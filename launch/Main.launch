@@ -1,0 +1,49 @@
+<launch>
+
+    <!-- ASUS -->
+    <include file="$(find openni2_launch)/launch/openni2.launch">
+        <arg name="depth_registration" value="true"/>
+    </include>
+
+    <!-- DUMMY CALIB -->
+    <node pkg="tf" type="static_transform_publisher" name="calib" args="0 0 0 0 0 0 1  /camera_rgb_optical_frame /world 100"/>
+
+    <!-- VISUAL FILTER -->
+    <!-- required services -->
+    <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="screen" />
+
+    <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
+    <node pkg="nodelet" type="nodelet" name="voxel_grid" args="load pcl/VoxelGrid pcl_manager" output="screen" respawn="true">
+        <remap from="~input" to="/camera/depth_registered/points" />
+        <rosparam>
+            filter_field_name: x
+            filter_limit_min: -5.0
+            filter_limit_max: 5.0
+            filter_field_name: y
+            filter_limit_min: -5.0
+            filter_limit_max: 5.0
+            filter_field_name: z
+            filter_limit_min: -5.0
+            filter_limit_max: 5.0
+            filter_limit_negative: False
+            leaf_size: 0.015
+        </rosparam>
+    </node>
+
+    <!-- TABLETOP DETECTOR -->
+    <include file="$(find tabletop_object_detector)/launch/tabletop_segmentation.launch">
+        <arg name="tabletop_segmentation_points_in" value="/voxel_grid/output" />
+        <arg name="tabletop_segmentation_convert_to_base_link" value="False" />
+        <arg name="tabletop_segmentation_clustering_voxel_size" value="0.001" />
+        <arg name="flatten_table" value="false"/>
+        <arg name="table_padding" value="0.02"/>
+        <arg name="inlier_threshold" value="200"/>
+        <arg name="min_cluster_size" value="30"/>
+    </include>
+
+    <!-- GAUSSIAN MODEL AND GEODESIC COMPUTATION-->
+    <node pkg="gaussian_object_modelling" type="object_model_node" name="object_model" output="screen" />
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find gaussian_object_modelling)/launch/config.rviz" />
+
+</launch>

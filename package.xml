@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package>
+  <name>gaussian_object_modelling</name>
+  <version>0.0.0</version>
+  <description>The gaussian_object_modelling package</description>
+
+  <maintainer email="cjrosales@gmail.com">Carlos J. Rosales</maintainer>
+
+  <license>GPLv2</license>
+
+  <author email="cjrosales@gmail.com">Carlos J. Rosales</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <build_depend>pacman_vision</build_depend>
+  
+  <run_depend>message_runtime</run_depend>
+  <run_depend>pacman_vision</run_depend>
+
+  <export>
+
+  </export>
+</package>

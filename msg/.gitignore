@@ -1,0 +1,4 @@
+# Ignore everything in this directory. Recall to to remove/modify this file if the directory is actually used for something
+*
+# Except this file
+!.gitignore
