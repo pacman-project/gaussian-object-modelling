@@ -1,7 +1,6 @@
-% testing Gaussian Process to reconstruct 
+% testing Gaussian Process for reconstruction 
 % of 2D explicit funtion
-% the code is stand-alone setting use_gpml = 0 ; otherwise the code will
-% try to use the gpml library
+% the code is stand-alone
 %
 clear all
 close all

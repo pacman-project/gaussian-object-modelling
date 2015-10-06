@@ -1,4 +1,7 @@
-% test
+% testing Gaussian Process to reconstruct 
+% of 2D implicit funtion;
+% The code use the external function plot3_to_surf
+%
 clear all
 close all
 % clc
