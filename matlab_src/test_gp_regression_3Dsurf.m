@@ -5,18 +5,6 @@
 clear all
 close all
 % clc
-% % 
-% % a = [0 0 0; 2 2 2 ;  1 0 0; 0 1 0 ; 0 0 1; 1 1 1] 
-% % A =a  ;
-% % B = a ;
-% % [m,p1] = size(A); [n,p2] = size(B);
-% % AA = sum(A.*A,2);  % column m_by_1
-% % BB = sum(B.*B,2)'; % row 1_by_n
-% % DD = AA(:,ones(1,n)) + BB(ones(1,m),:) - 2*A*B';
-% % EE = (sqrt(DD)) ;
-% % temp = 2.*EE.^3 - 3.* EE.^2 + ones(size(EE)) 
-% % 
-% % return
 % Building the (unknown!!) object
 points_object = 50 ;
 [beta_surf, lambda_surf] = ...
@@ -91,7 +79,7 @@ indeces_ext(indeces_ext>=size(x1_ext,1) ) = size(x1_ext,1) ;
 x1_samp_ext = x1_ext( indeces_ext ) ;
 x2_samp_ext = x2_ext( indeces_ext ) ;
 x3_samp_ext = x3_ext( indeces_ext ) ;
-y_samp_ext = zeros(size(x1_samp_ext)) ;
+y_samp_ext = ones(size(x1_samp_ext)) ; %???????
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 figure
 h= surf(x1_surf_ext, x2_surf_ext, x3_surf_ext ) ;
@@ -264,5 +252,22 @@ colorbar%
 set(s3,'Marker','o','LineWidth',0.75); %, 'b','FaceAlpha',.3,'EdgeAlpha',.1);
 axis equal
  
+
+%%
+
+x = x_post_plot( find(y_post>-1) , 1 ) ;
+y = x_post_plot( find(y_post>-1) , 2 ) ;
+z = x_post_plot( find(y_post>-1) , 3 ) ;
+%
+
+tri = delaunayTriangulation(x,y,z) ;
+figure
+tetramesh(tri,'FaceColor','g','FaceAlpha',0.3,'EdgeColor','k' ,'EdgeAlpha',.01);
+axis equal
+grid on
+hold on
+
+
+
 
 
