@@ -6,11 +6,14 @@ clear all
 close all
 % clc
 tic
-n_samples_obj = 300 ;  
+n_samples_obj = 400 ;  
+n_samples_hand = 100;
 n_samples_ext = 200 ; % samples on the external sphere
 points = 15 ;         % side of the sampling cube
+%
+crop = 3 ;
 % Object data
-filename = 'obj.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
+filename ='containerA_30_130.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
 % filename = 'containerA_50.txt' ; % 'pc_object_test.txt' ;
 % filename = 'containerA.txt' ; % 'pc_object_test.txt' ;
 delimiterIn = ' ';
@@ -22,36 +25,44 @@ Points_Object = Object_file.data(:,1:3) ;
 x1_object = Points_Object(:,1) ;
 x2_object = Points_Object(:,2) ;
 x3_object = Points_Object(:,3) ;
-%
-x1_object = x1_object( x1_object>=min(x1_object) ) ; % To eliminate nan
+%  % To eliminate nan
+x1_object = x1_object( x1_object>=min(x1_object) ) ;
 x2_object = x2_object( x2_object>=min(x2_object) ) ;
 x3_object = x3_object( x3_object>=min(x3_object) ) ;
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-filename = 'hand.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
-delimiterIn = ' ';
-headerlinesIn = 15 ; % 12
-% 
-Hand_file = importdata(filename,delimiterIn,headerlinesIn);
-Points_Hand = Hand_file.data(:,1:3) ;
-x1_hand = Points_Hand(:,1) ;
-x2_hand = Points_Hand(:,2) ;
-x3_hand = Points_Hand(:,3) ;
-%
-x1_hand = x1_hand( x1_hand>=min(x1_hand) ) ; % To eliminate nan
-x2_hand = x2_hand( x2_hand>=min(x2_hand) ) ;
-x3_hand = x3_hand( x3_hand>=min(x3_hand) ) ;
-%
+% To eliminate outlier
+x1_object = x1_object(crop:(end-crop)) ;
+x2_object = x2_object(crop:(end-crop)) ;
+x3_object = x3_object(crop:(end-crop)) ;
+% % % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % % filename = 'hand.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
+% % % delimiterIn = ' ';
+% % % headerlinesIn = 15 ; % 12
+% % % % 
+% % % Hand_file = importdata(filename,delimiterIn,headerlinesIn);
+% % % Points_Hand = Hand_file.data(:,1:3) ;
+% % % x1_hand = Points_Hand(:,1) ;
+% % % x2_hand = Points_Hand(:,2) ;
+% % % x3_hand = Points_Hand(:,3) ;
+% % % % % To eliminate nan
+% % % x1_hand = x1_hand( x1_hand>=min(x1_hand) ) ; 
+% % % x2_hand = x2_hand( x2_hand>=min(x2_hand) ) ;
+% % % x3_hand = x3_hand( x3_hand>=min(x3_hand) ) ;
+% % % % To eliminate outlier
+% % % x1_hand = x1_hand(crop:(end-crop)) ;
+% % % x2_hand = x2_hand(crop:(end-crop)) ;
+% % % x3_hand = x3_hand(crop:(end-crop)) ;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 %
 n_samples_obj = min(n_samples_obj, max(size(x1_object)))  ; % samples on the object
+%n_samples_hand = min(n_samples_hand, max(size(x1_hand)))  ; % samples on the hand
 %
 x1_c = ( max(x1_object) + min(x1_object))/2 ;  
 x2_c = ( max(x2_object) + min(x2_object))/2 ;  
 x3_c = ( max(x3_object) + min(x3_object))/2 ;  
 figure
-plot3( x1_object(1:10:end), x2_object(1:10:end), x3_object(1:10:end), '+' )  ;
-% plot3( x1_object , x2_object , x3_object , '+' )  ;
+plot3( x1_object(1:5:(end)), x2_object(1:5:(end)), x3_object(1:5:(end)), '+' )  ;
+hold on
+%plot3( x1_hand(1:1:(end)), x2_hand(1:1:(end)), x3_hand(1:1:(end)), '+r' )  ;
 grid on
 axis equal
 %

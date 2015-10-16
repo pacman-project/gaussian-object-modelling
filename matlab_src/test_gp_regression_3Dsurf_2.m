@@ -5,11 +5,14 @@
 clear all
 close all
 % clc
-n_samples_obj = 50 ;  % samples on the object
+tic
+n_samples_obj = 300 ;  
 n_samples_ext = 200 ; % samples on the external sphere
 points = 15 ;         % side of the sampling cube
 % Object data
-filename = 'containerA.txt' ; % 'pc_object_test.txt' ;
+filename = 'obj.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
+% filename = 'containerA_50.txt' ; % 'pc_object_test.txt' ;
+% filename = 'containerA.txt' ; % 'pc_object_test.txt' ;
 delimiterIn = ' ';
 headerlinesIn = 15 ; % 12
 % 
@@ -20,16 +23,40 @@ x1_object = Points_Object(:,1) ;
 x2_object = Points_Object(:,2) ;
 x3_object = Points_Object(:,3) ;
 %
+x1_object = x1_object( x1_object>=min(x1_object) ) ; % To eliminate nan
+x2_object = x2_object( x2_object>=min(x2_object) ) ;
+x3_object = x3_object( x3_object>=min(x3_object) ) ;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+filename = 'hand.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
+delimiterIn = ' ';
+headerlinesIn = 15 ; % 12
+% 
+Hand_file = importdata(filename,delimiterIn,headerlinesIn);
+Points_Hand = Hand_file.data(:,1:3) ;
+x1_hand = Points_Hand(:,1) ;
+x2_hand = Points_Hand(:,2) ;
+x3_hand = Points_Hand(:,3) ;
+%
+x1_hand = x1_hand( x1_hand>=min(x1_hand) ) ; % To eliminate nan
+x2_hand = x2_hand( x2_hand>=min(x2_hand) ) ;
+x3_hand = x3_hand( x3_hand>=min(x3_hand) ) ;
+%
+return
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%
+n_samples_obj = min(n_samples_obj, max(size(x1_object)))  ; % samples on the object
+%
 x1_c = ( max(x1_object) + min(x1_object))/2 ;  
 x2_c = ( max(x2_object) + min(x2_object))/2 ;  
 x3_c = ( max(x3_object) + min(x3_object))/2 ;  
 figure
-plot3( x1_object(1:20:end), x2_object(1:20:end), x3_object(1:20:end), '+' )  ;
+plot3( x1_object(1:10:end), x2_object(1:10:end), x3_object(1:10:end), '+' )  ;
 % plot3( x1_object , x2_object , x3_object , '+' )  ;
 grid on
 axis equal
 %
-stlwrite('original.stl', x1_object(1:30:end) , x2_object(1:30:end) , x3_object(1:30:end)) ;
+% stlwrite('original.stl', x1_object(1:30:end) , x2_object(1:30:end) , x3_object(1:30:end)) ;
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % External Sphere
@@ -58,7 +85,7 @@ y_int = -1*ones(size(x1_int))  ;
 % Sampling the object
 % n_samples_obj = 50 ;
 indeces_obj =  round( size(x1_object,1)*rand(1,n_samples_obj) ) ;
-indeces_obj(indeces_obj<=0) = 0 ;
+indeces_obj(indeces_obj<=0) = 1 ;
 indeces_obj(indeces_obj>=size(x1_object,1) ) = size(x1_object,1) ;
 x1_samp_obj = x1_object( indeces_obj ) ;
 x2_samp_obj = x2_object( indeces_obj ) ;
@@ -81,32 +108,6 @@ x2_training = [ x2_samp_obj ; x2_int  ; x2_samp_ext  ] ;
 x3_training = [ x3_samp_obj ; x3_int  ; x3_samp_ext  ] ;
 x_training = [ x1_training , x2_training , x3_training ]' ;
 y_training  = [ y_samp_obj  ;  y_int  ;  y_samp_ext  ] ; 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Defining kernel functions
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
-sigma_f = 1 ; % hyper-parameter of the squared exponential kernel
-leng =  1 ;   % hyper-parameter of the squared exponential kernel
-% kernel_gauss= @(p_1,p_2) ...
-%               sigma_f^2*exp( ((p_1-p_2)'*(p_1-p_2))^2 /(-2*leng^2));
-% %
-% kernel_laplace = @(p_1,p_2) ...
-%               sigma_f^2*exp(sqrt((p_1-p_2)'*(p_1-p_2))/(-leng));
-%           
-% kernel_inv_mult = @(p_1,p_2) ... % inverse multiquadic kernel
-%               1/ sqrt((p_1-p_2)'*(p_1-p_2)+leng) ;  %sigma_f^2*exp(sqrt((p_1-p_2)'*(p_1-p_2))/(-leng));
-% %
-% kernel_matern_32 = @(p_1,p_2) ... %  Matèrn function with v = 3/2
-%              sigma_f^2 *(1+sqrt(3)* sqrt(  (p_1-p_2)'*(p_1-p_2))/leng)*...
-%                    exp(-sqrt(3)* sqrt(  (p_1-p_2)'*(p_1-p_2))/leng    )  ;
-% %
-% kernel_matern_52 = @(p_1,p_2) ...  %  Matèrn function with v = 5/2
-%              sigma_f^2 *(1+sqrt(5)* sqrt(  (p_1-p_2)'*(p_1-p_2))/leng  +    (  5*(p_1-p_2)'*(p_1-p_2))/(3*leng^2) )*...
-%                    exp(-sqrt(5)* sqrt(  (p_1-p_2)'*(p_1-p_2))/leng    )  ;
-% %
-% kernel_thin_plate = @(p_1,p_2) ... % thin plate function
-%              2*(sqrt((p_1-p_2)'*(p_1-p_2)))^3 - 3*leng*(p_1-p_2)'*(p_1-p_2) + leng^3 ;                    ;
-% %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % sampling points (side of a cube)
 % points = 15 ;   
@@ -119,22 +120,20 @@ pred_x1 = [ reshape(pred_x1, size(pred_x1,1) *size(pred_x1,2)*size(pred_x1,3),1)
 pred_x2 = [ reshape(pred_x2, size(pred_x2,1) *size(pred_x2,2)*size(pred_x2,3),1) ; x2_samp_obj ] ;
 pred_x3 = [ reshape(pred_x3, size(pred_x3,1) *size(pred_x3,2)*size(pred_x3,3),1) ; x3_samp_obj ] ;
 %
-% % Adding the sampling points
-% pred_x1 = [pred_x1 ; x1_samp_obj ] ;
-% pred_x2 = [pred_x2 ; x2_samp_obj ] ;
-% pred_x3 = [pred_x3 ; x3_samp_obj ] ;
-%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Regression
 x_to_predict = [ pred_x1, pred_x2, pred_x3 ]' ; 
 x_post =  [ x_training , x_to_predict ] ;  % x_to_predict  ; %
 %
-  Cov_gau   = Cov_gauss(x_post', leng, sigma_f) ;
-  Cov_lap   = Cov_laplace(x_post', leng, sigma_f) ;
-  Cov_thin  = Cov_thin_plate(x_post', leng) ;
-  % % Cov_mult  = Cov_inv_multiquadric(x_post', leng) ;
-  % % Cov_mat_32 =Cov_matern_32(x_post', leng, sigma_f) ;
-  % % Cov_mat_52 =Cov_matern_52(x_post', leng, sigma_f) ;
+sigma_f = 1 ; % hyper-parameter of the squared exponential kernel
+leng =  1 ;   % hyper-parameter of the squared exponential kernel
+  %Cov_gau   = Cov_gauss(x_post', leng, sigma_f) ;
+   Cov_lap   = Cov_laplace(x_post', leng, sigma_f) ;
+  % Cov_thin  = Cov_thin_plate(x_post', leng) ;
+  %  Cov_nuk   = Cov_nuklei( x_post', leng ) ;
+% %    Cov_mult  = Cov_inv_multiquadric(x_post', leng) ;
+% %    Cov_mat_32 =Cov_matern_32(x_post', leng, sigma_f) ;
+% %    Cov_mat_52 =Cov_matern_52(x_post', leng, sigma_f) ;
   %
 %%
 Cov_tot = Cov_lap ; % Cov_lap ;
@@ -183,27 +182,63 @@ plot3( x1_post_plot , x2_post_plot , x3_post_plot , '*r','MarkerSize',3) ;
 grid on
 axis equal
 %
-figure
-plot3(x1_samp_obj, x2_samp_obj, x3_samp_obj, 'ok','MarkerSize',10) ;
-hold on
-plot3(x1_int, x2_int, x3_int, '*k','MarkerSize',100) ;
-s3 = scatter3( x1_post_plot , x2_post_plot , x3_post_plot , 30, upper_var_plot ,'filled' ) ;
-colorbar
-grid on
-axis equal
+% figure
+% plot3(x1_samp_obj, x2_samp_obj, x3_samp_obj, 'ok','MarkerSize',10) ;
+% hold on
+% plot3(x1_int, x2_int, x3_int, '*k','MarkerSize',100) ;
+% s3 = scatter3( x1_post_plot , x2_post_plot , x3_post_plot , 30, upper_var_plot ,'filled' ) ;
+% colorbar
+% grid on
+% axis equal
 %
-tri = delaunay(x_post_plot( y_post>-1 , 1 ) , x_post_plot( y_post>-1 , 2 ) );
-figure
-h = trisurf(tri, x_post_plot( y_post>-1 , 1 ) , x_post_plot( y_post>-1 , 2 ) , x_post_plot( y_post>-1 , 3 )) ;
-set(h,'FaceColor','b','FaceAlpha',0.3,'EdgeAlpha',.1); 
-axis equal
-grid on
-hold on
-%
-stlwrite('reconstructed.stl', x1_post_plot , x2_post_plot , x3_post_plot) ;
+% tri = delaunay(x_post_plot( y_post>-1 , 1 ) , x_post_plot( y_post>-1 , 2 ) );
+% figure
+% h = trisurf(tri, x_post_plot( y_post>-1 , 1 ) , x_post_plot( y_post>-1 , 2 ) , x_post_plot( y_post>-1 , 3 )) ;
+% set(h,'FaceColor','b','FaceAlpha',0.3,'EdgeAlpha',.1); 
+% axis equal
+% grid on
+% hold on
+% %
+% stlwrite('reconstructed.stl', x1_post_plot , x2_post_plot , x3_post_plot) ;
+% %
 % DT = delaunayTriangulation(x_post_plot( find(y_post>-1),:)) ;
 % faceColor  = [0.6875 0.8750 0.8984];
 % figure
 % tetramesh(DT,'FaceColor',faceColor,'FaceAlpha',0.3,'EdgeAlpha',.05);
 % 
-% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+% max_var_post = max(upper_var_plot) ;
+max_var = 0.4 ;
+%
+minimum = min(abs(upper_var_plot-max_var)) ;
+index = find((  abs(upper_var_plot-max_var)-minimum)==0) ;
+max_var_post = upper_var_plot(index) 
+p_max_var_post = [ x1_post_plot(index) , x2_post_plot(index) , x3_post_plot(index) ]
+n_max_var_post = unit([ (x1_c- x1_post_plot(index)),...
+                   (x2_c- x2_post_plot(index)),...
+                   (x3_c- x3_post_plot(index)) ])
+%
+%
+figure
+plot3(x1_samp_obj, x2_samp_obj, x3_samp_obj, 'ok','MarkerSize',10) ;
+hold on
+plot3(x1_int, x2_int, x3_int, '*k','MarkerSize',100) ;
+s3 = scatter3( x1_post_plot , x2_post_plot , x3_post_plot , 30, upper_var_plot ,'filled' ) ;
+plot3( x1_post_plot(index), x2_post_plot(index),  x3_post_plot(index), '*r','MarkerSize',70) ;
+quiver3( x1_post_plot(index), x2_post_plot(index),  x3_post_plot(index),...
+    0.1*n_max_var_post(1), 0.1*n_max_var_post(2), 0.1*n_max_var_post(3),'LineWidth',3 )
+colorbar
+grid on
+axis equal
+
+
+
+toc
+
+
+
+
+
+
+
