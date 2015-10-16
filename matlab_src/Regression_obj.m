@@ -13,7 +13,7 @@ points = 15 ;         % side of the sampling cube
 %
 crop = 3 ;
 % Object data
-filename ='containerA_30_130.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
+filename = 'obj.txt' ; %'containerA_30_130.txt' ; % 'obj.txt' ; %'containerA_30_130.txt' ; % 'pc_object_test.txt' ;
 % filename = 'containerA_50.txt' ; % 'pc_object_test.txt' ;
 % filename = 'containerA.txt' ; % 'pc_object_test.txt' ;
 delimiterIn = ' ';
