@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(gaussian_object_modelling)
+project(gp_regression)
 
 find_package(catkin REQUIRED COMPONENTS 
 	roscpp
@@ -8,23 +8,20 @@ find_package(catkin REQUIRED COMPONENTS
 	geometry_msgs
 	sensor_msgs
 	visualization_msgs
-	urdf
-	tf
-	pcl_ros
-	pacman_vision
+	cmake_modules
 )
 
 # ToDo: port to 1.7.2
-find_package(PCL REQUIRED)
+# find_package(PCL REQUIRED)
 
-add_service_files(
-  FILES
-  PickPoint.srv
-)
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  std_msgs
+  geometry_msgs
+  sensor_msgs
+  visualization_msgs
 )
 
 
@@ -32,18 +29,18 @@ catkin_package()
 
 include_directories(include
   ${catkin_INCLUDE_DIRS}
-  ${PCL_INCLUDE_DIRS}
+  # ${PCL_INCLUDE_DIRS}
 )
 
-add_executable(object_model_node 
-  src/object_model_node.cpp
+add_executable(regression_server
+  src/regression_server.cpp
 )
 
-add_dependencies(object_model_node 
-  gaussian_object_modelling_generate_messages_cpp
+add_dependencies(regression_server 
+  gp_regression_generate_messages_cpp
 )
 
-target_link_libraries(object_model_node 
+target_link_libraries(regression_server 
   ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
+  # ${PCL_LIBRARIES}
 )

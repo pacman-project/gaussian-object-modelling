@@ -1,9 +1,0 @@
-# the service automatically calls the tabletop segmentor and reads the point clouds of the clusters, 
-
-# id of the point in the cluster to start the geodesic integration
-int64 pick
-bool use_same_weights
-
----
-
-bool result

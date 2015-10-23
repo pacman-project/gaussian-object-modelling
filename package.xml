@@ -1,21 +1,21 @@
 <?xml version="1.0"?>
 <package>
-  <name>gaussian_object_modelling</name>
+  <name>gp_regression</name>
   <version>0.0.0</version>
-  <description>The gaussian_object_modelling package</description>
+  <description>The gp_regression package for object modelling</description>
 
+  <maintainer email="edoardo.farnioli@gmail.com">Edoardo Farnioli</maintainer>
   <maintainer email="cjrosales@gmail.com">Carlos J. Rosales</maintainer>
 
-  <license>GPLv2</license>
+  <license>ToDo</license>
 
+  <author email="edoardo.farnioli@gmail.com">Edoardo Farnioli</author>
   <author email="cjrosales@gmail.com">Carlos J. Rosales</author>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>message_generation</build_depend>
-  <build_depend>pacman_vision</build_depend>
   
   <run_depend>message_runtime</run_depend>
-  <run_depend>pacman_vision</run_depend>
 
   <export>
 
