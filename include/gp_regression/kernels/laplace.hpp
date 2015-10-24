@@ -16,4 +16,6 @@
  * %
  * Cov_matrix = abs(sigma_f)*exp(sqrt(DD)./(-abs(leng))) ;
  * end
+ *
+ *
  */

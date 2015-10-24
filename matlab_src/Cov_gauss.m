@@ -16,3 +16,5 @@ DD = AA(:,ones(1,n)) + BB(ones(1,m),:) - 2*A*B';
 Cov_matrix = sigma_f^2*exp(DD./(-2*leng^2)) ;
 end
 
+
+(x-y)*(x-y) = x*x - 2*x*y + y*y

@@ -1,9 +1,11 @@
 #ifndef GP_REGRESSION___GP_REGRESSOR_H
 #define GP_REGRESSION___GP_REGRESSOR_H
 
-#include <cassert>
-#include <string>
 #include <vector>
+#include <functional>
+
+#include <Eigen/Core>
+#include <Eigen/LU>
 
 #include <gp_regression/cov_functions.h>
 #include <gp_regression/gp_regression_exception.h>
@@ -16,9 +18,13 @@ namespace gp_regression
  */
 struct Data
 {
-	std::vector<double*> coord_x;
-	std::vector<double*> coord_y;
-	std::vector<double*> coord_z;
+        std::vector<double> coord_x;
+        std::vector<double> coord_y;
+        std::vector<double> coord_z;
+        std::vector<double> std_dev_x;
+        std::vector<double> std_dev_y;
+        std::vector<double> std_dev_z;
+        std::vector<double> label;
 };
 
 /*
@@ -26,15 +32,13 @@ struct Data
  */
 struct Model
 {
-	std::vector<double*> mean_x;
-	std::vector<double*> mean_y;
-	std::vector<double*> mean_z;
-	std::vector<double*> std_dev_x;
-	std::vector<double*> std_dev_y;
-	std::vector<double*> std_dev_z;
-	std::vector<double*> weight;
+        Eigen::MatrixXd P; // points 
+        Eigen::MatrixXd E; // noise
+        Eigen::VectorXd Y;  // labels
+        Eigen::MatrixXd Kpp; // covariance with selected kernel
+        Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel
+        Eigen::VectorXd InvKppY; // weights
 };
-
 
 /*
  * \brief Handle for propagating a single GP map from 3D points to paramters, 
@@ -45,62 +49,138 @@ template <class CovType>
 class GPRegressor
 {
 public:
-	virtual ~GPRegressor() {}
+        // pointer to the covariance function type
+        CovType* kernel_;
 
-	// CovType getCovType()
-	// {
-		// try
-		// {
-		// 	// return this->
-		// }
-		// catch(const std::logic_error& e)
-		// {
-		// 	//throw TransmissionInterfaceException(e.what());
-		// }
-	// }
+        virtual ~GPRegressor() {}
 
-	/**
-	* \brief Solves the regression problem, computes the model parameters.
-	* \param[in]  data 3D points.
-	* \param[out] gp Gaussian Process parameters.
-	* \pre All non-empty vectors must contain valid data and their size 
-	* should be equal among them. Data vectors not used in this function can
-	* remain empty, so they can be used for 3D or 2D. For now, only 3D is
-	* assumed.
-	*/
-	void generateModel(const Data& data, Model& gp)
-	{
+        /**
+        * \brief Solves the regression problem, computes the model parameters.
+        * \param[in]  data 3D points.
+        * \param[out] gp Gaussian Process parameters.
+        * \pre All non-empty vectors must contain valid data and their size 
+        * should be equal among them. Data vectors not used in this function can
+        * remain empty, so they can be used for 3D or 2D. For now, only 3D is
+        * assumed.
+        */
+        void create(const Data &data, Model &gp)
+        {
+                // validate data
+                if (data.coord_x.empty() && data.coord_y.empty() 
+                        && data.coord_z.empty() && data.std_dev_x.empty()
+                        && data.std_dev_y.empty() && data.std_dev_z.empty()
+                        && data.label.empty())
+                {
+                        throw GPRegressionException("All input data is empty!");
+                }
 
-	}
+                // configure gp
+                convertToEigen(data.coord_x, data.coord_y, data.coord_z, gp.P);
+                convertToEigen(data.std_dev_x, data.std_dev_y, data.std_dev_z, gp.E);
+                convertToEigen(data.label, gp.Y);
 
-	/** 
-	 * \brief Generates data using the GP
-	 * \param[in]  data 3D points.
-	 */
-	void generateData(const Model& gp, Data& data)
-	{
+                // go! // ToDo: avoid the for loops.
+                buildEuclideanDistanceMatrix(gp.P, gp.P, gp.Kpp);
 
-	}
+                for(int i = 0; i < gp.Kpp.rows(); ++i)
+                {
+                        for(int j = 0; j < gp.Kpp.cols(); ++j)
+                        {
+                               gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j)); 
+                        }
+                }
 
-	void updateModel(const Data& data, Model& gp)
-	{
+                gp.InvKpp = gp.Kpp.inverse();
+                gp.InvKppY = gp.InvKpp*gp.Y;
+        }
 
-	}
+        /** 
+         * \brief Generates data using the GP
+         * \param[in]  data 3D points.
+         */
+        void estimate(const Model &gp, Data &query)
+        {
+                // validate gp
 
-	/* 
-	 * \return Number of example points in the GP
-	 */
-	virtual std::size_t numPoints() const = 0;
+                // validate data
+                if (query.coord_x.empty() && query.coord_y.empty() 
+                        && query.coord_z.empty() && query.std_dev_x.empty()
+                        && query.std_dev_y.empty() && query.std_dev_z.empty())
+                {
+                        throw GPRegressionException("The query is empty!");
+                }
+
+                if (!query.label.empty())
+                        throw GPRegressionException("Query is already labeled!");
+
+                // go!
+                Eigen::MatrixXd Q;
+                Eigen::MatrixXd Kqp;
+                Eigen::VectorXd YPost;
+                convertToEigen(query.coord_x, query.coord_y, query.coord_z, Q);
+                buildEuclideanDistanceMatrix(Q, gp.P, Kqp);
+                YPost = Kqp*gp.InvKppY;
+
+                convertToSTD(YPost, query.label);
+        }
+
+        /** 
+         * \brief Updates the GP with the new data
+         * \param[in]  data 3D points.
+         */
+        void update(const Data &new_data, Model &gp)
+        {
+
+        }
+
+        GPRegressor()
+        {
+                kernel_ = new CovType();
+        }
 
 private:
+        /*
+         * Conversion functions
+         */
+        void convertToEigen(const std::vector<double> &a,
+                                const std::vector<double> &b,
+                                const std::vector<double> &c,
+                                Eigen::MatrixXd &M)
+        {
+                M.resize(a.size(), 3);
+                M.col(0) = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
+                M.col(1) = Eigen::Map<Eigen::VectorXd>((double *)b.data(), b.size());
+                M.col(2) = Eigen::Map<Eigen::VectorXd>((double *)c.data(), c.size());
+        }
 
+        void convertToEigen(const std::vector<double> &a, Eigen::VectorXd &M)
+        {
+                M = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
+        }
+
+        void convertToSTD(const Eigen::VectorXd &M, std::vector<double> &a)
+        {
+                a = std::vector<double>(M.data(), M.data() + M.size());
+        }
+
+        /*
+         * Utility functions
+         */
+        void buildEuclideanDistanceMatrix(const Eigen::MatrixXd &A,
+                                                const Eigen::MatrixXd &B,
+                                                Eigen::MatrixXd &D)
+        {
+                D = -2*A*B.transpose();
+                D.colwise() += A.cwiseProduct(A).rowwise().sum();
+                D.rowwise() += B.cwiseProduct(B).rowwise().sum().transpose();
+        }
 };
 
-// Useful typedefs
+// Convenience typedefs. Note that these will use the default constructors!
 
 class GaussianRegressor : public GPRegressor<gp_regression::Gaussian> {};
-// class LaplaceRegressor : public GPRegressor<Laplace> {};
-// class InvMultiQuadRegressor : public GPRegressor<InvMultiQuad> {};
+// class LaplaceRegressor : public GPRegressor<gp_regression::Laplace> {};
+// class InvMultiQuadRegressor : public GPRegressor<gp_regression::InvMultiQuad> {};
 
 }
 
