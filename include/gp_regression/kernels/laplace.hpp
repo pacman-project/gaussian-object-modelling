@@ -19,3 +19,47 @@
  *
  *
  */
+ 
+ #ifndef GP_REGRESSION___LAPLACE_H
+#define GP_REGRESSION___LAPLACE_H
+
+#include <cmath>
+
+namespace gp_regression
+{
+
+class Laplace
+{
+public:
+        const double sigma_;
+        const double length_;
+
+        inline double compute(double &value)
+        {
+                double power = -1*value*inv_length_;
+                double out = 2*sigma_*std::exp(power);
+                return out;
+        }
+
+        Laplace(double sigma, double length) :
+                sigma_(sigma),
+                length_(length)
+        {
+                inv_length_ = 1.0 / (length_);
+        }
+
+        Laplace() :
+                sigma_(1.0),
+                length_(1.0)
+        {
+                inv_length_ = 1.0;
+        }
+
+private:
+        double inv_length_;
+
+};
+
+}
+
+#endif

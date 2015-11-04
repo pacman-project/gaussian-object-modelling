@@ -66,13 +66,7 @@ public:
         void create(const Data &data, Model &gp)
         {
                 // validate data
-                if (data.coord_x.empty() && data.coord_y.empty() 
-                        && data.coord_z.empty() && data.std_dev_x.empty()
-                        && data.std_dev_y.empty() && data.std_dev_z.empty()
-                        && data.label.empty())
-                {
-                        throw GPRegressionException("All input data is empty!");
-                }
+                assertData(data);
 
                 // configure gp
                 convertToEigen(data.coord_x, data.coord_y, data.coord_z, gp.P);
@@ -103,12 +97,7 @@ public:
                 // validate gp
 
                 // validate data
-                if (query.coord_x.empty() && query.coord_y.empty() 
-                        && query.coord_z.empty() && query.std_dev_x.empty()
-                        && query.std_dev_y.empty() && query.std_dev_z.empty())
-                {
-                        throw GPRegressionException("The query is empty!");
-                }
+                assertData(query);
 
                 if (!query.label.empty())
                         throw GPRegressionException("Query is already labeled!");
@@ -119,6 +108,15 @@ public:
                 Eigen::VectorXd YPost;
                 convertToEigen(query.coord_x, query.coord_y, query.coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp.P, Kqp);
+                
+                for(int i = 0; i < Kqp.rows(); ++i)
+                {
+                        for(int j = 0; j < Kqp.cols(); ++j)
+                        {
+                               Kqp(i,j) = kernel_->compute(Kqp(i,j)); 
+                        }
+                }
+                
                 YPost = Kqp*gp.InvKppY;
 
                 convertToSTD(YPost, query.label);
@@ -130,7 +128,7 @@ public:
          */
         void update(const Data &new_data, Model &gp)
         {
-
+        	create(new_data, gp);                
         }
 
         GPRegressor()
@@ -145,20 +143,22 @@ private:
         void convertToEigen(const std::vector<double> &a,
                                 const std::vector<double> &b,
                                 const std::vector<double> &c,
-                                Eigen::MatrixXd &M)
+                                Eigen::MatrixXd &M) const
         {
-                M.resize(a.size(), 3);
-                M.col(0) = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
-                M.col(1) = Eigen::Map<Eigen::VectorXd>((double *)b.data(), b.size());
-                M.col(2) = Eigen::Map<Eigen::VectorXd>((double *)c.data(), c.size());
+        	double rowSize = M.rows() + a.size();
+                M.resize(rowSize, 3);
+                M.col(0) << Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
+                M.col(1) << Eigen::Map<Eigen::VectorXd>((double *)b.data(), b.size());
+                M.col(2) << Eigen::Map<Eigen::VectorXd>((double *)c.data(), c.size());
         }
 
-        void convertToEigen(const std::vector<double> &a, Eigen::VectorXd &M)
+        void convertToEigen(const std::vector<double> &a, Eigen::VectorXd &M) const
         {
-                M = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
+        	M.resize(M.size() + a.size());
+                M << Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
         }
 
-        void convertToSTD(const Eigen::VectorXd &M, std::vector<double> &a)
+        void convertToSTD(const Eigen::VectorXd &M, std::vector<double> &a) const
         {
                 a = std::vector<double>(M.data(), M.data() + M.size());
         }
@@ -168,11 +168,22 @@ private:
          */
         void buildEuclideanDistanceMatrix(const Eigen::MatrixXd &A,
                                                 const Eigen::MatrixXd &B,
-                                                Eigen::MatrixXd &D)
+                                                Eigen::MatrixXd &D) const
         {
                 D = -2*A*B.transpose();
                 D.colwise() += A.cwiseProduct(A).rowwise().sum();
                 D.rowwise() += B.cwiseProduct(B).rowwise().sum().transpose();
+        }
+        
+        void assertData(const Data &data) const
+        {
+        	if (data.coord_x.empty() && data.coord_y.empty() 
+                        && data.coord_z.empty() && data.std_dev_x.empty()
+                        && data.std_dev_y.empty() && data.std_dev_z.empty()
+                        && data.label.empty())
+                {
+                        throw GPRegressionException("All input data is empty!");
+                }
         }
 };
 
