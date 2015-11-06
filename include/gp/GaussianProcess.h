@@ -10,6 +10,7 @@
 #include "gp/SampleSet.h"
 #include "gp/CovLaplace.h"
 #include "gp/CovThinPlate.h"
+#include <omp.h>
 
 //------------------------------------------------------------------------------
 
@@ -20,14 +21,14 @@ namespace gp {
 static const double log2pi = std::log(numeric_const<double>::TWO_PI);
 static const double initial_L_size = 15000;
 /*
- * \brief Handle for propagating a single GP map from 3D points to paramters, 
- * from-to parameters of 3D points, sample points, etc. 
+ * \brief Handle for propagating a single GP map from 3D points to paramters,
+ * from-to parameters of 3D points, sample points, etc.
  *
  */
 template <class CovType> class GaussianProcess {
-public: 
+public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	
+
 	GaussianProcess() {
 		cf.reset(new CovType);
 		sampleset.reset();
@@ -50,9 +51,9 @@ public:
 		L.reset(new Eigen::MatrixXd);
 		L->resize(initial_L_size, initial_L_size);
 	};
-	
+
 	virtual ~GaussianProcess() {};
-	
+
 	/** Predict target value for given input.
 	* @param x input vector
 	* @return predicted value */
@@ -66,13 +67,13 @@ public:
 		//std::cout << "size alpha=" << alpha.size() << " k_star=" << k_star.size() << std::endl;
 		return k_star->dot(*alpha);
 	}
-	
+
 	/** Predict variance of prediction for given input.
 	* @param x input vector
 	* @return predicted variance */
 	virtual double var(const Vec3& xStar) {
 		if (sampleset->empty()) return 0;
-		
+
 		//Eigen::Map<const Eigen::VectorXd> x_star(x.v, input_dim);
 		compute();
 		update_alpha();
@@ -81,7 +82,7 @@ public:
 		Eigen::VectorXd v = L->topLeftCorner(n, n).triangularView<Eigen::Lower>().solve(*k_star);
 		return cf->get(xStar, xStar) - v.dot(v); //cf->get(x_star, x_star) - v.dot(v);
 	}
-	
+
 	/** Add input-output-pair to sample set.
 	* Add a copy of the given input-output-pair to sample set.
 	* @param x input array
@@ -89,11 +90,11 @@ public:
 	*/
 	void add_patterns(const Vec3Seq& newInputs, const Vec& newTargets) {
 		assert(newInputs.size() == newTargets.size());
-		
+
 		// the size of the inputs before adding new samples
 		const size_t n = sampleset->size();
 		sampleset->add(newInputs, newTargets);
-		
+
 		// create kernel matrix if sampleset is empty
 		if (n == 0) {
 			cf->loghyper_changed = true;
@@ -122,7 +123,7 @@ public:
 		}
 		alpha_needs_update = true;
 	}
-	
+
 //	bool set_y(size_t i, double y);
 //	/** Get number of samples in the training set. */
 //	size_t get_sampleset_size();
@@ -132,7 +133,7 @@ public:
 //	CovarianceFunction & covf();
 //	/** Get input vector dimensionality. */
 //	size_t get_input_dim();
-	
+
 	double log_likelihood() {
 		compute();
 		update_alpha();
@@ -142,7 +143,7 @@ public:
 		double det = 2 * L->diagonal().head(n).array().log().sum();
 		return -0.5*y.dot(*alpha) - 0.5*det - 0.5*n*log2pi;
 	}
-	
+
 //	Eigen::VectorXd log_likelihood_gradient() {
 //		compute();
 //		update_alpha();
@@ -163,7 +164,7 @@ public:
 //		}
 //		return grad;
 //	}
-	
+
 protected:
 	// pointer to the covariance function type
         boost::shared_ptr<CovType> cf;
@@ -180,7 +181,7 @@ protected:
 	size_t input_dim;
 	/** Noise parameter */
 	double delta_n;
-	
+
 	/** Update test input and cache kernel vector. */
 //	void update_k_star(const Eigen::VectorXd &x_star) {
 //		k_star.resize(sampleset->size());
@@ -206,7 +207,7 @@ protected:
 		*alpha = L->topLeftCorner(n, n).triangularView<Eigen::Lower>().solve(y);
 		L->topLeftCorner(n, n).triangularView<Eigen::Lower>().adjoint().solveInPlace(*alpha);
 	}
-	
+
 	/** Compute covariance matrix and perform cholesky decomposition. */
 	virtual void compute() {
 		// can previously computed values be used?
