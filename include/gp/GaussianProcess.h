@@ -1,3 +1,16 @@
+/** @file GaussianProcess.h
+ * 
+ * 
+ * @author	Claudio Zito
+ *
+ * @copyright  Copyright (C) 2015 Claudio, University of Birmingham, UK
+ *
+ * @license  This file copy is licensed to you under the terms described in
+ *           the License.txt file included in this distribution.
+ *
+ * Refer to Gaussian process library for Machine Learning.
+ *
+ */
 #ifndef __GP_GAUSSIANPROCESS_H__
 #define __GP_GAUSSIANPROCESS_H__
 #define _USE_MATH_DEFINES
@@ -18,25 +31,30 @@ namespace gp {
 
 //------------------------------------------------------------------------------
 
+/** Utily constants */
 static const double log2pi = std::log(numeric_const<double>::TWO_PI);
-static const double initial_L_size = 15000;
+
+//------------------------------------------------------------------------------
+
 /*
- * \brief Handle for propagating a single GP map from 3D points to paramters, 
- * from-to parameters of 3D points, sample points, etc. 
+ * Gaussian Process. 
  *
  */
-
 template <class CovTypePtr, class CovTypeDesc> class GaussianProcess {
 public: 
+	/** Needed for good alignment for the Eigen's' data structures */
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	/** POinter to the class */
+	/** Pointer to the class */
 	typedef boost::shared_ptr<GaussianProcess<CovTypePtr, CovTypeDesc> > Ptr;
 	
 	/** Descriptor file */
 	class Desc {
 	public:
+		/** Initial size of the kernel matrix */
 		double initialLSize;
+		/** Noise use to compute K(x,x) */
 		double noise;
+		/** Covariance description file */
 		CovTypeDesc covTypeDesc;
 		
 		/** C'tor */
@@ -52,11 +70,7 @@ public:
 		}
 		
 		/** Creates the object from the description. */
-		//CREATE_FROM_OBJECT_TEMPLATE_DESC_0(GaussianProcess, CovType, GaussianProcess::Ptr, SampleSet::Ptr)
 		Ptr create() const {
-//			GaussianProcess<CovTypePtr, CovTypeDesc> *pObject = new GaussianProcess<CovTypePtr, CovTypeDesc>();
-//			Ptr pointer(pObject);
-//			pObject->create(*this);
 			Ptr pointer(new GaussianProcess<CovTypePtr, CovTypeDesc>);
 			pointer->create(*this);
 			return pointer;
@@ -72,9 +86,7 @@ public:
 		}
 	};
 	
-	/** Predict target value for given input.
-	* @param x input vector
-	* @return predicted value */
+	/** Predict f_* ~ GP(x_*) */
 	virtual double f(const Vec3& xStar) {
 		if (sampleset->empty()) return 0;
 
@@ -86,9 +98,7 @@ public:
 		return k_star->dot(*alpha);
 	}
 	
-	/** Predict variance of prediction for given input.
-	* @param x input vector
-	* @return predicted variance */
+	/** Predict variance v[f_*] ~ var(x_*)  */
 	virtual double var(const Vec3& xStar) {
 		if (sampleset->empty()) return 0;
 		
@@ -101,19 +111,17 @@ public:
 		return cf->get(xStar, xStar) - v.dot(v); //cf->get(x_star, x_star) - v.dot(v);
 	}
 	
+	/** Set training data */
 	void set(SampleSet::Ptr trainingData) {
 		sampleset = trainingData;
 	}
 	
+	/** Get name of the covariance function */
 	std::string getName() const {
 		return cf->getName();
 	}
 	
-	/** Add input-output-pair to sample set.
-	* Add a copy of the given input-output-pair to sample set.
-	* @param x input array
-	* @param y output value
-	*/
+	/** Add input-output pairs to sample set. */
 	void add_patterns(const Vec3Seq& newInputs, const Vec& newTargets) {
 		assert(newInputs.size() == newTargets.size());
 		
@@ -150,7 +158,8 @@ public:
 		alpha_needs_update = true;
 	}
 	
-	double log_likelihood() {
+	/** Compute loglikelihood */
+	double logLikelihood() {
 		compute();
 		update_alpha();
 		int n = sampleset->size();
@@ -160,6 +169,7 @@ public:
 		return -0.5*y.dot(*alpha) - 0.5*det - 0.5*n*log2pi;
 	}
 	
+	/** D'tor */
 	virtual ~GaussianProcess() {};
 	
 protected:
@@ -178,15 +188,18 @@ protected:
 	size_t input_dim;
 	/** Noise parameter */
 	double delta_n;
+	/** Enable/disable to update the alpha vector */
 	bool alpha_needs_update;
 	
-	
+	/** Compute k_* = K(x_*, x) */
 	void update_k_star(const Vec3&x_star) {
 		k_star->resize(sampleset->size());
 		for(size_t i = 0; i < sampleset->size(); ++i) {
 			(*k_star)(i) = cf->get(x_star, sampleset->x(i));
 		}
 	}
+	
+	/** Update alpha vector (mean) */
 	void update_alpha() {
 		// can previously computed values be used?
 		if (!alpha_needs_update) return;
@@ -241,12 +254,13 @@ protected:
 		alpha_needs_update = true;
 	}
 	
-	/** C'tor */
+	/** Default C'tor */
 	GaussianProcess() {}
 };
 
 //------------------------------------------------------------------------------
 
+/** List of legal types */
 typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::Laplace::Desc> LaplaceRegressor;
 //typedef GaussianProcess<gp::Laplace::Ptr, gp::Laplace::Desc> LaplaceRegressor;
 //typedef GaussianProcess<gp::ThinPlate> ThinPlateRegressor;
@@ -255,4 +269,4 @@ typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::Laplace::Desc> LaplaceRegresso
 //------------------------------------------------------------------------------
 
 }
-#endif /* __GP_H__ */
+#endif /* __GP_GAUSSIANPROCESS_H__ */

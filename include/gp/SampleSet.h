@@ -1,3 +1,16 @@
+/** @file SampleSet.h
+ * 
+ * 
+ * @author	Claudio Zito
+ *
+ * @copyright  Copyright (C) 2015 Claudio, University of Birmingham, UK
+ *
+ * @license  This file copy is licensed to you under the terms described in
+ *           the License.txt file included in this distribution.
+ *
+ * Refer to Gaussian process library for Machine Learning.
+ *
+ */
 #ifndef __SAMPLESET_H__
 #define __SAMPLESET_H__
 
