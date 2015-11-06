@@ -1,3 +1,9 @@
+/** @file SampleSet.cpp
+ * 
+ * 
+ * @author	Claudio Zito
+ *
+ */
 #include "gp/SampleSet.h"
 #include <Eigen/StdVector>
 

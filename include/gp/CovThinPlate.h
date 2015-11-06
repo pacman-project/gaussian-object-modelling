@@ -1,3 +1,16 @@
+/** @file CovThinPlate.h
+ * 
+ * 
+ * @author	Claudio Zito
+ *
+ * @copyright  Copyright (C) 2015 Claudio, University of Birmingham, UK
+ *
+ * @license  This file copy is licensed to you under the terms described in
+ *           the License.txt file included in this distribution.
+ *
+ * Refer to Gaussian process library for Machine Learning.
+ *
+ */
 #ifndef __GP__THINPLATE_H__
 #define __GP__THINPLATE_H__
 
