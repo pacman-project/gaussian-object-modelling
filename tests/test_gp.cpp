@@ -10,7 +10,7 @@ using namespace std;
 int main( int argc, char** argv )
 {
         /*****  Global variables  ******************************************/
-        size_t N_sur = 1000, N_ext = 50, N_int = 1;
+        size_t N_sur = 2000, N_ext = 50, N_int = 1;
         double noise = 0.001;
         const double PI = numeric_const<double>::PI; 
 
@@ -18,7 +18,7 @@ int main( int argc, char** argv )
   	srand (time(NULL));
   	
   	const bool prtInit = false;
-  	const bool prtPreds = true;
+  	const bool prtPreds = false;
         
         /*****  Generate Input data  ******************************************/
         Vec3Seq cloud;
@@ -62,14 +62,18 @@ int main( int argc, char** argv )
        	
        	/*****  Create the model  *********************************************/
        	SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
-        LaplaceRegressor gp(trainingData, noise);
+       	LaplaceRegressor::Desc laplaceDesc;
+       	laplaceDesc.noise = noise;
+        LaplaceRegressor::Ptr gp = laplaceDesc.create();
+        printf("Regressor created %s\n", gp->getName().c_str());
+        gp->set(trainingData);
         //ThinPlateRegressor gp(&trainingData);
         
         
         /*****  Query the model with a point  *********************************/
         Vec3 q(cloud[0]);
-        const double qf = gp.f(q);
-        const double qVar = gp.var(q);
+        const double qf = gp->f(q);
+        const double qVar = gp->var(q);
         
         if (prtPreds) cout << "y = " << targets[0] << " -> qf = " << qf << " qVar = " << qVar << endl << endl;
         
@@ -92,22 +96,21 @@ int main( int argc, char** argv )
         	y_star[i] = y;
         	
         	// gp estimate of y value
-        	const double f_star = gp.f(point);
-		const double v_star = gp.var(point);
+        	const double f_star = gp->f(point);
+		const double v_star = gp->var(point);
         	if (prtPreds) 
         		cout << "f(x_star) = " << y << " -> f_star = " << f_star << " v_star = " << v_star << endl;
 	}
 	
 	/*****  Add point to the model  *********************************************/
-	gp.add_patterns(x_star, y_star);
+	gp->add_patterns(x_star, y_star);
 	
 	// test on the first x_star point
 	Vec3 q2(x_star[0]);
-        const double q2f = gp.f(q2);
-        const double q2Var = gp.var(q2);
+        const double q2f = gp->f(q2);
+        const double q2Var = gp->var(q2);
         
         if (prtPreds) cout << "y = " << y_star[0] << " -> q2f = " << q2f << " q2Var = " << q2Var << endl << endl;
-
 
 
 

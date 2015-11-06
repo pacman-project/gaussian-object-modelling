@@ -12,32 +12,66 @@ namespace gp
 
 //------------------------------------------------------------------------------
 
-class ThinPlate : public BaseCovFunc {
+class ThinPlate : public BaseCovFunc 
+{
 public:
-        const double length_;
-        
+	/** Pointer to the Covariance function */
+	typedef boost::shared_ptr<ThinPlate> Ptr;
+
+	/** Descriptor file */
+	class Desc : public BaseCovFunc::Desc {
+	public:
+		/** Pointer to description file */
+		typedef boost::shared_ptr<ThinPlate::Desc> Ptr;
+		
+		/** Hyper-parameters */
+        	double length;
+		
+		/** Default C'tor */
+		Desc() {
+			setToDefault();
+		}
+		
+		/** Set values to default */
+		void setToDefault() {
+			length = 1.0;
+		}
+		
+		/** Creates the object from the description. */
+		CREATE_FROM_OBJECT_DESC_0(ThinPlate, BaseCovFunc::Ptr)
+		
+		/** Assert valid descriptor files */
+		bool isValid(){ 
+			if (!std::isfinite(length))
+				return false;
+			return true;
+		}
+	}; 
+	
+	/** Get name of the covariance functions */
+	virtual std::string getName() const {
+		return "Laplace";
+	}
+	
         //thin plate kernel = 2.*EE.^3 - 3.*(leng).* EE.^2 + (leng*ones(size(EE))).^3
-        double get(const Vec3& x1, const Vec3& x2) const {
-//        	const double sum_x1_2 = x1.magnitudeSqr();
-//        	const double sum_x2_2 = x2.magnitudeSqr();
-//        	const double DD = sum_x1_2 + sum_x2_2 - 2*x1.dot(x2);
-        	const double EE = x1.distance(x2);//sqrt(DD);
-        	return 2*std::pow(EE, 3.0) - 3*length_*pow(EE, 2.0) + length_;
+        inline double get(const Vec3& x1, const Vec3& x2) const {
+        	const double EE = x1.distance(x2);
+        	return 2*std::pow(EE, 3.0) - threeLength*pow(EE, 2.0) + length3;
         }
 
-        ThinPlate(const double length) : BaseCovFunc(), length_(length) {
-                length_3 = std::pow(length_, 3.0);
-                loghyper_changed = true;
-        }
-
-        ThinPlate() : BaseCovFunc(), length_(1.0)
-        {
-                length_3 = std::pow(length_, 3.0);
-                loghyper_changed = true;
-        }
+        ~ThinPlate() {};
 
 private:
-        double length_3;
+        /** Hyper-parameters */
+        double threeLength;
+        double length3;
+        
+        /** Create from descriptor */
+	void create(const Desc& desc) {
+		BaseCovFunc::create(desc);
+		threeLength = 3*desc.length;
+		length3 = std::pow(desc.length, 3.0);
+	}
 };
 
 //------------------------------------------------------------------------------

@@ -10,6 +10,7 @@
 #include "gp/SampleSet.h"
 #include "gp/CovLaplace.h"
 #include "gp/CovThinPlate.h"
+#include <omp.h>
 
 //------------------------------------------------------------------------------
 
@@ -24,34 +25,52 @@ static const double initial_L_size = 15000;
  * from-to parameters of 3D points, sample points, etc. 
  *
  */
-template <class CovType> class GaussianProcess {
+
+template <class CovTypePtr, class CovTypeDesc> class GaussianProcess {
 public: 
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+	/** POinter to the class */
+	typedef boost::shared_ptr<GaussianProcess<CovTypePtr, CovTypeDesc> > Ptr;
 	
-	GaussianProcess() {
-		cf.reset(new CovType);
-		sampleset.reset();
-		input_dim = 3;
-		delta_n = numeric_const<double>::ZERO;
-		alpha.reset(new Eigen::VectorXd);
-		k_star.reset(new Eigen::VectorXd);
-		L.reset(new Eigen::MatrixXd);
-		L->resize(initial_L_size, initial_L_size);
+	/** Descriptor file */
+	class Desc {
+	public:
+		double initialLSize;
+		double noise;
+		CovTypeDesc covTypeDesc;
+		
+		/** C'tor */
+		Desc() {
+			setToDefault();
+		}
+		
+		/** Set to default */
+		void setToDefault() {
+			initialLSize = 10000;
+			noise = numeric_const<double>::ZERO;
+			covTypeDesc.setToDefault();
+		}
+		
+		/** Creates the object from the description. */
+		//CREATE_FROM_OBJECT_TEMPLATE_DESC_0(GaussianProcess, CovType, GaussianProcess::Ptr, SampleSet::Ptr)
+		Ptr create() const {
+//			GaussianProcess<CovTypePtr, CovTypeDesc> *pObject = new GaussianProcess<CovTypePtr, CovTypeDesc>();
+//			Ptr pointer(pObject);
+//			pObject->create(*this);
+			Ptr pointer(new GaussianProcess<CovTypePtr, CovTypeDesc>);
+			pointer->create(*this);
+			return pointer;
+		} 
+		
+		/** Assert valid descriptor files */
+		bool isValid(){ 
+			if (!std::isfinite(initialLSize))
+				return false;
+			if (noise < numeric_const<double>::ZERO)
+				return false;
+			return true;
+		}
 	};
-	/** Create and instance of GaussianProcess with given input dimensionality
-	* and covariance function. */
-	GaussianProcess(SampleSet::Ptr trainingData, const double noise = numeric_const<double>::ZERO) {
-		cf.reset(new CovType);
-		sampleset = trainingData;
-		input_dim = 3;
-		delta_n = noise;
-		alpha.reset(new Eigen::VectorXd);
-		k_star.reset(new Eigen::VectorXd);
-		L.reset(new Eigen::MatrixXd);
-		L->resize(initial_L_size, initial_L_size);
-	};
-	
-	virtual ~GaussianProcess() {};
 	
 	/** Predict target value for given input.
 	* @param x input vector
@@ -63,7 +82,7 @@ public:
 		compute();
 		update_alpha();
 		update_k_star(xStar);
-		//std::cout << "size alpha=" << alpha.size() << " k_star=" << k_star.size() << std::endl;
+		//std::cout << "size alpha=" << alpha->size() << " k_star=" << k_star->size() << std::endl;
 		return k_star->dot(*alpha);
 	}
 	
@@ -82,6 +101,14 @@ public:
 		return cf->get(xStar, xStar) - v.dot(v); //cf->get(x_star, x_star) - v.dot(v);
 	}
 	
+	void set(SampleSet::Ptr trainingData) {
+		sampleset = trainingData;
+	}
+	
+	std::string getName() const {
+		return cf->getName();
+	}
+	
 	/** Add input-output-pair to sample set.
 	* Add a copy of the given input-output-pair to sample set.
 	* @param x input array
@@ -96,7 +123,7 @@ public:
 		
 		// create kernel matrix if sampleset is empty
 		if (n == 0) {
-			cf->loghyper_changed = true;
+			cf->setLogHyper(true);
 			compute();
 		}
 		else {
@@ -123,16 +150,6 @@ public:
 		alpha_needs_update = true;
 	}
 	
-//	bool set_y(size_t i, double y);
-//	/** Get number of samples in the training set. */
-//	size_t get_sampleset_size();
-//	/** Clear sample set and free memory. */
-//	void clear_sampleset();
-//	/** Get reference on currently used covariance function. */
-//	CovarianceFunction & covf();
-//	/** Get input vector dimensionality. */
-//	size_t get_input_dim();
-	
 	double log_likelihood() {
 		compute();
 		update_alpha();
@@ -143,30 +160,11 @@ public:
 		return -0.5*y.dot(*alpha) - 0.5*det - 0.5*n*log2pi;
 	}
 	
-//	Eigen::VectorXd log_likelihood_gradient() {
-//		compute();
-//		update_alpha();
-//		size_t n = sampleset->size();
-//		Eigen::VectorXd grad = Eigen::VectorXd::Zero(cf->get_param_dim());
-//		Eigen::VectorXd g(grad.size());
-//		Eigen::MatrixXd W = Eigen::MatrixXd::Identity(n, n);
-//		// compute kernel matrix inverse
-//		L.topLeftCorner(n, n).triangularView<Eigen::Lower>().solveInPlace(W);
-//		L.topLeftCorner(n, n).triangularView<Eigen::Lower>().transpose().solveInPlace(W);
-//		W = alpha * alpha.transpose() - W;
-//		for(size_t i = 0; i < n; ++i) {
-//		for(size_t j = 0; j <= i; ++j) {
-//		cf->grad(sampleset->x(i), sampleset->x(j), g);
-//		if (i==j) grad += W(i,j) * g * 0.5;
-//		else grad += W(i,j) * g;
-//		}
-//		}
-//		return grad;
-//	}
+	virtual ~GaussianProcess() {};
 	
 protected:
-	// pointer to the covariance function type
-        boost::shared_ptr<CovType> cf;
+	/** pointer to the covariance function type */
+        CovTypePtr cf;
 	/** The training sample set. */
 	boost::shared_ptr<SampleSet> sampleset;
 	/** Alpha is cached for performance. */
@@ -180,14 +178,9 @@ protected:
 	size_t input_dim;
 	/** Noise parameter */
 	double delta_n;
+	bool alpha_needs_update;
 	
-	/** Update test input and cache kernel vector. */
-//	void update_k_star(const Eigen::VectorXd &x_star) {
-//		k_star.resize(sampleset->size());
-//		for(size_t i = 0; i < sampleset->size(); ++i) {
-//			k_star(i) = cf->get(x_star, sampleset->x(i));
-//		}
-//	}
+	
 	void update_k_star(const Vec3&x_star) {
 		k_star->resize(sampleset->size());
 		for(size_t i = 0; i < sampleset->size(); ++i) {
@@ -210,16 +203,16 @@ protected:
 	/** Compute covariance matrix and perform cholesky decomposition. */
 	virtual void compute() {
 		// can previously computed values be used?
-		if (!cf->loghyper_changed) return;
+		if (!cf->getLogHyper()) return;
 		clock_t t = clock();
-		cf->loghyper_changed = false;
+		cf->setLogHyper(false);
 		// input size
 		const size_t n = sampleset->size();
 		// resize L if necessary
 		if (n > L->rows()) L->resize(n + initial_L_size, n + initial_L_size);
 		// compute kernel matrix (lower triangle)
 		size_t counter = 0;
-		#pragma omp parallel for
+		//#pragma omp parallel for
 		for(size_t i = 0; i < n; ++i) {
 			for(size_t j = 0; j <= i; ++j) {
 				const double k_ij = cf->get(sampleset->x(i), sampleset->x(j));
@@ -234,13 +227,29 @@ protected:
 		alpha_needs_update = true;
 		printf("GP::Compute(): Elapsed time: %.4fs\n", (float)(clock() - t)/CLOCKS_PER_SEC);
 	}
-	bool alpha_needs_update;
+	
+	/** Create from description file */
+	void create(const Desc& desc) {
+		cf = desc.covTypeDesc.create();
+		//sampleset = desc.trainingData;
+		input_dim = 3;
+		delta_n = desc.noise;
+		alpha.reset(new Eigen::VectorXd);
+		k_star.reset(new Eigen::VectorXd);
+		L.reset(new Eigen::MatrixXd);
+		L->resize(desc.initialLSize, desc.initialLSize);
+		alpha_needs_update = true;
+	}
+	
+	/** C'tor */
+	GaussianProcess() {}
 };
 
 //------------------------------------------------------------------------------
 
-typedef GaussianProcess<gp::Laplace> LaplaceRegressor;
-typedef GaussianProcess<gp::ThinPlate> ThinPlateRegressor;
+typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::Laplace::Desc> LaplaceRegressor;
+//typedef GaussianProcess<gp::Laplace::Ptr, gp::Laplace::Desc> LaplaceRegressor;
+//typedef GaussianProcess<gp::ThinPlate> ThinPlateRegressor;
 //class LaplaceRegressor : public GaussianProcess<gp::Laplace> {};
 
 //------------------------------------------------------------------------------

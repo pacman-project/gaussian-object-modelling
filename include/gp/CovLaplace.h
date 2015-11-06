@@ -35,54 +35,87 @@ namespace gp
 
 class Laplace : public BaseCovFunc {
 public:
-        const double sigma_;
-        const double length_;
-//        inline double compute(double &value)
-//        {
-//                double power = -1*value*inv_length_;
-//                double out = 2*sigma_*std::exp(power);
-//                return out;
-//        }
+	typedef boost::shared_ptr<Laplace> Ptr;
+
+	/** Descriptor file */
+	class Desc : public BaseCovFunc::Desc {
+	public:
+		typedef boost::shared_ptr<Laplace::Desc> Ptr;
+		double sigma;
+        	double length;
+		
+		/** Default C'tor */
+		Desc() {
+			setToDefault();
+		}
+		
+		/** Set values to default */
+		void setToDefault() {
+			sigma = 1.0;
+			length = 1.0;
+		}
+		
+		/** Creates the object from the description. */
+		CREATE_FROM_OBJECT_DESC_0(Laplace, BaseCovFunc::Ptr)
+		
+		/** Assert valid descriptor files */
+		bool isValid(){ 
+			if (!std::isfinite(sigma) || !std::isfinite(length))
+				return false;
+			return true;
+		}
+	};
+	
+	/** Get name of the covariance functions */
+	virtual std::string getName() const {
+		return "Laplace";
+	}
         
         //laplacian kernel = sigma_f^2*exp(sqrt((p_1-p_2)'*(p_1-p_2))/(-leng))
-        double get(const Vec3& x1, const Vec3& x2) const {
-//        	const double sum_x1_2 = x1.magnitudeSqr();
-//        	const double sum_x2_2 = x2.magnitudeSqr();
-//        	const double DD = sum_x1_2 + sum_x2_2 - 2*x1.dot(x2);
+        inline double get(const Vec3& x1, const Vec3& x2) const {
         	const double EE = x1.distance(x2);//sqrt(DD);
-        	const double power = -1*EE*inv_length_;
-        	return 2*sigma_2*std::exp(power);
-//        	Vec3 d = x1 - x2;
-//        	double value = std::sqrt(d.dot(d));
-//        	double power = -1*value*inv_length_;
-//                double out = 2*sigma_*std::exp(power);
+        	const double power = -1*EE*invLength;
+        	return twoSigma2*std::exp(power);
         }
-
-        Laplace(const double sigma, const double length) : BaseCovFunc(),
-                sigma_(sigma),
-                length_(length)
-        {
-        	sigma_2 = sigma_*sigma_;
-                inv_length_ = 1.0 / (length_);
-                loghyper_changed = true;
-        }
-
-        Laplace() : BaseCovFunc(),
-                sigma_(1.0),
-                length_(1.0)
-        {
-        	sigma_2 = sigma_*sigma_;
-                inv_length_ = 1.0;
-                loghyper_changed = true;
-        }
-
+	
+	~Laplace(){}
 private:
-	double sigma_2;
-        double inv_length_;
+	/** Hyper-parameters */
+	double twoSigma2;
+        double invLength;
+        
+        /** Create from descriptor */
+	void create(const Desc& desc) {
+		BaseCovFunc::create(desc);
+		twoSigma2 = 2*std::pow(desc.sigma, 2.0);
+                invLength = 1.0 / desc.length;
+	}
+        
+        Laplace() : BaseCovFunc() {}
 };
 
 //------------------------------------------------------------------------------
 
 }
+
+
+
+//Laplace(const double sigma, const double length) : BaseCovFunc(),
+//                sigma_(sigma),
+//                length_(length)
+//        {
+//        	two_sigma_2 = 2*sigma_*sigma_;
+//                inv_length_ = 1.0 / (length_);
+//                loghyper_changed = true;
+//        }
+
+//        Laplace() : BaseCovFunc(),
+//                sigma_(1.0),
+//                length_(1.0)
+//        {
+//        	two_sigma_2 = 2*sigma_*sigma_;
+//                inv_length_ = 1.0;
+//                loghyper_changed = true;
+//        }
 
 #endif
