@@ -3,7 +3,7 @@ project(gp_regression)
 
 add_definitions (-fpermissive -std=c++11)
 
-find_package(catkin REQUIRED COMPONENTS 
+find_package(catkin REQUIRED COMPONENTS
   roscpp
   message_generation
   std_msgs
@@ -17,6 +17,12 @@ find_package(catkin REQUIRED COMPONENTS
 # find_package(PCL REQUIRED)
 
 find_package(Eigen REQUIRED)
+
+find_package(OpenMP REQUIRED)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
 
 # Golem
 #SET(GOLEM_INCLUDE /usr/include CACHE PATH "Path prefix for Golem include")
@@ -46,11 +52,11 @@ add_executable(regression_server
   src/regression_server.cpp
 )
 
-add_dependencies(regression_server 
+add_dependencies(regression_server
   gp_regression_generate_messages_cpp
 )
 
-target_link_libraries(regression_server 
+target_link_libraries(regression_server
   ${catkin_LIBRARIES}
   #${GOLEM_LIBRARY}
   # ${PCL_LIBRARIES}
@@ -63,11 +69,11 @@ add_executable(test_gaussian
   tests/test_gaussian.cpp
 )
 
-add_dependencies(test_gaussian 
+add_dependencies(test_gaussian
   gp_regression_generate_messages_cpp
 )
 
-target_link_libraries(test_gaussian 
+target_link_libraries(test_gaussian
   ${catkin_LIBRARIES}
   # ${PCL_LIBRARIES}
 )
@@ -77,11 +83,11 @@ add_executable(test_gp
   src/gp/SampleSet.cpp
 )
 
-add_dependencies(test_gp 
+add_dependencies(test_gp
   gp_regression_generate_messages_cpp
 )
 
-target_link_libraries(test_gp 
+target_link_libraries(test_gp
   ${catkin_LIBRARIES}
   # ${PCL_LIBRARIES}
 )
