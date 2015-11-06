@@ -43,6 +43,14 @@ class GaussianProcessNode
         virtual ~GaussianProcessNode (){}
         /**\brief Node Handle*/
         ros::NodeHandle nh;
+
+        //Republish cloud method
+        void republish_cloud ()
+        {
+            if (start_gp && cloud_ptr)
+                if(!cloud_ptr->empty() && pub_cloud.getNumSubscribers()>0)
+                    pub_cloud.publish(*cloud_ptr);
+        }
     private:
         //input point cloud
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr;
@@ -97,7 +105,7 @@ int main (int argc, char *argv[])
     {
         //gogogo!
         ros::spinOnce();
-        //TODO do something in the loop if we recived a start? i.e. start_gp == true
+        node.republish_cloud();
         rate.sleep();
     }
     //someone killed us :(
