@@ -1,0 +1,5 @@
+#Serviced by /gaussian_process/start_process
+#REQ cloud: full path to a cloud on disk to load, if empty calls pacman_vision
+#           get cloud in hand to get a point cloud from vision.
+string cloud
+---

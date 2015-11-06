@@ -11,10 +11,13 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   visualization_msgs
   cmake_modules
+  pacman_vision_comm
 )
 
-# ToDo: port to 1.7.2
-# find_package(PCL REQUIRED)
+#ToDo: port to 1.7.2
+#TODO:  1.7.1 is  fine for  just loading  clouds, readding  it back  at whatever
+#       version it finds on system (Fri 06 Nov 2015 04:48:02 PM CET -- Tabjones)
+find_package(PCL REQUIRED)
 
 find_package(Eigen REQUIRED)
 
@@ -28,6 +31,11 @@ endif()
 #SET(GOLEM_INCLUDE /usr/include CACHE PATH "Path prefix for Golem include")
 #SET(GOLEM_LIBRARY /usr/lib CACHE PATH "Path prefix for Golem library")
 #SET(GOLEM_BINARIES /usr/bin CACHE PATH "Path prefix for Golem binaries")
+
+add_service_files(
+    FILES
+    start_process.srv
+    )
 
 generate_messages(
   DEPENDENCIES
@@ -45,7 +53,7 @@ include_directories(include
   ${catkin_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
   #${GOLEM_INCLUDE}
-  # ${PCL_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 add_executable(regression_server
@@ -59,7 +67,7 @@ add_dependencies(regression_server
 target_link_libraries(regression_server
   ${catkin_LIBRARIES}
   #${GOLEM_LIBRARY}
-  # ${PCL_LIBRARIES}
+  #${PCL_LIBRARIES}
 )
 
 
@@ -75,7 +83,7 @@ add_dependencies(test_gaussian
 
 target_link_libraries(test_gaussian
   ${catkin_LIBRARIES}
-  # ${PCL_LIBRARIES}
+  #${PCL_LIBRARIES}
 )
 
 add_executable(test_gp
@@ -90,4 +98,11 @@ add_dependencies(test_gp
 target_link_libraries(test_gp
   ${catkin_LIBRARIES}
   # ${PCL_LIBRARIES}
+)
+
+#Add ROS node
+add_executable(gaussian_process node/gp_node.cpp)
+target_link_libraries(gaussian_process
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
