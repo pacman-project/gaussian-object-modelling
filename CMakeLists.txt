@@ -101,7 +101,9 @@ target_link_libraries(test_gp
 )
 
 #Add ROS node
-add_executable(gaussian_process node/gp_node.cpp)
+add_executable(gaussian_process
+    node/gp_node.cpp
+    src/gp/SampleSet.cpp)
 target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
