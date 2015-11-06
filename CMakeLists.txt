@@ -18,6 +18,11 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Eigen REQUIRED)
 
+# Golem
+#SET(GOLEM_INCLUDE /usr/include CACHE PATH "Path prefix for Golem include")
+#SET(GOLEM_LIBRARY /usr/lib CACHE PATH "Path prefix for Golem library")
+#SET(GOLEM_BINARIES /usr/bin CACHE PATH "Path prefix for Golem binaries")
+
 generate_messages(
   DEPENDENCIES
   std_msgs
@@ -33,6 +38,7 @@ catkin_package()
 include_directories(include
   ${catkin_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
+  #${GOLEM_INCLUDE}
   # ${PCL_INCLUDE_DIRS}
 )
 
@@ -46,6 +52,7 @@ add_dependencies(regression_server
 
 target_link_libraries(regression_server 
   ${catkin_LIBRARIES}
+  #${GOLEM_LIBRARY}
   # ${PCL_LIBRARIES}
 )
 
@@ -61,6 +68,20 @@ add_dependencies(test_gaussian
 )
 
 target_link_libraries(test_gaussian 
+  ${catkin_LIBRARIES}
+  # ${PCL_LIBRARIES}
+)
+
+add_executable(test_gp
+  tests/test_gp.cpp
+  src/gp/SampleSet.cpp
+)
+
+add_dependencies(test_gp 
+  gp_regression_generate_messages_cpp
+)
+
+target_link_libraries(test_gp 
   ${catkin_LIBRARIES}
   # ${PCL_LIBRARIES}
 )
