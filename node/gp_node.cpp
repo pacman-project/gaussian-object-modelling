@@ -80,6 +80,9 @@ class GaussianProcessNode
         bool start_gp;
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
+        //Laplace regressor for the model
+        //this ideally gets updated with new points when they arrive
+        LaplaceRegressor::Ptr gp;
 
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res)
@@ -149,14 +152,15 @@ class GaussianProcessNode
             SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
             LaplaceRegressor::Desc laplaceDesc;
             laplaceDesc.noise = 0.001;
-            LaplaceRegressor::Ptr gp = laplaceDesc.create();
-            printf("Regressor created %s\n", gp->getName().c_str());
+            //create the model to be stored in class
+            gp = laplaceDesc.create();
+            ROS_INFO("Regressor created %s\n", gp->getName().c_str());
             gp->set(trainingData);
             /*****  Query the model with a point  *********************************/
-            Vec3 q(cloud[0]);
-            const double qf = gp->f(q);
-            const double qVar = gp->var(q);
-            std::cout << "y = " << targets[0] << " -> qf = " << qf << " qVar = " << qVar << std::endl << std::endl;
+            // Vec3 q(cloud[0]);
+            // const double qf = gp->f(q);
+            // const double qVar = gp->var(q);
+            // std::cout << "y = " << targets[0] << " -> qf = " << qf << " qVar = " << qVar << std::endl << std::endl;
         }
         //update gaussian model with new points from probe
         void update()
