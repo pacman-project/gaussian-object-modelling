@@ -50,7 +50,7 @@ class GaussianProcessNode
             pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
             cloud_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
             hand_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
-            model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB);
+            model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
         }
         /**\brief Destructor */
         virtual ~GaussianProcessNode (){}
@@ -75,7 +75,7 @@ class GaussianProcessNode
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr hand_ptr;
         //Services and publishers
         ros::ServiceServer srv_start;
-        ros::Publisher pub_cloud;
+        ros::Publisher pub_model;
         //control if we can start processing
         bool start_gp;
         //reconstructed model cloud to republish
