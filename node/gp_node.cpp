@@ -28,6 +28,12 @@
 
 using namespace gp;
 
+/*
+ *              PLEASE LOOK at TODOs by searching "TODO" to have an idea of
+ *              what is still missing or is improvable!
+ */
+
+
 /**\brief Class GaussianProcessNode
  * {Wraps Gaussian process into a ROS node}
 */
@@ -41,9 +47,10 @@ class GaussianProcessNode
             //TODO: Added a  publisher to republish point cloud  with new points
             //from  gaussian process,  right now  it's unused  (Fri 06  Nov 2015
             //05:18:41 PM CET -- tabjones)
-            pub_cloud = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_cloud", 1);
+            pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
             cloud_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
             hand_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+            model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB);
         }
         /**\brief Destructor */
         virtual ~GaussianProcessNode (){}
@@ -53,9 +60,14 @@ class GaussianProcessNode
         //Republish cloud method
         void republish_cloud ()
         {
-            if (start_gp && cloud_ptr)
-                if(!cloud_ptr->empty() && pub_cloud.getNumSubscribers()>0)
-                    pub_cloud.publish(*cloud_ptr);
+            // TODO:  this  function  is   unused  atm  (tabjones  on  Wednesday
+            //11/11/2015).
+            //These checks are  to make sure we are not  publishing empty cloud,
+            //we have a  gaussian process computed and  there's actually someone
+            //who listens to us
+            if (start_gp && model_ptr)
+                if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
+                    pub_model.publish(*model_ptr);
         }
     private:
         //input point cloud
@@ -66,6 +78,9 @@ class GaussianProcessNode
         ros::Publisher pub_cloud;
         //control if we can start processing
         bool start_gp;
+        //reconstructed model cloud to republish
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
+
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res)
         {
@@ -85,14 +100,14 @@ class GaussianProcessNode
                     ROS_ERROR("Get cloud in hand service call failed!");
                     return (false);
                 }
-                //obj cloud is saved into class, while hand cloud is wasted
+                //object and hand clouds are saved into class
                 pcl::fromROSMsg (service.response.obj, *cloud_ptr);
                 pcl::fromROSMsg (service.response.hand, *hand_ptr);
             }
             else{
-            //User told us to load a cloud from disk instead.
-            //TODO: Add some path checks perhaps? Lets hope the path is valid
-            //      for now!  (Fri 06 Nov 2015 05:03:19 PM CET -- tabjones)
+            //User told us to load a clouds from a dir on disk instead.
+            //TODO: Add  some path checks  perhaps? Lets  hope the user  wrote a
+            //valid path for now! (Fri 06 Nov 2015 05:03:19 PM CET -- tabjones)
                 if (pcl::io::loadPCDFile((req.cloud_dir+"/obj.pcd"), *cloud_ptr) != 0){
                     ROS_ERROR("Error loading cloud from %s",(req.cloud_dir+"obj.pcd").c_str());
                     return (false);
@@ -125,6 +140,7 @@ class GaussianProcessNode
             }
             for(size_t i=0; i<size_hand; ++i)
             {
+                //these points are marked as "external", cause they are from the hand
                 Vec3 point(hand_ptr->points[i].x, hand_ptr->points[i].y, hand_ptr->points[i].z);
                 cloud[size_cloud +i]=point;
                 targets[size_cloud+i]=1;
@@ -141,7 +157,14 @@ class GaussianProcessNode
             const double qf = gp->f(q);
             const double qVar = gp->var(q);
             std::cout << "y = " << targets[0] << " -> qf = " << qf << " qVar = " << qVar << std::endl << std::endl;
-
+        }
+        //update gaussian model with new points from probe
+        void update()
+        {
+            // TODO: To  implement entirely. Also  we need a way  to communicate
+            // with the probe  package to get the new points.  For instance call
+            // this function inside the callback when new points arrive(tabjones
+            // on Wednesday 11/11/2015)
         }
 };
 
