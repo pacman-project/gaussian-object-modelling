@@ -14,9 +14,11 @@
 #include <pcl/point_types.h>
 #include <pcl/common/io.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/common.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/search/kdtree.h>
 // General Utils
 #include <cmath>
 #include <fstream>
@@ -57,14 +59,18 @@ class GaussianProcessNode
         void sampleAndPublish ();
 
     private:
-        //input point cloud
+        //input object point cloud, this gets updated with new points from probe
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr;
+        //input hand point cloud
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr hand_ptr;
         //Services and publishers
         ros::ServiceServer srv_start;
         ros::Publisher pub_model;
         //control if we can start processing, i.e. we have a model and clouds
         bool start;
+        //control if gp model was updated with new points and thus we need to
+        //republish a new point cloud estimation
+        bool need_update;
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
         //Laplace regressor for the model
