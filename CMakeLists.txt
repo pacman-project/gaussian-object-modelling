@@ -49,11 +49,13 @@ generate_messages(
 
 catkin_package()
 
-include_directories(include
-  ${catkin_INCLUDE_DIRS}
-  ${Eigen_INCLUDE_DIRS}
-  #${GOLEM_INCLUDE}
-  ${PCL_INCLUDE_DIRS}
+include_directories(
+    include
+    node/include
+    ${catkin_INCLUDE_DIRS}
+    ${Eigen_INCLUDE_DIRS}
+    #${GOLEM_INCLUDE}
+    ${PCL_INCLUDE_DIRS}
 )
 
 add_executable(regression_server
@@ -104,6 +106,7 @@ target_link_libraries(test_gaussian
 #Add ROS node
 add_executable(gaussian_process
     node/gp_node.cpp
+    node/gp_node_main.cpp
     src/gp/SampleSet.cpp)
 target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
