@@ -110,6 +110,7 @@ void GaussianProcessNode::sampleAndPublish ()
                 if (qf <= 0.1){
                     //We can add this sample to the reconstructed cloud model
                     //color the sample according to variance
+                    //THIS DOESNT WORK
                     double red = 255.0*qvar;
                     double green = 255.0*(1.0 - qvar);
                     uint8_t* tmp = (uint8_t*)&red;
@@ -118,14 +119,6 @@ void GaussianProcessNode::sampleAndPublish ()
                     tmp = (uint8_t*)&green;
                     g = *tmp;
                     std::cout<<red<<" "<<green<<" -> "<<(unsigned int)r<<" "<<(unsigned int)g<<std::endl;
-                    if (r < 0)
-                        r = 0;
-                    if (r > 255)
-                        r = 255;
-                    if (g < 0)
-                        g = 0;
-                    if (g > 255)
-                        g = 255;
                     rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
                     pt.rgb = *reinterpret_cast<float*>(&rgb);
                     //add it
@@ -199,8 +192,8 @@ bool GaussianProcessNode::compute()
     Vec targets;
     const size_t size_cloud = cloud_ptr->size();
     const size_t size_hand = hand_ptr->size();
-    targets.resize(size_cloud + size_hand);
-    cloud.resize(size_cloud + size_hand);
+    targets.resize(size_cloud + size_hand +1);
+    cloud.resize(size_cloud + size_hand +1);
     if (size_cloud <=0){
         ROS_ERROR("[GaussianProcessNode::%s]\tLoaded object cloud is empty, cannot compute a model. Aborting...",__func__);
         start = false;
@@ -213,36 +206,35 @@ bool GaussianProcessNode::compute()
         targets[i]=0;
     }
     if (size_hand <=0){
-        ROS_WARN("[GaussianProcessNode::%s]\tLoaded hand cloud is empty, using centroid of object as 'external' point for Gaussian model computation...",__func__);
-        Eigen::Vector4f centroid;
-        if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*cloud_ptr, centroid) == 0){
-            ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
-            start = false;
-            return false;
-        }
-        targets.resize(size_cloud + 1);
-        cloud.resize(size_cloud + 1);
-        Vec3 ext_point(centroid[0], centroid[1], centroid[2]);
-        cloud[size_cloud] = ext_point;
-        targets[size_cloud] = 1;
+        ROS_WARN("[GaussianProcessNode::%s]\tLoaded hand cloud is empty, cannot compute a model. Aborting...",__func__);
+        start = false;
+        return false;
     }
-    else{
-        for(size_t i=0; i<size_hand; ++i)
-        {
-            //these points are marked as "external", cause they are from the hand
-            Vec3 point(hand_ptr->points[i].x, hand_ptr->points[i].y, hand_ptr->points[i].z);
-            cloud[size_cloud +i]=point;
-            targets[size_cloud+i]=1;
-        }
+    for(size_t i=0; i<size_hand; ++i)
+    {
+        //these points are marked as "external", cause they are from the hand
+        Vec3 point(hand_ptr->points[i].x, hand_ptr->points[i].y, hand_ptr->points[i].z);
+        cloud[size_cloud +i]=point;
+        targets[size_cloud+i]=1;
     }
+    //Now add centroid as "internal"
+    Eigen::Vector4f centroid;
+    if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*cloud_ptr, centroid) == 0){
+        ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
+        start = false;
+        return false;
+    }
+    Vec3 centr(centroid[0], centroid[1], centroid[2]);
+    cloud[size_hand+size_cloud] =centr;
+    targets[size_hand+size_cloud] = -1;
     /*****  Create the model  *********************************************/
     SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
     LaplaceRegressor::Desc laplaceDesc;
     laplaceDesc.noise = 0.001;
     //create the model to be stored in class
     gp = laplaceDesc.create();
-    ROS_INFO("[GaussianProcessNode::%s]\tRegressor created: %s",__func__, gp->getName().c_str());
     gp->set(trainingData);
+    ROS_INFO("[GaussianProcessNode::%s]\tRegressor created: %s",__func__, gp->getName().c_str());
     start = true;
     //tell the publisher we have a new model, so it can publish it to rviz
     need_update = true;

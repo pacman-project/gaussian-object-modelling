@@ -62,9 +62,9 @@ add_executable(regression_server
   src/regression_server.cpp
 )
 
-add_dependencies(regression_server
-  gp_regression_generate_messages_cpp
-)
+# add_dependencies(regression_server
+#   gp_regression_generate_messages_cpp
+# )
 
 target_link_libraries(regression_server
   ${catkin_LIBRARIES}
@@ -79,29 +79,28 @@ add_executable(test_gaussian
   tests/test_gaussian.cpp
 )
 
-add_dependencies(test_gaussian
-  gp_regression_generate_messages_cpp
-)
+# add_dependencies(test_gaussian
+#   gp_regression_generate_messages_cpp
+# )
 
 target_link_libraries(test_gaussian
   ${catkin_LIBRARIES}
   #${PCL_LIBRARIES}
 )
 
-# Removed compilation of test, cause it fails (tabjones on Wednesday 11/11/2015)
-# add_executable(test_gp
-#   tests/test_gp.cpp
-#   src/gp/SampleSet.cpp
-# )
-#
+add_executable(test_gp
+  tests/test_gp.cpp
+  src/gp/SampleSet.cpp
+)
+
 # add_dependencies(test_gp
 #   gp_regression_generate_messages_cpp
 # )
-#
-# target_link_libraries(test_gp
-#   ${catkin_LIBRARIES}
-#   # ${PCL_LIBRARIES}
-# )
+
+target_link_libraries(test_gp
+  ${catkin_LIBRARIES}
+  # ${PCL_LIBRARIES}
+)
 
 #Add ROS node
 add_executable(gaussian_process
