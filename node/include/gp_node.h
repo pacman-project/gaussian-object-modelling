@@ -13,6 +13,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/common/io.h>
+#include <pcl/common/centroid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -62,8 +63,8 @@ class GaussianProcessNode
         //Services and publishers
         ros::ServiceServer srv_start;
         ros::Publisher pub_model;
-        //control if we can start processing
-        bool start_gp;
+        //control if we can start processing, i.e. we have a model and clouds
+        bool start;
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
         //Laplace regressor for the model
@@ -75,7 +76,7 @@ class GaussianProcessNode
         bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res);
 
         //gp computation
-        void compute();
+        bool compute();
         //update gaussian model with new points from probe
         void update();
         //Republish cloud method
