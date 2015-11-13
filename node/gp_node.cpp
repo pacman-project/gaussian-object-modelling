@@ -107,18 +107,18 @@ void GaussianProcessNode::sampleAndPublish ()
                 const double qf = gp->f(q);
                 const double qvar = gp->var(q);
                 //test if sample was classified internal
-                if (qf <= 0.1){
-                    //We can add this sample to the reconstructed cloud model
-                    //color the sample according to variance
-                    //THIS DOESNT WORK
+                if (qf <= 0.3){
+                    //We can  add this sample  to the reconstructed  cloud model
+                    //color the sample according to variance. lots of mumbojumbo
+                    //to convert from double to uint then to float!
                     double red = 255.0*qvar;
                     double green = 255.0*(1.0 - qvar);
-                    uint8_t* tmp = (uint8_t*)&red;
+                    uint32_t tmp = *reinterpret_cast<int*>(&red);
                     b = 0;
-                    r = *tmp;
-                    tmp = (uint8_t*)&green;
-                    g = *tmp;
-                    std::cout<<red<<" "<<green<<" -> "<<(unsigned int)r<<" "<<(unsigned int)g<<std::endl;
+                    r = (tmp >> 16) & 0x0000ff;
+                    tmp = *reinterpret_cast<int*>(&green);
+                    g = (tmp >> 8) & 0x0000ff;
+                    std::cout<<red<<" "<<green<<" -> "<<(int)r<<" "<<(int)g<<std::endl;
                     rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
                     pt.rgb = *reinterpret_cast<float*>(&rgb);
                     //add it
