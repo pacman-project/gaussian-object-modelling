@@ -1,4 +1,5 @@
 #include <gp_node.h>
+#include <algorithm> //for std::max_element
 
 using namespace gp;
 
@@ -46,6 +47,9 @@ void GaussianProcessNode::sampleAndPublish ()
      *     return;
      * }
      */
+    //initialize storage
+    sample_vars.clear();
+    samples.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     //get minimum and maximum x y z coordinates of object
     Eigen::Vector4f min_coord, max_coord;
     pcl::getMinMax3D(*cloud_ptr, min_coord, max_coord);
@@ -67,16 +71,18 @@ void GaussianProcessNode::sampleAndPublish ()
     //construct a kdtree of hand to test if sample point is near the hand
     pcl::search::KdTree<pcl::PointXYZRGB> tree_hand;
     tree_hand.setInputCloud(hand_ptr);
-    //construct  a  kdtree  of  object  to  test if  sample  point  is  near  it
-    pcl::search::KdTree<pcl::PointXYZRGB> tree_obj;
-    tree_obj.setInputCloud(cloud_ptr);
+    //construct  the  kdtree  of  object
+    tree_obj.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    tree_obj->setInputCloud(cloud_ptr);
     //sample from (min - ext) to (max + ext)
-    float ext = 0.03f;
+    //except z that  goes from (min + step) to  (max + 2*ext) //no need  to sample in
+    //front of the camera, remember z=0 is kinect plane
+    float ext = 0.05f;
     //with a step of
-    float step = 0.02f;
+    float step = 0.015f;
     for (float x = min_coord[0] - ext; x<= max_coord[0] + ext; x += step)
         for (float y = min_coord[1] - ext; y<= max_coord[1] + ext; y += step)
-            for (float z = min_coord[2] - ext; z<= max_coord[2] + ext; z += step)
+            for (float z = min_coord[2] + step; z<= max_coord[2] + 2*ext; z += step)
             {
                 pcl::PointXYZRGB pt;
                 pt.x = x;
@@ -91,48 +97,78 @@ void GaussianProcessNode::sampleAndPublish ()
                         //this sample is near the hand (2cm), we discard it
                         continue;
                 }
+                    //then exclude  samples too near the object, they probably
+                    //don't interest much
+                    if(tree_obj->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
+                        //this sample is near the obj (5mm), we discard it
+                        continue;
                 //test if sample point is occluded, if not we don't have to test
                 //it since  camera would have seen  it, thus it would  be inside
                 //object cloud already
-                // TODO:  Implement a test  for occlusion (tabjones  on Thursday
-                //12/11/2015)
-
-                //test for object adjacency
-                if(tree_obj.radiusSearch(pt, 0.01, k_id, k_dist, 1) > 0)
-                    //this sample is near the object (1cm), we discard it
+                if (isSampleVisible(pt, min_coord[2]))
+                    //camera can see the sample, discard it
                     continue;
+
                 //finally query  the gaussian  model for  the sample,  keep only
                 //samples detected as "internal"
                 Vec3 q(x,y,z);
                 const double qf = gp->f(q);
                 const double qvar = gp->var(q);
-                //test if sample was classified internal
-                if (qf <= 0.3){
+                //test if sample was classified internal, with high tolerance
+                if (qf <= 0.7){
                     //We can  add this sample  to the reconstructed  cloud model
-                    //color the sample according to variance. lots of mumbojumbo
-                    //to convert from double to uint then to float!
-                    double red = 255.0*qvar;
-                    double green = 255.0*(1.0 - qvar);
-                    uint32_t tmp = *reinterpret_cast<int*>(&red);
-                    b = 0;
-                    r = (tmp >> 16) & 0x0000ff;
-                    tmp = *reinterpret_cast<int*>(&green);
-                    g = (tmp >> 8) & 0x0000ff;
-                    std::cout<<red<<" "<<green<<" -> "<<(int)r<<" "<<(int)g<<std::endl;
-                    rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
-                    pt.rgb = *reinterpret_cast<float*>(&rgb);
-                    //add it
-                    model_ptr->push_back(pt);
-                    // TODO: Add a storage of accepted samples into the class so
-                    // they can be  sent to the probe for  example. (tabjones on
-                    // Thursday 12/11/2015)
+                    //color the sample according to variance. however to do this
+                    //we need  the maximum variance  found. So we have  to store
+                    //these points  to evaluate it,  then add them to  the model
+                    //later.
+                    sample_vars.push_back(qvar);
+                    samples->push_back(pt);
                 }
             }
-    //All samples tested
+    //all generated samples are now tested, good ones are stored into samples.
+    const double max_var = *std::max_element(sample_vars.begin(), sample_vars.end());
+    //so color of points goes from green (var = 0) to red (var = max_var)
+    //Lots of mumbo-jumbo with bits to do this (convert from double to uint then
+    //to float!)
+
+    //sanity check for size
+    if(sample_vars.size() != samples->size()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tSomething went wrong when computing samples, size mismatch. Aborting...",__func__);
+        //this should never happen, however extra checks don't hurt
+        return;
+    }
+    //finally color those sample with their appropriate color
+    double red, green;
+    uint32_t tmp;
+    b=0;
+    for (size_t i =0; i<samples->size(); ++i)
+    {
+        if (sample_vars[i] <= max_var*0.5){
+            red = 255.0*2.0*sample_vars[i];
+            g = 255;
+            tmp = uint32_t(red);
+            r = tmp & 0x0000ff;
+            //This way it goes from green to yellow at half max_var
+        }
+        if (sample_vars[i] > max_var*0.5){
+            green = 255.0*2.0*(max_var - sample_vars[i]);
+            r = 255;
+            tmp = uint32_t(green);
+            g = tmp & 0x0000ff;
+        }
+        rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
+        samples->points[i].rgb = *reinterpret_cast<float*>(&rgb);
+        //add it published model
+        model_ptr->push_back(samples->points[i]);
+    }
+    //we leave samples filled, so they can be sent to someone if needed
     need_update = false;
-    //publish it
-    ROS_INFO("[GaussianProcessNode::%s]\tDone computing reconstructed model cloud.",__func__);
+    //reset  object  kdtree,   so  no  one  can   call  isSampleVisible  without
+    //initializing it again.
+    tree_obj.reset();
+    //publish the model
     publishCloudModel();
+    ROS_INFO("[GaussianProcessNode::%s]\tDone computing reconstructed model cloud.",__func__);
 }
 
 //callback to start process service, executes when service is called
@@ -230,7 +266,7 @@ bool GaussianProcessNode::compute()
     /*****  Create the model  *********************************************/
     SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
     LaplaceRegressor::Desc laplaceDesc;
-    laplaceDesc.noise = 0.001;
+    laplaceDesc.noise = 0.01;
     //create the model to be stored in class
     gp = laplaceDesc.create();
     gp->set(trainingData);
@@ -249,7 +285,7 @@ void GaussianProcessNode::update()
     // on Wednesday 11/11/2015)
 }
 //Republish cloud method
-void GaussianProcessNode::publishCloudModel ()
+void GaussianProcessNode::publishCloudModel () const
 {
     //These checks are  to make sure we are not  publishing empty cloud,
     //we have a  gaussian process computed and  there's actually someone
@@ -257,5 +293,48 @@ void GaussianProcessNode::publishCloudModel ()
     if (start && model_ptr)
         if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
             pub_model.publish(*model_ptr);
+}
+//test for occlusion of samples
+//return:
+//  0 -> not visible
+//  1 -> visible
+//  -1 -> error
+int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const
+{
+    if(!tree_obj){
+        ROS_ERROR("[GaussianProcessNode::%s]\tObject KdTree is not initialized. Aborting...",__func__);
+        //should never happen if called from sampleAndPublish
+        return (-1);
+    }
+    Eigen::Vector3f camera(0,0,0);
+    Eigen::Vector3f start_point(sample.x, sample.y, sample.z);
+    Eigen::Vector3f direction = camera - start_point;
+    const float norm = direction.norm();
+    direction.normalize();
+    const float step_size = 0.01f;
+    const int nsteps = std::max(1, static_cast<int>(norm/step_size));
+    std::vector<int> k_id;
+    std::vector<float> k_dist;
+    //move along direction
+    Eigen::Vector3f p(start_point[0], start_point[1], start_point[2]);
+    for (size_t i = 0; i<nsteps; ++i)
+    {
+        if (p[2] <= min_z)
+            //don't reach  the sensor, if  we are  outside sample region  we can
+            //stop testing.
+            break;
+        pcl::PointXYZRGB pt;
+        pt.x = p[0];
+        pt.y = p[1];
+        pt.z = p[2];
+        // TODO: This search radius is  hardcoded now, should be adapted somehow
+        // on point density (tabjones on Friday 13/11/2015)
+        if (tree_obj->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
+            //we intersected an object point, this sample cant reach the camera
+            return(0);
+        p += (direction * step_size);
+    }
+    //we didn't intersect anything, this sample is not occluded
+    return(1);
 }
 

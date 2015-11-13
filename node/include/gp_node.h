@@ -15,6 +15,7 @@
 #include <pcl/common/io.h>
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -76,16 +77,23 @@ class GaussianProcessNode
         //Laplace regressor for the model
         //this ideally gets updated with new points when they arrive
         LaplaceRegressor::Ptr gp;
+        //stored variances of sample points
+        std::vector<double> sample_vars;
+        //stored samples to add to model cloud
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr samples;
+        //kdtree for object, used by isSampleVisible method
+        pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree_obj;
 
-
+        //test sample for occlusion, i.e tells if the sample can reach the camera
+        //without "touching" other object points
+        int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res);
-
         //gp computation
         bool compute();
         //update gaussian model with new points from probe
         void update();
         //Republish cloud method
-        void publishCloudModel();
+        void publishCloudModel() const;
 };
 #endif
