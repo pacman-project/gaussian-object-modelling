@@ -21,7 +21,7 @@ find_package(PCL REQUIRED)
 
 find_package(Eigen REQUIRED)
 
-find_package(OpenMP REQUIRED)
+find_package(OpenMP)
 if (OPENMP_FOUND)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
@@ -40,14 +40,14 @@ add_service_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
-  std_msgs
   geometry_msgs
   sensor_msgs
   visualization_msgs
 )
 
-
-catkin_package()
+catkin_package(
+    CATKIN_DEPENDS roscpp message_runtime pacman_vision_comm message_generation
+    )
 
 include_directories(
     include
@@ -107,6 +107,11 @@ add_executable(gaussian_process
     node/gp_node.cpp
     node/gp_node_main.cpp
     src/gp/SampleSet.cpp)
+
+add_dependencies(gaussian_process
+  gp_regression_generate_messages_cpp
+)
+
 target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
