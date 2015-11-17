@@ -7,7 +7,9 @@ using namespace gp;
  *              PLEASE LOOK at TODOs by searching "TODO" to have an idea of
  *              what is still missing or is improvable!
  */
-
+// TODO:*abbassa densita punti sfera
+//      * abbassa densità griglia
+//      *varianza di riferimento da trovare cercare su code matlab(tabjones on Tuesday 17/11/2015)
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     need_update(false)
 {
@@ -33,6 +35,8 @@ void GaussianProcessNode::sampleAndPublish ()
         //last computed and published model is still fine, let's get out of here
         return;
 
+    // TODO: add a model_ptr reset mechanism (tabjones on Tuesday 17/11/2015)
+
     //We need to sample some points on a grid, query the gp model and add points
     //to cloud model, colored accordingly  to their covariance. Then publish the
     //cloud so the user can see it in rviz. Let's get this job done!
@@ -54,7 +58,7 @@ void GaussianProcessNode::sampleAndPublish ()
     Eigen::Vector4f min_coord, max_coord;
     pcl::getMinMax3D(*cloud_ptr, min_coord, max_coord);
     //color input point cloud blue in the reconstructed model
-    pcl::copyPointCloud(*cloud_ptr, *model_ptr);
+    *model_ptr += *cloud_ptr;
     uint8_t r = 0, g = 0, b = 255;
     uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
     for (size_t i=0; i < model_ptr->size(); ++i)
@@ -70,19 +74,20 @@ void GaussianProcessNode::sampleAndPublish ()
     }
     //construct a kdtree of hand to test if sample point is near the hand
     pcl::search::KdTree<pcl::PointXYZRGB> tree_hand;
-    tree_hand.setInputCloud(hand_ptr);
+    if (!hand_ptr->empty())
+        tree_hand.setInputCloud(hand_ptr);
     //construct  the  kdtree  of  object
     tree_obj.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
     tree_obj->setInputCloud(cloud_ptr);
     //sample from (min - ext) to (max + ext)
     //except z that  goes from (min + step) to  (max + 2*ext) //no need  to sample in
     //front of the camera, remember z=0 is kinect plane
-    float ext = 0.05f;
+    float ext = 0.01f;
     //with a step of
-    float step = 0.015f;
+    float step = 0.01f;
     for (float x = min_coord[0] - ext; x<= max_coord[0] + ext; x += step)
         for (float y = min_coord[1] - ext; y<= max_coord[1] + ext; y += step)
-            for (float z = min_coord[2] + step; z<= max_coord[2] + 2*ext; z += step)
+            for (float z = min_coord[2]; z<= max_coord[2] + 2*ext; z += step)
             {
                 pcl::PointXYZRGB pt;
                 pt.x = x;
@@ -97,11 +102,11 @@ void GaussianProcessNode::sampleAndPublish ()
                         //this sample is near the hand (2cm), we discard it
                         continue;
                 }
-                    //then exclude  samples too near the object, they probably
-                    //don't interest much
-                    if(tree_obj->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
-                        //this sample is near the obj (5mm), we discard it
-                        continue;
+                // then exclude  samples too near the object, they probably
+                // don't interest much
+                if(tree_obj->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
+                    //this sample is near the obj (5mm), we discard it
+                    continue;
                 //test if sample point is occluded, if not we don't have to test
                 //it since  camera would have seen  it, thus it would  be inside
                 //object cloud already
@@ -110,12 +115,12 @@ void GaussianProcessNode::sampleAndPublish ()
                     continue;
 
                 //finally query  the gaussian  model for  the sample,  keep only
-                //samples detected as "internal"
+                //samples detected as belonging to the object
                 Vec3 q(x,y,z);
                 const double qf = gp->f(q);
                 const double qvar = gp->var(q);
-                //test if sample was classified internal, with high tolerance
-                if (qf <= 0.7){
+                //test if sample was classified internal
+                if (qf <= 0.02 && qf >= -0.02){
                     //We can  add this sample  to the reconstructed  cloud model
                     //color the sample according to variance. however to do this
                     //we need  the maximum variance  found. So we have  to store
@@ -202,34 +207,42 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
             ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir+"obj.pcd").c_str());
             return (false);
         }
-        if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0){
-            ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir + "/hand.pcd").c_str());
-            return (false);
-        }
+        if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0)
+            ROS_WARN("[GaussianProcessNode::%s]\tError loading cloud from %s, ignoring hand",__func__,(req.cloud_dir + "/hand.pcd").c_str());
         //We  need  to  fill  point  cloud header  or  ROS  will  complain  when
         //republishing this cloud. Let's assume it was published by asus kinect.
         //I think it's just need the frame id
         cloud_ptr->header.frame_id="/camera_rgb_optical_frame";
         hand_ptr->header.frame_id="/camera_rgb_optical_frame";
+        model_ptr->header.frame_id="/camera_rgb_optical_frame";
     }
     return (compute());
 }
 //gp computation
 bool GaussianProcessNode::compute()
 {
-    if(!cloud_ptr || !hand_ptr){
+    if(!cloud_ptr){
         //This  should never  happen  if compute  is  called from  start_process
         //service callback, however it does not hurt to add this extra check!
-        ROS_ERROR("[GaussianProcessNode::%s]\tObject or Hand cloud pointers are empty. Aborting...",__func__);
+        ROS_ERROR("[GaussianProcessNode::%s]\tObject cloud pointer is empty. Aborting...",__func__);
         start = false;
         return false;
     }
     Vec3Seq cloud;
     Vec targets;
+    // sphere bounds computation
+    const int ang_div = 8; //divide 360° in 8 pieces, i.e. steps of 45°
+    const int lin_div = 6; //divide diameter into 6 pieces
+    //this makes 8*(6-2+1) + 2 points. Points at poles are not multiplied by 8
+    // = 42
+
     const size_t size_cloud = cloud_ptr->size();
-    const size_t size_hand = hand_ptr->size();
-    targets.resize(size_cloud + size_hand +1);
-    cloud.resize(size_cloud + size_hand +1);
+    // const size_t size_hand = hand_ptr->size();
+    // ignoring hand points in the gp model
+    const size_t size_hand = 0;
+    const size_t size_sphere = ang_div*lin_div;
+    targets.resize(size_cloud + size_hand + 1 + size_sphere);
+    cloud.resize(size_cloud + size_hand + 1 + size_sphere);
     if (size_cloud <=0){
         ROS_ERROR("[GaussianProcessNode::%s]\tLoaded object cloud is empty, cannot compute a model. Aborting...",__func__);
         start = false;
@@ -241,18 +254,19 @@ bool GaussianProcessNode::compute()
         cloud[i]=point;
         targets[i]=0;
     }
-    if (size_hand <=0){
-        ROS_WARN("[GaussianProcessNode::%s]\tLoaded hand cloud is empty, cannot compute a model. Aborting...",__func__);
-        start = false;
-        return false;
-    }
-    for(size_t i=0; i<size_hand; ++i)
-    {
-        //these points are marked as "external", cause they are from the hand
-        Vec3 point(hand_ptr->points[i].x, hand_ptr->points[i].y, hand_ptr->points[i].z);
-        cloud[size_cloud +i]=point;
-        targets[size_cloud+i]=1;
-    }
+    //ignore hand in gp model
+    // if (size_hand <=0){
+    //     ROS_WARN("[GaussianProcessNode::%s]\tLoaded hand cloud is empty, cannot compute a model. Aborting...",__func__);
+    //     start = false;
+    //     return false;
+    // }
+    // for(size_t i=0; i<size_hand; ++i)
+    // {
+    //     //these points are marked as "external", cause they are from the hand
+    //     Vec3 point(hand_ptr->points[i].x, hand_ptr->points[i].y, hand_ptr->points[i].z);
+    //     cloud[size_cloud +i]=point;
+    //     targets[size_cloud+i]=1;
+    // }
     //Now add centroid as "internal"
     Eigen::Vector4f centroid;
     if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*cloud_ptr, centroid) == 0){
@@ -263,10 +277,32 @@ bool GaussianProcessNode::compute()
     Vec3 centr(centroid[0], centroid[1], centroid[2]);
     cloud[size_hand+size_cloud] =centr;
     targets[size_hand+size_cloud] = -1;
+    //Add points in a sphere around centroid
+    const double radius = 0.3; //30cm
+    const double ang_step = M_PI * 2 / ang_div; //steps of 45°
+    const double lin_step = 2 * radius / lin_div;
+    //8 steps for diameter times 6 for angle, make  points on the sphere surface
+    int j(0);
+    for (double lin=-radius+lin_step/2; lin< radius; lin+=lin_step)
+        for (double ang=0; ang < 2*M_PI; ang+=ang_step, ++j)
+        {
+            double x = sqrt(radius*radius - lin*lin) * cos(ang) + centroid[0];
+            double y = sqrt(radius*radius - lin*lin) * sin(ang) + centroid[1];
+            double z = lin + centroid[2]; //add centroid to translate there
+            Vec3 point(x,y,z);
+            cloud[size_cloud+size_hand+j+1] = point;
+            targets[size_cloud+size_hand+j+1] = 1;
+            //this is to view points on sphere in the model
+            // pcl::PointXYZRGB pt;
+            // pt.x = x;
+            // pt.y = y;
+            // pt.z = z;
+            // model_ptr->push_back(pt);
+        }
     /*****  Create the model  *********************************************/
     SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
     LaplaceRegressor::Desc laplaceDesc;
-    laplaceDesc.noise = 0.01;
+    laplaceDesc.noise = 1e-6;
     //create the model to be stored in class
     gp = laplaceDesc.create();
     gp->set(trainingData);
