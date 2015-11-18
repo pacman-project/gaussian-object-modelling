@@ -104,6 +104,7 @@ target_link_libraries(test_gp
 
 #Add ROS node
 add_executable(gaussian_process
+    node/include/gp_node.h
     node/gp_node.cpp
     node/gp_node_main.cpp
     src/gp/SampleSet.cpp)

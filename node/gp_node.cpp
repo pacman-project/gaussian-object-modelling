@@ -7,18 +7,15 @@ using namespace gp;
  *              PLEASE LOOK at TODOs by searching "TODO" to have an idea of
  *              what is still missing or is improvable!
  */
-// TODO:*abbassa densita punti sfera
-//      * abbassa densità griglia
+// TODO:
 //      *varianza di riferimento da trovare cercare su code matlab(tabjones on Tuesday 17/11/2015)
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
-    need_update(false)
+    need_update(false), how_many_discoveries(1)
 {
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
-    //TODO: Added a  publisher to republish point cloud  with new points
-    //from  gaussian process,  right now  it's unused  (Fri 06  Nov 2015
-    //05:18:41 PM CET -- tabjones)
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
-    cloud_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+    sub_points = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_point, this);
+    object_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     hand_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
 }
@@ -35,30 +32,13 @@ void GaussianProcessNode::sampleAndPublish ()
         //last computed and published model is still fine, let's get out of here
         return;
 
-    // TODO: add a model_ptr reset mechanism (tabjones on Tuesday 17/11/2015)
-
-    //We need to sample some points on a grid, query the gp model and add points
-    //to cloud model, colored accordingly  to their covariance. Then publish the
-    //cloud so the user can see it in rviz. Let's get this job done!
-    ROS_INFO("[GaussianProcessNode::%s]\tComputing reconstructed model cloud...",__func__);
-    // Get centroid of object and it's rough bounding box
-    // TODO: Centroid is not used atm (tabjones on Thursday 12/11/2015)
-    /*
-     * Eigen::Vector4f obj_cent;
-     * if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*cloud_ptr, obj_cent) == 0){
-     *     ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
-     *     need_update = false;
-     *     return;
-     * }
-     */
-    //initialize storage
-    sample_vars.clear();
-    samples.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
-    //get minimum and maximum x y z coordinates of object
-    Eigen::Vector4f min_coord, max_coord;
-    pcl::getMinMax3D(*cloud_ptr, min_coord, max_coord);
+    //model is reset, refill it
+    model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+    object_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    hand_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    pcl::copyPointCloud(*object_ptr, *model_ptr);
+    model_ptr->header.frame_id="/camera_rgb_optical_frame";
     //color input point cloud blue in the reconstructed model
-    *model_ptr += *cloud_ptr;
     uint8_t r = 0, g = 0, b = 255;
     uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
     for (size_t i=0; i < model_ptr->size(); ++i)
@@ -72,19 +52,37 @@ void GaussianProcessNode::sampleAndPublish ()
         hp.rgb = *reinterpret_cast<float*>(&rgb);
         model_ptr->push_back(hp);
     }
+    //We need to sample some points on a grid, query the gp model and add points
+    //to cloud model, colored accordingly  to their covariance. Then publish the
+    //cloud so the user can see it in rviz. Let's get this job done!
+    ROS_INFO("[GaussianProcessNode::%s]\tComputing reconstructed model cloud...",__func__);
+    // Get centroid of object and it's rough bounding box
+    // TODO: Centroid is not used atm (tabjones on Thursday 12/11/2015)
+    /*
+     * Eigen::Vector4f obj_cent;
+     * if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*object_ptr, obj_cent) == 0){
+     *     ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
+     *     need_update = false;
+     *     return;
+     * }
+     */
+    //initialize samples storage
+    samples_var.clear();
+    samples_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+    //get minimum and maximum x y z coordinates of object
+    Eigen::Vector4f min_coord, max_coord;
+    pcl::getMinMax3D(*object_ptr, min_coord, max_coord);
     //construct a kdtree of hand to test if sample point is near the hand
-    pcl::search::KdTree<pcl::PointXYZRGB> tree_hand;
     if (!hand_ptr->empty())
-        tree_hand.setInputCloud(hand_ptr);
+        hand_tree->setInputCloud(hand_ptr);
     //construct  the  kdtree  of  object
-    tree_obj.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
-    tree_obj->setInputCloud(cloud_ptr);
-    //sample from (min - ext) to (max + ext)
-    //except z that  goes from (min + step) to  (max + 2*ext) //no need  to sample in
-    //front of the camera, remember z=0 is kinect plane
-    float ext = 0.01f;
+    object_tree->setInputCloud(object_ptr);
+    //sample from (min  - ext) to (max +  ext) except z that goes  from (min) to
+    //(max + 2*ext). No need to sample  in front of the camera,  remember z=0 is
+    //kinect plane.
+    const float ext = 0.01f;
     //with a step of
-    float step = 0.01f;
+    const float step = 0.01f;
     for (float x = min_coord[0] - ext; x<= max_coord[0] + ext; x += step)
         for (float y = min_coord[1] - ext; y<= max_coord[1] + ext; y += step)
             for (float z = min_coord[2]; z<= max_coord[2] + 2*ext; z += step)
@@ -98,13 +96,13 @@ void GaussianProcessNode::sampleAndPublish ()
                 if (!hand_ptr->empty()){
                     //first exclude  samples that  could be  near the  hand, we
                     //don't want the probe go near it
-                    if(tree_hand.radiusSearch(pt, 0.02, k_id, k_dist, 1) > 0)
+                    if(hand_tree->radiusSearch(pt, 0.02, k_id, k_dist, 1) > 0)
                         //this sample is near the hand (2cm), we discard it
                         continue;
                 }
                 // then exclude  samples too near the object, they probably
                 // don't interest much
-                if(tree_obj->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
+                if(object_tree->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
                     //this sample is near the obj (5mm), we discard it
                     continue;
                 //test if sample point is occluded, if not we don't have to test
@@ -119,25 +117,24 @@ void GaussianProcessNode::sampleAndPublish ()
                 Vec3 q(x,y,z);
                 const double qf = gp->f(q);
                 const double qvar = gp->var(q);
-                //test if sample was classified internal
+                //test if sample was classified as belonging to obj surface
                 if (qf <= 0.02 && qf >= -0.02){
                     //We can  add this sample  to the reconstructed  cloud model
                     //color the sample according to variance. however to do this
                     //we need  the maximum variance  found. So we have  to store
-                    //these points  to evaluate it,  then add them to  the model
-                    //later.
-                    sample_vars.push_back(qvar);
-                    samples->push_back(pt);
+                    //these points  to evaluate it.
+                    samples_var.push_back(qvar);
+                    samples_ptr->push_back(pt);
                 }
             }
     //all generated samples are now tested, good ones are stored into samples.
-    const double max_var = *std::max_element(sample_vars.begin(), sample_vars.end());
+    const double max_var = *std::max_element(samples_var.begin(), samples_var.end());
     //so color of points goes from green (var = 0) to red (var = max_var)
     //Lots of mumbo-jumbo with bits to do this (convert from double to uint then
     //to float!)
 
     //sanity check for size
-    if(sample_vars.size() != samples->size()){
+    if(samples_var.size() != samples_ptr->size()){
         ROS_ERROR("[GaussianProcessNode::%s]\tSomething went wrong when computing samples, size mismatch. Aborting...",__func__);
         //this should never happen, however extra checks don't hurt
         return;
@@ -145,32 +142,31 @@ void GaussianProcessNode::sampleAndPublish ()
     //finally color those sample with their appropriate color
     double red, green;
     uint32_t tmp;
-    b=0;
-    for (size_t i =0; i<samples->size(); ++i)
+    r = 0; g = 0; b = 0;
+    for (size_t i =0; i<samples_var.size(); ++i)
     {
-        if (sample_vars[i] <= max_var*0.5){
-            red = 255.0*2.0*sample_vars[i];
+        if (samples_var[i] <= max_var*0.5){
+            red = 255.0*2.0*samples_var[i];
             g = 255;
             tmp = uint32_t(red);
             r = tmp & 0x0000ff;
             //This way it goes from green to yellow at half max_var
         }
-        if (sample_vars[i] > max_var*0.5){
-            green = 255.0*2.0*(max_var - sample_vars[i]);
+        if (samples_var[i] > max_var*0.5){
+            green = 255.0*2.0*(max_var - samples_var[i]);
             r = 255;
             tmp = uint32_t(green);
             g = tmp & 0x0000ff;
         }
         rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
-        samples->points[i].rgb = *reinterpret_cast<float*>(&rgb);
-        //add it published model
-        model_ptr->push_back(samples->points[i]);
+        samples_ptr->at(i).rgb = *reinterpret_cast<float*>(&rgb);
+        model_ptr->push_back(samples_ptr->at(i));
     }
-    //we leave samples filled, so they can be sent to someone if needed
+    //we leave samplesfilled, so they could be sent to someone if needed
     need_update = false;
     //reset  object  kdtree,   so  no  one  can   call  isSampleVisible  without
     //initializing it again.
-    tree_obj.reset();
+    object_tree.reset();
     //publish the model
     publishCloudModel();
     ROS_INFO("[GaussianProcessNode::%s]\tDone computing reconstructed model cloud.",__func__);
@@ -187,23 +183,21 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
         service.request.save = "false";
         //TODO:  Service requires  to know  which hand  is grasping  the
         //object we  dont have a way to tell inside here.  Assuming it's
-        //the right  hand for now.(Fri  06 Nov  2015 05:11:45 PM  CET --
+        //the left  hand for now.(Fri  06 Nov  2015 05:11:45 PM  CET --
         //tabjones)
-        service.request.right = true;
+        service.request.right = false;
         if (!ros::service::call<pacman_vision_comm::get_cloud_in_hand>(service_name, service))
         {
             ROS_ERROR("[GaussianProcessNode::%s]\tGet cloud in hand service call failed!",__func__);
             return (false);
         }
         //object and hand clouds are saved into class
-        pcl::fromROSMsg (service.response.obj, *cloud_ptr);
+        pcl::fromROSMsg (service.response.obj, *object_ptr);
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
     }
     else{
         //User told us to load a clouds from a dir on disk instead.
-        //TODO: Add  some path checks  perhaps? Lets  hope the user  wrote a
-        //valid path for now! (Fri 06 Nov 2015 05:03:19 PM CET -- tabjones)
-        if (pcl::io::loadPCDFile((req.cloud_dir+"/obj.pcd"), *cloud_ptr) != 0){
+        if (pcl::io::loadPCDFile((req.cloud_dir+"/obj.pcd"), *object_ptr) != 0){
             ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir+"obj.pcd").c_str());
             return (false);
         }
@@ -212,16 +206,40 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
         //We  need  to  fill  point  cloud header  or  ROS  will  complain  when
         //republishing this cloud. Let's assume it was published by asus kinect.
         //I think it's just need the frame id
-        cloud_ptr->header.frame_id="/camera_rgb_optical_frame";
+        object_ptr->header.frame_id="/camera_rgb_optical_frame";
         hand_ptr->header.frame_id="/camera_rgb_optical_frame";
         model_ptr->header.frame_id="/camera_rgb_optical_frame";
     }
+    discovered.clear();
     return (compute());
+}
+// TODO: Convert this callback, if  needed, to accept probe points and not
+// rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
+// Callback for rviz clicked point to simulate probe
+void GaussianProcessNode::cb_point(const geometry_msgs::PointStamped::ConstPtr &msg)
+{
+    pcl::PointXYZRGB pt;
+    //get the clicked point
+    pt.x = msg->point.x;
+    pt.y = msg->point.y;
+    pt.z = msg->point.z;
+    //color it blue
+    uint8_t r = 0, g = 0, b = 255;
+    uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
+    pt.rgb = *reinterpret_cast<float*>(&rgb);
+    discovered.push_back(pt);
+    //check if they are enough to update the model
+    if (discovered.size() >= how_many_discoveries){
+        for (const auto& x: discovered)
+            object_ptr->push_back(x);
+        //update the model
+        this->update();
+    }
 }
 //gp computation
 bool GaussianProcessNode::compute()
 {
-    if(!cloud_ptr){
+    if(!object_ptr){
         //This  should never  happen  if compute  is  called from  start_process
         //service callback, however it does not hurt to add this extra check!
         ROS_ERROR("[GaussianProcessNode::%s]\tObject cloud pointer is empty. Aborting...",__func__);
@@ -233,10 +251,9 @@ bool GaussianProcessNode::compute()
     // sphere bounds computation
     const int ang_div = 8; //divide 360° in 8 pieces, i.e. steps of 45°
     const int lin_div = 6; //divide diameter into 6 pieces
-    //this makes 8*(6-2+1) + 2 points. Points at poles are not multiplied by 8
-    // = 42
+    //this makes 8*6 = 48 points.
 
-    const size_t size_cloud = cloud_ptr->size();
+    const size_t size_cloud = object_ptr->size();
     // const size_t size_hand = hand_ptr->size();
     // ignoring hand points in the gp model
     const size_t size_hand = 0;
@@ -250,7 +267,7 @@ bool GaussianProcessNode::compute()
     }
     for(size_t i=0; i<size_cloud; ++i)
     {
-        Vec3 point(cloud_ptr->points[i].x, cloud_ptr->points[i].y, cloud_ptr->points[i].z);
+        Vec3 point(object_ptr->points[i].x, object_ptr->points[i].y, object_ptr->points[i].z);
         cloud[i]=point;
         targets[i]=0;
     }
@@ -269,7 +286,7 @@ bool GaussianProcessNode::compute()
     // }
     //Now add centroid as "internal"
     Eigen::Vector4f centroid;
-    if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*cloud_ptr, centroid) == 0){
+    if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*object_ptr, centroid) == 0){
         ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
         start = false;
         return false;
@@ -292,14 +309,8 @@ bool GaussianProcessNode::compute()
             Vec3 point(x,y,z);
             cloud[size_cloud+size_hand+j+1] = point;
             targets[size_cloud+size_hand+j+1] = 1;
-            //this is to view points on sphere in the model
-            // pcl::PointXYZRGB pt;
-            // pt.x = x;
-            // pt.y = y;
-            // pt.z = z;
-            // model_ptr->push_back(pt);
         }
-    /*****  Create the model  *********************************************/
+    /*****  Create the gp model  *********************************************/
     SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
     LaplaceRegressor::Desc laplaceDesc;
     laplaceDesc.noise = 1e-6;
@@ -315,10 +326,25 @@ bool GaussianProcessNode::compute()
 //update gaussian model with new points from probe
 void GaussianProcessNode::update()
 {
-    // TODO: To  implement entirely. Also  we need a way  to communicate
-    // with the probe  package to get the new points.  For instance call
-    // this function inside the callback when new points arrive(tabjones
-    // on Wednesday 11/11/2015)
+    // add_patterns seems not to work!
+    //
+    // Vec3Seq new_points;
+    // new_points.resize(discovered.size());
+    // Vec target;
+    // target.resize(discovered.size());
+    // for (size_t i = 0; i < discovered.size(); ++i)
+    // {
+    //     Vec3 point(discovered[i].x, discovered[i].y, discovered[i].z);
+    //     new_points[i] = point;
+    //     target[i] = 0;
+    // }
+    // #<{(|****  Add point to the model  ********************************************|)}>#
+    // gp->add_patterns(new_points, target);
+    // discovered.clear();
+    // need_update = true;
+    gp.reset();
+    discovered.clear();
+    this->compute();
 }
 //Republish cloud method
 void GaussianProcessNode::publishCloudModel () const
@@ -337,7 +363,7 @@ void GaussianProcessNode::publishCloudModel () const
 //  -1 -> error
 int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const
 {
-    if(!tree_obj){
+    if(!object_tree){
         ROS_ERROR("[GaussianProcessNode::%s]\tObject KdTree is not initialized. Aborting...",__func__);
         //should never happen if called from sampleAndPublish
         return (-1);
@@ -365,7 +391,7 @@ int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const fl
         pt.z = p[2];
         // TODO: This search radius is  hardcoded now, should be adapted somehow
         // on point density (tabjones on Friday 13/11/2015)
-        if (tree_obj->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
+        if (object_tree->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
             //we intersected an object point, this sample cant reach the camera
             return(0);
         p += (direction * step_size);
@@ -373,4 +399,3 @@ int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const fl
     //we didn't intersect anything, this sample is not occluded
     return(1);
 }
-

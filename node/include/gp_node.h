@@ -9,6 +9,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+#include <geometry_msgs/PointStamped.h>
 //PCL
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -16,6 +17,7 @@
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -61,34 +63,44 @@ class GaussianProcessNode
 
     private:
         //input object point cloud, this gets updated with new points from probe
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr;
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr object_ptr;
         //input hand point cloud
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr hand_ptr;
-        //Services and publishers
+        //Services, publishers and subscribers
         ros::ServiceServer srv_start;
         ros::Publisher pub_model;
+        ros::Subscriber sub_points;
         //control if we can start processing, i.e. we have a model and clouds
         bool start;
         //control if gp model was updated with new points and thus we need to
         //republish a new point cloud estimation
         bool need_update;
+        //control how many new discovered points we need before updating the model
+        int how_many_discoveries;
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
         //Laplace regressor for the model
-        //this ideally gets updated with new points when they arrive
         LaplaceRegressor::Ptr gp;
         //stored variances of sample points
-        std::vector<double> sample_vars;
-        //stored samples to add to model cloud
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr samples;
+        std::vector<double> samples_var;
+        //stored samples
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr samples_ptr;
         //kdtree for object, used by isSampleVisible method
-        pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree_obj;
+        pcl::search::KdTree<pcl::PointXYZRGB>::Ptr object_tree;
+        //kdtree for hand
+        pcl::search::KdTree<pcl::PointXYZRGB>::Ptr hand_tree;
+        //vector of discovered points
+        std::vector<pcl::PointXYZRGB> discovered;
 
         //test sample for occlusion, i.e tells if the sample can reach the camera
         //without "touching" other object points
         int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res);
+        //callback for sub point subscriber
+        // TODO: Convert this callback if  needed to accept probe points and not
+        // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
+        void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
         //gp computation
         bool compute();
         //update gaussian model with new points from probe
