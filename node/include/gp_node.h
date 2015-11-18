@@ -85,8 +85,10 @@ class GaussianProcessNode
         std::vector<double> samples_var;
         //stored samples
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr samples_ptr;
-        //kdtree for object, used by isSampleVisible method
+        //kdtree for object
         pcl::search::KdTree<pcl::PointXYZRGB>::Ptr object_tree;
+        //kdtree for object, used by isSampleVisible method
+        pcl::search::KdTree<pcl::PointXYZRGB>::Ptr viewpoint_tree;
         //kdtree for hand
         pcl::search::KdTree<pcl::PointXYZRGB>::Ptr hand_tree;
         //vector of discovered points

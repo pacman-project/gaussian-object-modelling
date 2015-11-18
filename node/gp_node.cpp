@@ -209,6 +209,8 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
         object_ptr->header.frame_id="/camera_rgb_optical_frame";
         hand_ptr->header.frame_id="/camera_rgb_optical_frame";
         model_ptr->header.frame_id="/camera_rgb_optical_frame";
+        viewpoint_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
+        viewpoint_tree->setInputCloud(object_ptr);
     }
     discovered.clear();
     return (compute());
@@ -363,8 +365,8 @@ void GaussianProcessNode::publishCloudModel () const
 //  -1 -> error
 int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const
 {
-    if(!object_tree){
-        ROS_ERROR("[GaussianProcessNode::%s]\tObject KdTree is not initialized. Aborting...",__func__);
+    if(!viewpoint_tree){
+        ROS_ERROR("[GaussianProcessNode::%s]\tObject Viewpoint KdTree is not initialized. Aborting...",__func__);
         //should never happen if called from sampleAndPublish
         return (-1);
     }
@@ -391,7 +393,7 @@ int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const fl
         pt.z = p[2];
         // TODO: This search radius is  hardcoded now, should be adapted somehow
         // on point density (tabjones on Friday 13/11/2015)
-        if (object_tree->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
+        if (viewpoint_tree->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
             //we intersected an object point, this sample cant reach the camera
             return(0);
         p += (direction * step_size);
