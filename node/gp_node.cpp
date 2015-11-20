@@ -8,13 +8,14 @@ using namespace gp;
  *              what is still missing or is improvable!
  */
 // TODO:
-//      *varianza di riferimento da trovare cercare su code matlab(tabjones on Tuesday 17/11/2015)
+//      *varianza di riferimento da mettere (max-min)/2 (tabjones on Tuesday 17/11/2015)
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     need_update(false), how_many_discoveries(1)
 {
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     sub_points = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_point, this);
+    pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 1);
     object_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     hand_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -57,15 +58,12 @@ void GaussianProcessNode::sampleAndPublish ()
     //cloud so the user can see it in rviz. Let's get this job done!
     ROS_INFO("[GaussianProcessNode::%s]\tComputing reconstructed model cloud...",__func__);
     // Get centroid of object and it's rough bounding box
-    // TODO: Centroid is not used atm (tabjones on Thursday 12/11/2015)
-    /*
-     * Eigen::Vector4f obj_cent;
-     * if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*object_ptr, obj_cent) == 0){
-     *     ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
-     *     need_update = false;
-     *     return;
-     * }
-     */
+    Eigen::Vector4f obj_cent;
+    if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*object_ptr, obj_cent) == 0){
+        ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
+        need_update = false;
+        return;
+    }
     //initialize samples storage
     samples_var.clear();
     samples_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -129,6 +127,8 @@ void GaussianProcessNode::sampleAndPublish ()
             }
     //all generated samples are now tested, good ones are stored into samples.
     const double max_var = *std::max_element(samples_var.begin(), samples_var.end());
+    const double min_var = *std::min_element(samples_var.begin(), samples_var.end());
+    const double ref_var = (max_var-min_var)*0.5;
     //so color of points goes from green (var = 0) to red (var = max_var)
     //Lots of mumbo-jumbo with bits to do this (convert from double to uint then
     //to float!)
@@ -143,25 +143,51 @@ void GaussianProcessNode::sampleAndPublish ()
     double red, green;
     uint32_t tmp;
     r = 0; g = 0; b = 0;
+    int samp_idx(0);
+    double min_var_diff(1e5);
     for (size_t i =0; i<samples_var.size(); ++i)
     {
-        if (samples_var[i] <= max_var*0.5){
-            red = 255.0*2.0*samples_var[i];
+        if (samples_var[i] <= ref_var){
+            red = 255.0*(samples_var[i] - min_var);
             g = 255;
             tmp = uint32_t(red);
             r = tmp & 0x0000ff;
             //This way it goes from green to yellow at half max_var
+            double dif_var = ref_var - samples_var[i];
+            if (dif_var < min_var_diff){
+                min_var_diff = dif_var;
+                samp_idx = i;
+            }
         }
-        if (samples_var[i] > max_var*0.5){
-            green = 255.0*2.0*(max_var - samples_var[i]);
+        if (samples_var[i] > ref_var){
+            green = 255.0*(max_var - samples_var[i]);
             r = 255;
             tmp = uint32_t(green);
             g = tmp & 0x0000ff;
+
+            double dif_var = samples_var[i] - ref_var;
+            if (dif_var < min_var_diff){
+                min_var_diff = dif_var;
+                samp_idx = i;
+            }
         }
         rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
         samples_ptr->at(i).rgb = *reinterpret_cast<float*>(&rgb);
         model_ptr->push_back(samples_ptr->at(i));
     }
+    sample_to_explore.header.frame_id="/camera_rgb_optical_frame";
+    sample_to_explore.header.stamp=ros::Time::now();
+    sample_to_explore.point.x = samples_ptr->at(samp_idx).x;
+    sample_to_explore.point.y = samples_ptr->at(samp_idx).y;
+    sample_to_explore.point.z = samples_ptr->at(samp_idx).z;
+    Eigen::Vector3f dir(obj_cent[0] - samples_ptr->at(samp_idx).x,
+                        obj_cent[1] - samples_ptr->at(samp_idx).y,
+                        obj_cent[2] - samples_ptr->at(samp_idx).z);
+    std::cout<<obj_cent;
+    dir.normalize();
+    sample_to_explore.direction.x = dir[0];
+    sample_to_explore.direction.y = dir[1];
+    sample_to_explore.direction.z = dir[2];
     //we leave samplesfilled, so they could be sent to someone if needed
     need_update = false;
     //reset  object  kdtree,   so  no  one  can   call  isSampleVisible  without
@@ -169,6 +195,7 @@ void GaussianProcessNode::sampleAndPublish ()
     object_tree.reset();
     //publish the model
     publishCloudModel();
+    publishSampleToExplore();
     ROS_INFO("[GaussianProcessNode::%s]\tDone computing reconstructed model cloud.",__func__);
 }
 
@@ -357,6 +384,14 @@ void GaussianProcessNode::publishCloudModel () const
     if (start && model_ptr)
         if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
             pub_model.publish(*model_ptr);
+}
+//Publish sample
+void GaussianProcessNode::publishSampleToExplore () const
+{
+    //These checks are  to make sure we  have a gp and  there's actually someone
+    // who listens to us
+    if (start && pub_point.getNumSubscribers()>0)
+        pub_point.publish(sample_to_explore);
 }
 //test for occlusion of samples
 //return:

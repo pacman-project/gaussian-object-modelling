@@ -31,6 +31,8 @@
 #include <pacman_vision_comm/get_cloud_in_hand.h>
 // This node service
 #include <gp_regression/start_process.h>
+// This node custom msg
+#include <gp_regression/SampleToExplore.h>
 //GP
 #include <gp/GaussianProcess.h>
 #include <gp/SampleSet.h>
@@ -68,7 +70,7 @@ class GaussianProcessNode
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr hand_ptr;
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
-        ros::Publisher pub_model;
+        ros::Publisher pub_model, pub_point;
         ros::Subscriber sub_points;
         //control if we can start processing, i.e. we have a model and clouds
         bool start;
@@ -91,6 +93,8 @@ class GaussianProcessNode
         pcl::search::KdTree<pcl::PointXYZRGB>::Ptr viewpoint_tree;
         //kdtree for hand
         pcl::search::KdTree<pcl::PointXYZRGB>::Ptr hand_tree;
+        //sample to explore
+        gp_regression::SampleToExplore sample_to_explore;
         //vector of discovered points
         std::vector<pcl::PointXYZRGB> discovered;
 
@@ -109,5 +113,7 @@ class GaussianProcessNode
         void update();
         //Republish cloud method
         void publishCloudModel() const;
+        //Publish sample to explore
+        void publishSampleToExplore() const;
 };
 #endif

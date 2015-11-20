@@ -37,6 +37,11 @@ add_service_files(
     start_process.srv
     )
 
+add_message_files(
+    FILES
+    SampleToExplore.msg
+    )
+
 generate_messages(
   DEPENDENCIES
   std_msgs
