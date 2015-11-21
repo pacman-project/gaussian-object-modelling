@@ -13,9 +13,12 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     need_update(false), how_many_discoveries(1)
 {
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
+    srv_sample = nh.advertiseService("sample_process", &GaussianProcessNode::cb_sample, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     sub_points = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_point, this);
     pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 1);
+    pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 1); // TEMP, should be a trajectory, curve, pose
+    pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 1); // TEMP, should be a trajectory, curve, pose
     object_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     hand_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -221,6 +224,8 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
         //object and hand clouds are saved into class
         pcl::fromROSMsg (service.response.obj, *object_ptr);
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
+        viewpoint_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
+        viewpoint_tree->setInputCloud(object_ptr);
     }
     else{
         //User told us to load a clouds from a dir on disk instead.
@@ -242,6 +247,16 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
     discovered.clear();
     return (compute());
 }
+
+bool GaussianProcessNode::cb_sample(gp_regression::GetToExploreTrajectory::Request& req, gp_regression::GetToExploreTrajectory::Response& res)
+{
+    // it will return the latest sample to explore it has
+    // this value is being computed in the node loop, which shouldn't be
+    // but for the moment return it as is
+    res.trajectory = sample_to_explore;
+    return true;
+}
+
 // TODO: Convert this callback, if  needed, to accept probe points and not
 // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
 // Callback for rviz clicked point to simulate probe
@@ -388,10 +403,24 @@ void GaussianProcessNode::publishCloudModel () const
 //Publish sample
 void GaussianProcessNode::publishSampleToExplore () const
 {
+    // TMP: The display marker for point and direction, useful for debug ;)
+    geometry_msgs::PointStamped point_marker;
+    point_marker.header = sample_to_explore.header;
+    point_marker.point = sample_to_explore.point;
+
+    geometry_msgs::WrenchStamped direction_marker;
+    direction_marker.header = sample_to_explore.header;
+    direction_marker.wrench.force = sample_to_explore.direction;
+
     //These checks are  to make sure we  have a gp and  there's actually someone
     // who listens to us
     if (start && pub_point.getNumSubscribers()>0)
+    {
         pub_point.publish(sample_to_explore);
+        pub_point_marker.publish(point_marker);
+        pub_direction_marker.publish(direction_marker);
+    }
+
 }
 //test for occlusion of samples
 //return:

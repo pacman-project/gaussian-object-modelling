@@ -10,6 +10,8 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/WrenchStamped.h>
+
 //PCL
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -29,10 +31,10 @@
 #include <stdlib.h>
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>
-// This node service
+// This node services (includes custom messages)
 #include <gp_regression/start_process.h>
-// This node custom msg
-#include <gp_regression/SampleToExplore.h>
+#include <gp_regression/GetToExploreTrajectory.h>
+
 //GP
 #include <gp/GaussianProcess.h>
 #include <gp/SampleSet.h>
@@ -70,7 +72,8 @@ class GaussianProcessNode
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr hand_ptr;
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
-        ros::Publisher pub_model, pub_point;
+        ros::ServiceServer srv_sample;
+        ros::Publisher pub_model, pub_point, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_points;
         //control if we can start processing, i.e. we have a model and clouds
         bool start;
@@ -103,6 +106,8 @@ class GaussianProcessNode
         int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res);
+        //callback to sample process service, executes when service is called
+        bool cb_sample(gp_regression::GetToExploreTrajectory::Request& req, gp_regression::GetToExploreTrajectory::Response& res);
         //callback for sub point subscriber
         // TODO: Convert this callback if  needed to accept probe points and not
         // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)

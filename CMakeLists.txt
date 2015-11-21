@@ -35,6 +35,7 @@ endif()
 add_service_files(
     FILES
     start_process.srv
+    GetToExploreTrajectory.srv
     )
 
 add_message_files(
