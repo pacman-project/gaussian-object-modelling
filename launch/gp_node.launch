@@ -16,7 +16,7 @@
   <!-- ============================= -->
 
   <!-- launch gaussian process node  -->
-  <node name="gaussian_process" pkg="gp_regression" type="gaussian_process" output="screen" />
+  <node name="gaussian_process" pkg="gp_regression" type="gaussian_process" output="screen" respawn="true" />
 
   <!-- rviz -->
   <node if="$(arg run_rviz)" name="rviz_gp" pkg="rviz" type="rviz" respawn="false" output="screen"/>
