@@ -224,8 +224,6 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
         //object and hand clouds are saved into class
         pcl::fromROSMsg (service.response.obj, *object_ptr);
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
-        viewpoint_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
-        viewpoint_tree->setInputCloud(object_ptr);
     }
     else{
         //User told us to load a clouds from a dir on disk instead.
@@ -241,9 +239,9 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
         object_ptr->header.frame_id="/camera_rgb_optical_frame";
         hand_ptr->header.frame_id="/camera_rgb_optical_frame";
         model_ptr->header.frame_id="/camera_rgb_optical_frame";
-        viewpoint_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
-        viewpoint_tree->setInputCloud(object_ptr);
     }
+    viewpoint_tree.reset(new pcl::search::KdTree<pcl::PointXYZRGB>);
+    viewpoint_tree->setInputCloud(object_ptr);
     discovered.clear();
     return (compute());
 }
