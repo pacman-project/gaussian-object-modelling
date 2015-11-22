@@ -16,9 +16,9 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     srv_sample = nh.advertiseService("sample_process", &GaussianProcessNode::cb_sample, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     sub_points = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_point, this);
-    pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 1);
-    pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 1); // TEMP, should be a trajectory, curve, pose
-    pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 1); // TEMP, should be a trajectory, curve, pose
+    pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 0, true);
+    pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
+    pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
     object_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     hand_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
     model_ptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -248,9 +248,7 @@ bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, g
 
 bool GaussianProcessNode::cb_sample(gp_regression::GetToExploreTrajectory::Request& req, gp_regression::GetToExploreTrajectory::Response& res)
 {
-    // it will return the latest sample to explore it has
-    // this value is being computed in the node loop, which shouldn't be
-    // but for the moment return it as is
+    sampleAndPublish();
     res.trajectory = sample_to_explore;
     return true;
 }
