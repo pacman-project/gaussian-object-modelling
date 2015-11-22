@@ -11,7 +11,7 @@ int main (int argc, char *argv[])
 {
     ros::init(argc, argv, "gaussian_process");
     GaussianProcessNode node;
-    ros::Rate rate(20); //try to go at 20hz
+    ros::Rate rate(50); //try to go at 50hz
     while (node.nh.ok())
     {
         //gogogo!
