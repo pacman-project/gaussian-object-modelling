@@ -21,9 +21,6 @@ struct Data
         std::vector<double> coord_x;
         std::vector<double> coord_y;
         std::vector<double> coord_z;
-        std::vector<double> std_dev_x;
-        std::vector<double> std_dev_y;
-        std::vector<double> std_dev_z;
         std::vector<double> label;
 };
 
@@ -32,8 +29,10 @@ struct Data
  */
 struct Model
 {
-        Eigen::MatrixXd P; // points 
-        Eigen::MatrixXd E; // noise
+        Eigen::MatrixXd P; // points
+        Eigen::MatrixXd N; // normal at points
+        Eigen::MatrixXd Tx; // tangent basis 1
+        Eigen::MatrixXd Ty; // tangent basis 2
         Eigen::VectorXd Y;  // labels
         Eigen::MatrixXd Kpp; // covariance with selected kernel
         Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel
@@ -70,7 +69,6 @@ public:
 
                 // configure gp
                 convertToEigen(data.coord_x, data.coord_y, data.coord_z, gp.P);
-                convertToEigen(data.std_dev_x, data.std_dev_y, data.std_dev_z, gp.E);
                 convertToEigen(data.label, gp.Y);
 
                 // go! // ToDo: avoid the for loops.
@@ -178,9 +176,7 @@ private:
         void assertData(const Data &data) const
         {
         	if (data.coord_x.empty() && data.coord_y.empty() 
-                        && data.coord_z.empty() && data.std_dev_x.empty()
-                        && data.std_dev_y.empty() && data.std_dev_z.empty()
-                        && data.label.empty())
+                        && data.coord_z.empty() && data.label.empty())
                 {
                         throw GPRegressionException("All input data is empty!");
                 }
