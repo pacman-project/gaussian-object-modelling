@@ -7,7 +7,8 @@ using namespace std;
 
 int main( int argc, char** argv )
 {
-        /*****  Generate Input data  ******************************************/
+        /*****  Generate INPUT data  ******************************************/
+        std::cout << "Generate INPUT data..." << std::endl;
         Data cloud;
         cloud.coord_x = vector<double>(1, 0.1);
         cloud.coord_y = vector<double>(1, 0.3);
@@ -27,6 +28,7 @@ int main( int argc, char** argv )
         cloud.label.push_back(1.0);
 
         /*****  Create the model  *********************************************/
+        std::cout << "Create the model..." << std::endl;
         Model mug;
         GaussianRegressor regresor;
         
@@ -40,6 +42,7 @@ int main( int argc, char** argv )
         cout << mug.Kpp << endl << endl;
 
         /*****  Query the model with a point  *********************************/
+        std::cout << "Query the model with a point" << std::endl;
         Data query;
         query.coord_x = vector<double>(1, 0.68);
         query.coord_y = vector<double>(1, 0.5);
@@ -58,6 +61,7 @@ int main( int argc, char** argv )
                         // << endl << endl;
 
         /*****  Query the model with a INPUT point  ***************************/
+        std::cout << "Query the model with a INPUT point" << std::endl;
         query.label.clear();
         query.coord_x = vector<double>(1, 0.1);
         query.coord_y = vector<double>(1, 0.3);
@@ -76,6 +80,7 @@ int main( int argc, char** argv )
                         // << endl << endl;
 
         /*****  Test the Tangent Basis generator  *****************************/
+        std::cout << "Test the Tangent Basis generator" << std::endl;
         Eigen::Vector3d z(1.0, 1.0, 1.0);
         std::cout << "z: " << std::endl << z << std::endl;
 
