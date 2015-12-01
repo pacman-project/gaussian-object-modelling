@@ -19,6 +19,20 @@ public:
                 return out;
         }
 
+        inline double computediff(double &value)
+        {
+                double e = compute(value);
+                double out = -1*inv_length2_*e;
+                return out;
+        }
+
+        inline double computediff2(double &value)
+        {
+                double e = compute(value);
+                double out = inv_length2_*inv_length2_*e;
+                return out;
+        }
+
         Gaussian(double sigma, double length) :
                 sigma_(sigma),
                 length_(length)
