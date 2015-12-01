@@ -75,5 +75,18 @@ int main( int argc, char** argv )
                         // << " " << query.ev_z.at(0) 
                         // << endl << endl;
 
+        /*****  Test the Tangent Basis generator  *****************************/
+        Eigen::Vector3d z(1.0, 1.0, 1.0);
+        std::cout << "z: " << std::endl << z << std::endl;
+
+        Eigen::Vector3d x, y;
+
+        computeTangentBasis(z, x, y);
+        std::cout << "x: " << std::endl << x << std::endl;
+        std::cout << "y: " << std::endl << y << std::endl;
+        std::cout << "x*z: " << std::endl << x.dot(z) << std::endl;
+        std::cout << "y*z: " << std::endl << y.dot(z) << std::endl;
+        std::cout << "x*y: " << std::endl << x.dot(y) << std::endl;
+
         return 0;
 }

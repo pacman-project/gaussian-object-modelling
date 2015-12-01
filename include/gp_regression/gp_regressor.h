@@ -6,12 +6,26 @@
 
 #include <Eigen/Core>
 #include <Eigen/LU>
+#include <Eigen/SVD>
 
 #include <gp_regression/cov_functions.h>
 #include <gp_regression/gp_regression_exception.h>
 
 namespace gp_regression
 {
+
+/*
+ * \brief Helper function to compute a basis in the tangnet plane defined
+ * by a normal vector
+ */
+void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
+{
+    Eigen::Vector3d NN = N.normalized();
+    Eigen::Matrix3d TProj = Eigen::Matrix3d::Identity() - NN*NN.transpose();
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(TProj, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Tx = svd.matrixU().col(0);
+    Ty = svd.matrixU().col(1);
+}
 
 /*
  * \brief Container for input data representing the raw 3D points
