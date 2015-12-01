@@ -32,20 +32,16 @@
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>
 // This node services (includes custom messages)
-#include <gp_regression/start_process.h>
+#include <gp_regression/StartProcess.h>
 #include <gp_regression/GetToExploreTrajectory.h>
 
 //GP
-#include <gp/GaussianProcess.h>
-#include <gp/SampleSet.h>
+#include <gp_regression/gp_regression.h>
 
-using namespace gp;
+using namespace gp_regression;
 
-/*
- *              PLEASE LOOK at TODOs by searching "TODO" to have an idea of
- *              what is still missing or is improvable!
- */
-
+/* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
+missing or is improvable! */
 
 /**\brief Class GaussianProcessNode
  * {Wraps Gaussian process into a ROS node}
@@ -84,8 +80,9 @@ class GaussianProcessNode
         int how_many_discoveries;
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
-        //Laplace regressor for the model
-        LaplaceRegressor::Ptr gp;
+        //Gaussian Model object and Lapalce regressor
+        Model object_gp;
+        LaplaceRegressor regressor;
         //stored variances of sample points
         std::vector<double> samples_var;
         //stored samples

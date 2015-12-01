@@ -3,12 +3,8 @@
 
 using namespace gp;
 
-/*
- *              PLEASE LOOK at TODOs by searching "TODO" to have an idea of
- *              what is still missing or is improvable!
- */
-// TODO:
-//      *varianza di riferimento da mettere (max-min)/2 (tabjones on Tuesday 17/11/2015)
+/* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
+missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     need_update(false), how_many_discoveries(1)
 {
@@ -186,12 +182,11 @@ void GaussianProcessNode::sampleAndPublish ()
     Eigen::Vector3f dir(obj_cent[0] - samples_ptr->at(samp_idx).x,
                         obj_cent[1] - samples_ptr->at(samp_idx).y,
                         obj_cent[2] - samples_ptr->at(samp_idx).z);
-    std::cout<<obj_cent;
     dir.normalize();
     sample_to_explore.direction.x = dir[0];
     sample_to_explore.direction.y = dir[1];
     sample_to_explore.direction.z = dir[2];
-    //we leave samplesfilled, so they could be sent to someone if needed
+    //we leave samples filled, so they could be sent to someone if needed
     need_update = false;
     //reset  object  kdtree,   so  no  one  can   call  isSampleVisible  without
     //initializing it again.
@@ -286,30 +281,20 @@ bool GaussianProcessNode::compute()
         start = false;
         return false;
     }
-    Vec3Seq cloud;
-    Vec targets;
-    // sphere bounds computation
-    const int ang_div = 8; //divide 360° in 8 pieces, i.e. steps of 45°
-    const int lin_div = 6; //divide diameter into 6 pieces
-    //this makes 8*6 = 48 points.
-
-    const size_t size_cloud = object_ptr->size();
-    // const size_t size_hand = hand_ptr->size();
-    // ignoring hand points in the gp model
-    const size_t size_hand = 0;
-    const size_t size_sphere = ang_div*lin_div;
-    targets.resize(size_cloud + size_hand + 1 + size_sphere);
-    cloud.resize(size_cloud + size_hand + 1 + size_sphere);
-    if (size_cloud <=0){
-        ROS_ERROR("[GaussianProcessNode::%s]\tLoaded object cloud is empty, cannot compute a model. Aborting...",__func__);
+    if (object_ptr->empty()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tObject point cloud is empty. Aborting...",__func__);
         start = false;
         return false;
     }
-    for(size_t i=0; i<size_cloud; ++i)
+    Data cloud; //to be filled later on...
+
+    //Add object points as label 0
+    for(const auto pt : object_ptr->points)
     {
-        Vec3 point(object_ptr->points[i].x, object_ptr->points[i].y, object_ptr->points[i].z);
-        cloud[i]=point;
-        targets[i]=0;
+        cloud.coord_x.push_back(pt.x);
+        cloud.coord_y.push_back(pt.y);
+        cloud.coord_z.push_back(pt.z);
+        cloud.label.push_back(0);
     }
     //ignore hand in gp model
     // if (size_hand <=0){
@@ -324,7 +309,8 @@ bool GaussianProcessNode::compute()
     //     cloud[size_cloud +i]=point;
     //     targets[size_cloud+i]=1;
     // }
-    //Now add centroid as "internal"
+
+    //Now add centroid as label -1
     Eigen::Vector4f centroid;
     if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*object_ptr, centroid) == 0){
         ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
@@ -332,9 +318,16 @@ bool GaussianProcessNode::compute()
         return false;
     }
     Vec3 centr(centroid[0], centroid[1], centroid[2]);
-    cloud[size_hand+size_cloud] =centr;
-    targets[size_hand+size_cloud] = -1;
-    //Add points in a sphere around centroid
+    cloud.coord_x.push_back(centroid[0]);
+    cloud.coord_y.push_back(centroid[1]);
+    cloud.coord_z.push_back(centroid[2]);
+    cloud.label.push_back(-1);
+
+    //Add points in a sphere around centroid as label 1
+    //sphere bounds computation
+    const int ang_div = 8; //divide 360° in 8 pieces, i.e. steps of 45°
+    const int lin_div = 6; //divide diameter into 6 pieces
+    //this makes 8*6 = 48 points.
     const double radius = 0.3; //30cm
     const double ang_step = M_PI * 2 / ang_div; //steps of 45°
     const double lin_step = 2 * radius / lin_div;
@@ -346,42 +339,26 @@ bool GaussianProcessNode::compute()
             double x = sqrt(radius*radius - lin*lin) * cos(ang) + centroid[0];
             double y = sqrt(radius*radius - lin*lin) * sin(ang) + centroid[1];
             double z = lin + centroid[2]; //add centroid to translate there
-            Vec3 point(x,y,z);
-            cloud[size_cloud+size_hand+j+1] = point;
-            targets[size_cloud+size_hand+j+1] = 1;
+            cloud.coord_x.push_back(x);
+            cloud.coord_y.push_back(y);
+            cloud.coord_z.push_back(z);
+            cloud.label.push_back(1);
         }
     /*****  Create the gp model  *********************************************/
-    SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
-    LaplaceRegressor::Desc laplaceDesc;
-    laplaceDesc.noise = 1e-6;
     //create the model to be stored in class
-    gp = laplaceDesc.create();
-    gp->set(trainingData);
-    ROS_INFO("[GaussianProcessNode::%s]\tRegressor created: %s",__func__, gp->getName().c_str());
+    regressor.create(cloud, object_gp);
+    ROS_INFO("[GaussianProcessNode::%s]\tRegressor created",__func__);
     start = true;
     //tell the publisher we have a new model, so it can publish it to rviz
     need_update = true;
     return true;
+
+    // TODO: REVISION TILL HERE, BELOW HERE IS NOT CHECKED AND DOES NOT COMPILE!
+    // (tabjones on Tuesday 01/12/2015)
 }
 //update gaussian model with new points from probe
 void GaussianProcessNode::update()
 {
-    // add_patterns seems not to work!
-    //
-    // Vec3Seq new_points;
-    // new_points.resize(discovered.size());
-    // Vec target;
-    // target.resize(discovered.size());
-    // for (size_t i = 0; i < discovered.size(); ++i)
-    // {
-    //     Vec3 point(discovered[i].x, discovered[i].y, discovered[i].z);
-    //     new_points[i] = point;
-    //     target[i] = 0;
-    // }
-    // #<{(|****  Add point to the model  ********************************************|)}>#
-    // gp->add_patterns(new_points, target);
-    // discovered.clear();
-    // need_update = true;
     gp.reset();
     discovered.clear();
     this->compute();

@@ -29,7 +29,7 @@ endif()
 
 add_service_files(
     FILES
-    start_process.srv
+    StartProcess.srv
     GetToExploreTrajectory.srv
     )
 

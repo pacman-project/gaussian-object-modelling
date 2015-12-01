@@ -55,11 +55,11 @@ struct Model
 };
 
 /*
- * \brief Handle for propagating a single GP map from 3D points to paramters, 
- * from-to parameters of 3D points, sample points, etc. 
+ * \brief Handle for propagating a single GP map from 3D points to paramters,
+ * from-to parameters of 3D points, sample points, etc.
  *
  */
-template <class CovType>
+template <typename CovType>
 class GPRegressor
 {
 public:
@@ -68,17 +68,17 @@ public:
 
         virtual ~GPRegressor() {}
 
-        /**
-        * \brief Solves the regression problem, computes the model parameters.
-        * \param[in]  data 3D points.
-        * \param[out] gp Gaussian Process parameters.
-        * \pre All non-empty vectors must contain valid data and their size 
-        * should be equal among them. Data vectors not used in this function can
-        * remain empty, so they can be used for 3D or 2D. For now, only 3D is
-        * assumed.
-        */
-        void create(const Data &data, Model &gp)
-        {
+            /**
+             * \brief Solves the regression problem, computes the model parameters.
+             * \param[in]  data 3D points.
+             * \param[out] gp Gaussian Process parameters.
+             * \pre All non-empty vectors must contain valid data and their size
+             * should be equal among them. Data vectors not used in this function can
+             * remain empty, so they can be used for 3D or 2D. For now, only 3D is
+             * assumed.
+             */
+            void create(const Data &data, Model &gp)
+            {
                 // validate data
                 assertData(data);
 
@@ -97,14 +97,13 @@ public:
                 {
                         for(int j = 0; j < gp.Kpp.cols(); ++j)
                         {
-                               gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j)); 
+                               gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j));
                                gp.Kppdiff(i,j) = kernel_->computediff(gp.Kpp(i,j));
                         }
                 }
 
                 gp.InvKpp = gp.Kpp.inverse();
                 gp.InvKppY = gp.InvKpp*gp.Y;
-
                 // normal and tangent computation, could be done potentially in the
                 // loop above, but just to keep it slightly separated for now
                 for(int i = 0; i < gp.Kpp.rows(); ++i)
@@ -122,102 +121,114 @@ public:
                 }
         }
 
-        /** 
-         * \brief Generates data using the GP
-         * \param[in]  data 3D points.
-         */
-        void estimate(const Model &gp, Data &query)
-        {
-                // validate gp
+            /**
+             * \brief Generates data using the GP
+             * \param[in]  data 3D points.
+             */
+            void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v)
+            {
 
                 // validate data
                 assertData(query);
 
                 if (!query.label.empty())
-                        throw GPRegressionException("Query is already labeled!");
+                    throw GPRegressionException("Query is already labeled!");
 
                 // go!
                 Eigen::MatrixXd Q;
-                Eigen::MatrixXd Kqp;
-                Eigen::VectorXd YPost;
+                Eigen::MatrixXd Kqp, Kpq;
+                Eigen::MatrixXd Kqq;
+                //function evaluation and associated variance
+                Eigen::VectorXd F, V_diagonal;
+                Eigen::MatrixXd V;
                 convertToEigen(query.coord_x, query.coord_y, query.coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp.P, Kqp);
-                
+
                 for(int i = 0; i < Kqp.rows(); ++i)
                 {
-                        for(int j = 0; j < Kqp.cols(); ++j)
-                        {
-                               Kqp(i,j) = kernel_->compute(Kqp(i,j)); 
-                        }
+                    for(int j = 0; j < Kqp.cols(); ++j)
+                    {
+                        Kqp(i,j) = kernel_->compute(Kqp(i,j));
+                    }
                 }
-                
-                YPost = Kqp*gp.InvKppY;
+                Kpq = Kqp.transpose();
+                buildEuclideanDistanceMatrix(Q, Q, Kqq);
+                for(int i = 0; i < Kqq.rows(); ++i)
+                {
+                    for(int j = 0; j < Kqq.cols(); ++j)
+                    {
+                        Kqq(i,j) = kernel_->compute(Kqq(i,j));
+                    }
+                }
+                F = Kqp*gp.InvKppY;
+                V = Kqq - Kqp*gp.InvKpp*Kpq;
+                V_diagonal = V.diagonal();
+                convertToSTD(F, f);
+                convertToSTD(V_diagonal, v);
+            }
 
-                convertToSTD(YPost, query.label);
-        }
+            /**
+             * \brief Updates the GP with the new data
+             * \param[in]  data 3D points.
+             */
+            void update(const Data &new_data, Model &gp)
+            {
+            }
 
-        /** 
-         * \brief Updates the GP with the new data
-         * \param[in]  data 3D points.
-         */
-        void update(const Data &new_data, Model &gp)
-        {
-        	create(new_data, gp);                
-        }
-
-        GPRegressor()
-        {
+            GPRegressor()
+            {
                 kernel_ = new CovType();
-        }
+            }
 
-private:
-        /*
-         * Conversion functions
-         */
-        void convertToEigen(const std::vector<double> &a,
-                                const std::vector<double> &b,
-                                const std::vector<double> &c,
-                                Eigen::MatrixXd &M) const
-        {
-        	double rowSize = M.rows() + a.size();
-                M.resize(rowSize, 3);
-                M.col(0) << Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
-                M.col(1) << Eigen::Map<Eigen::VectorXd>((double *)b.data(), b.size());
-                M.col(2) << Eigen::Map<Eigen::VectorXd>((double *)c.data(), c.size());
-        }
+        private:
+            /*
+             * Conversion functions
+             */
+            void convertToEigen(const std::vector<double> &a,
+                    const std::vector<double> &b,
+                    const std::vector<double> &c,
+                    Eigen::MatrixXd &M) const
+            {
+                M.resize(a.size(), 3);
+                M.col(0) = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
+                M.col(1) = Eigen::Map<Eigen::VectorXd>((double *)b.data(), b.size());
+                M.col(2) = Eigen::Map<Eigen::VectorXd>((double *)c.data(), c.size());
+            }
 
-        void convertToEigen(const std::vector<double> &a, Eigen::VectorXd &M) const
-        {
-        	M.resize(M.size() + a.size());
-                M << Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
-        }
+            void convertToEigen(const std::vector<double> &a, Eigen::VectorXd &M) const
+            {
+                M = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
+            }
 
-        void convertToSTD(const Eigen::VectorXd &M, std::vector<double> &a) const
-        {
+            void convertToSTD(const Eigen::VectorXd &M, std::vector<double> &a) const
+            {
                 a = std::vector<double>(M.data(), M.data() + M.size());
-        }
-
-        /*
-         * Utility functions
-         */
-        void buildEuclideanDistanceMatrix(const Eigen::MatrixXd &A,
-                                                const Eigen::MatrixXd &B,
-                                                Eigen::MatrixXd &D) const
-        {
+            }
+            /*
+             * Utility functions
+             */
+            void buildEuclideanDistanceMatrix(const Eigen::MatrixXd &A,
+                    const Eigen::MatrixXd &B,
+                    Eigen::MatrixXd &D) const
+            {
                 D = -2*A*B.transpose();
                 D.colwise() += A.cwiseProduct(A).rowwise().sum();
                 D.rowwise() += B.cwiseProduct(B).rowwise().sum().transpose();
-        }
-        
-        void assertData(const Data &data) const
-        {
-        	if (data.coord_x.empty() && data.coord_y.empty() 
-                        && data.coord_z.empty() && data.label.empty())
+            }
+
+            void assertData(const Data &data) const
+            {
+                if (data.coord_x.empty() && data.coord_y.empty()
+                        && data.coord_z.empty() && data.std_dev_x.empty()
+                        && data.std_dev_y.empty() && data.std_dev_z.empty()
+                        && data.label.empty())
                 {
-                        throw GPRegressionException("All input data is empty!");
+                    throw GPRegressionException("All input data is empty!");
                 }
         }
 };
+
+
 
 }
 
