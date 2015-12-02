@@ -219,9 +219,7 @@ public:
             void assertData(const Data &data) const
             {
                 if (data.coord_x.empty() && data.coord_y.empty()
-                        && data.coord_z.empty() && data.std_dev_x.empty()
-                        && data.std_dev_y.empty() && data.std_dev_z.empty()
-                        && data.label.empty())
+                        && data.coord_z.empty() && data.label.empty())
                 {
                         throw GPRegressionException("All input data is empty!");
                 }

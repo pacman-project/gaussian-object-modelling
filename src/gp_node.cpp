@@ -110,16 +110,20 @@ void GaussianProcessNode::sampleAndPublish ()
 
                 //finally query  the gaussian  model for  the sample,  keep only
                 //samples detected as belonging to the object
-                Vec3 q(x,y,z);
-                const double qf = gp->f(q);
-                const double qvar = gp->var(q);
+                Data samp;
+                samp.coord_x.push_back(x);
+                samp.coord_y.push_back(y);
+                samp.coord_z.push_back(z);
+                std::vector<double> f;
+                std::vector<double> v;
+                regressor.evaluate(*object_gp, samp, f, v);
                 //test if sample was classified as belonging to obj surface
-                if (qf <= 0.02 && qf >= -0.02){
+                if (f[0] <= 0.02 && f[0] >= -0.02){
                     //We can  add this sample  to the reconstructed  cloud model
                     //color the sample according to variance. however to do this
                     //we need  the maximum variance  found. So we have  to store
                     //these points  to evaluate it.
-                    samples_var.push_back(qvar);
+                    samples_var.push_back(v[0]);
                     samples_ptr->push_back(pt);
                 }
             }
@@ -316,7 +320,6 @@ bool GaussianProcessNode::compute()
         start = false;
         return false;
     }
-    Vec3 centr(centroid[0], centroid[1], centroid[2]);
     cloud.coord_x.push_back(centroid[0]);
     cloud.coord_y.push_back(centroid[1]);
     cloud.coord_z.push_back(centroid[2]);
