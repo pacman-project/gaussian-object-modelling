@@ -1,6 +1,6 @@
 #include <gp_node.h>
 
-using namespace gp;
+using namespace gp_regression;
 
 /*
  *              PLEASE LOOK at TODOs by searching "TODO" to have an idea of

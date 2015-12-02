@@ -36,7 +36,8 @@
 #include <gp_regression/GetToExploreTrajectory.h>
 
 //GP
-#include <gp_regression/gp_regression.h>
+#include <gp_regression/gp_regressor.h>
+#include <gp_regression/gp_regressors.h>
 
 using namespace gp_regression;
 
@@ -81,7 +82,7 @@ class GaussianProcessNode
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
         //Gaussian Model object and Lapalce regressor
-        Model object_gp;
+        Model* object_gp;
         LaplaceRegressor regressor;
         //stored variances of sample points
         std::vector<double> samples_var;
@@ -102,7 +103,7 @@ class GaussianProcessNode
         //without "touching" other object points
         int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
         //callback to start process service, executes when service is called
-        bool cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res);
+        bool cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res);
         //callback to sample process service, executes when service is called
         bool cb_sample(gp_regression::GetToExploreTrajectory::Request& req, gp_regression::GetToExploreTrajectory::Response& res);
         //callback for sub point subscriber

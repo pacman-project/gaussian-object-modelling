@@ -1,8 +1,7 @@
 #include <gp_node.h>
 #include <algorithm> //for std::max_element
 
-using namespace gp;
-
+using namespace gp_regression;
 /* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
@@ -111,16 +110,20 @@ void GaussianProcessNode::sampleAndPublish ()
 
                 //finally query  the gaussian  model for  the sample,  keep only
                 //samples detected as belonging to the object
-                Vec3 q(x,y,z);
-                const double qf = gp->f(q);
-                const double qvar = gp->var(q);
+                Data samp;
+                samp.coord_x.push_back(x);
+                samp.coord_y.push_back(y);
+                samp.coord_z.push_back(z);
+                std::vector<double> f;
+                std::vector<double> v;
+                regressor.evaluate(*object_gp, samp, f, v);
                 //test if sample was classified as belonging to obj surface
-                if (qf <= 0.02 && qf >= -0.02){
+                if (f[0] <= 0.02 && f[0] >= -0.02){
                     //We can  add this sample  to the reconstructed  cloud model
                     //color the sample according to variance. however to do this
                     //we need  the maximum variance  found. So we have  to store
                     //these points  to evaluate it.
-                    samples_var.push_back(qvar);
+                    samples_var.push_back(v[0]);
                     samples_ptr->push_back(pt);
                 }
             }
@@ -198,7 +201,7 @@ void GaussianProcessNode::sampleAndPublish ()
 }
 
 //callback to start process service, executes when service is called
-bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res)
+bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res)
 {
     if(req.cloud_dir.empty()){
         //Request was empty, means we have to call pacman vision service to
@@ -317,7 +320,6 @@ bool GaussianProcessNode::compute()
         start = false;
         return false;
     }
-    Vec3 centr(centroid[0], centroid[1], centroid[2]);
     cloud.coord_x.push_back(centroid[0]);
     cloud.coord_y.push_back(centroid[1]);
     cloud.coord_z.push_back(centroid[2]);
@@ -346,20 +348,18 @@ bool GaussianProcessNode::compute()
         }
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
-    regressor.create(cloud, object_gp);
+    object_gp = new Model;
+    regressor.create(cloud, *object_gp);
     ROS_INFO("[GaussianProcessNode::%s]\tRegressor created",__func__);
     start = true;
     //tell the publisher we have a new model, so it can publish it to rviz
     need_update = true;
     return true;
-
-    // TODO: REVISION TILL HERE, BELOW HERE IS NOT CHECKED AND DOES NOT COMPILE!
-    // (tabjones on Tuesday 01/12/2015)
 }
 //update gaussian model with new points from probe
 void GaussianProcessNode::update()
 {
-    gp.reset();
+    delete object_gp;
     discovered.clear();
     this->compute();
 }
