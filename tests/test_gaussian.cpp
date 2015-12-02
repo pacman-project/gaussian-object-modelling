@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include <gp_regression/gp_regressor.h>
+#include <gp_regression/gp_regressors.h>
 
 using namespace gp_regression;
 using namespace std;

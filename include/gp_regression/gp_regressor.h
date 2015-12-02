@@ -219,12 +219,6 @@ private:
         }
 };
 
-// Convenience typedefs. Note that these will use the default constructors!
-
-class GaussianRegressor : public GPRegressor<gp_regression::Gaussian> {};
-// class LaplaceRegressor : public GPRegressor<gp_regression::Laplace> {};
-// class InvMultiQuadRegressor : public GPRegressor<gp_regression::InvMultiQuad> {};
-
 }
 
 #endif
