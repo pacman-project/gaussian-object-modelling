@@ -44,13 +44,14 @@ struct Data
 struct Model
 {
         Eigen::MatrixXd P; // points
-        Eigen::MatrixXd N; // normal at points
+        Eigen::MatrixXd N; // (inward) normal at points
         Eigen::MatrixXd Tx; // tangent basis 1
         Eigen::MatrixXd Ty; // tangent basis 2
         Eigen::VectorXd Y;  // labels
         Eigen::MatrixXd Kpp; // covariance with selected kernel
         Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel
         Eigen::VectorXd InvKppY; // weights
+        Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel
 };
 
 /*
@@ -84,20 +85,41 @@ public:
                 // configure gp
                 convertToEigen(data.coord_x, data.coord_y, data.coord_z, gp.P);
                 convertToEigen(data.label, gp.Y);
+                gp.N.resize(gp.P.rows(), gp.P.cols());
+                gp.Tx.resize(gp.P.rows(), gp.P.cols());
+                gp.Ty.resize(gp.P.rows(), gp.P.cols());
 
                 // go! // ToDo: avoid the for loops.
                 buildEuclideanDistanceMatrix(gp.P, gp.P, gp.Kpp);
+                gp.Kppdiff = gp.Kpp;
 
                 for(int i = 0; i < gp.Kpp.rows(); ++i)
                 {
                         for(int j = 0; j < gp.Kpp.cols(); ++j)
                         {
                                gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j)); 
+                               gp.Kppdiff(i,j) = kernel_->computediff(gp.Kpp(i,j));
                         }
                 }
 
                 gp.InvKpp = gp.Kpp.inverse();
                 gp.InvKppY = gp.InvKpp*gp.Y;
+
+                // normal and tangent computation, could be done potentially in the
+                // loop above, but just to keep it slightly separated for now
+                for(int i = 0; i < gp.Kpp.rows(); ++i)
+                {
+                        for(int j = 0; j < gp.Kpp.cols(); ++j)
+                        {
+                               gp.N.row(i) += gp.InvKppY(j)*gp.Kppdiff(i,j)*(gp.P.row(i) - gp.P.row(j));
+                        }
+                        gp.N.row(i).normalize();
+                        Eigen::Vector3d N = gp.N.row(i);
+                        Eigen::Vector3d Tx, Ty;
+                        computeTangentBasis(N, Tx, Ty);
+                        gp.Tx.row(i) = Tx;
+                        gp.Ty.row(i) = Ty;
+                }
         }
 
         /** 
