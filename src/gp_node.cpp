@@ -1,8 +1,7 @@
 #include <gp_node.h>
 #include <algorithm> //for std::max_element
 
-using namespace gp;
-
+using namespace gp_regression;
 /* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
@@ -198,7 +197,7 @@ void GaussianProcessNode::sampleAndPublish ()
 }
 
 //callback to start process service, executes when service is called
-bool GaussianProcessNode::cb_start(gp_regression::start_process::Request& req, gp_regression::start_process::Response& res)
+bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res)
 {
     if(req.cloud_dir.empty()){
         //Request was empty, means we have to call pacman vision service to
@@ -346,20 +345,18 @@ bool GaussianProcessNode::compute()
         }
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
-    regressor.create(cloud, object_gp);
+    object_gp = new Model;
+    regressor.create(cloud, *object_gp);
     ROS_INFO("[GaussianProcessNode::%s]\tRegressor created",__func__);
     start = true;
     //tell the publisher we have a new model, so it can publish it to rviz
     need_update = true;
     return true;
-
-    // TODO: REVISION TILL HERE, BELOW HERE IS NOT CHECKED AND DOES NOT COMPILE!
-    // (tabjones on Tuesday 01/12/2015)
 }
 //update gaussian model with new points from probe
 void GaussianProcessNode::update()
 {
-    gp.reset();
+    delete object_gp;
     discovered.clear();
     this->compute();
 }

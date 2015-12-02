@@ -36,7 +36,7 @@
 #include <gp_regression/GetToExploreTrajectory.h>
 
 //GP
-#include <gp_regression/gp_regression.h>
+#include <gp_regression/gp_regressor.h>
 
 using namespace gp_regression;
 
@@ -81,7 +81,7 @@ class GaussianProcessNode
         //reconstructed model cloud to republish
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_ptr;
         //Gaussian Model object and Lapalce regressor
-        Model object_gp;
+        Model* object_gp;
         LaplaceRegressor regressor;
         //stored variances of sample points
         std::vector<double> samples_var;
