@@ -22,15 +22,15 @@ public:
         inline double computediff(double &value)
         {
                 double e = compute(value);
-                double out = -1*inv_length2_*e;
+                double out = -1*inv_length2_*e/value;
                 return out;
         }
 
         inline double computediff2(double &value)
         {
-                double e = compute(value);
-                double out = inv_length2_*inv_length2_*e;
-                return out;
+                // double e = compute(value);
+                // double out = inv_length2_*inv_length2_*e;
+                return 0.0;
         }
 
         Gaussian(double sigma, double length) :

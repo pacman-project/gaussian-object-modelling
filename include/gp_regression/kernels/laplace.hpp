@@ -44,15 +44,15 @@ public:
         inline double computediff(double &value)
         {
                 double e = compute(value);
-                double out = -1*inv_length_*e;
+                double out = -1*inv_length_*e/value;
                 return out;
         }
 
         inline double computediff2(double &value)
         {
-                double e = compute(value);
-                double out = inv_length_*inv_length_*e;
-                return out;
+                // double e = compute(value);
+                // double out = inv_length_*inv_length_*e;
+                return 0.0;
         }
 
         Laplace(double sigma, double length) :
