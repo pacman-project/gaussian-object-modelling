@@ -44,7 +44,7 @@ public:
         inline double computediff(double &value)
         {
                 double e = compute(value);
-                double out = -1*inv_length_*e/value;
+                double out = -1*inv_length_*e;
                 return out;
         }
 
