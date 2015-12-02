@@ -8,38 +8,54 @@ using namespace std;
 int main( int argc, char** argv )
 {
         /*****  Generate INPUT data  ******************************************/
-        std::cout << "Generate INPUT data..." << std::endl;
+        std::cout << "Generate INPUT data for a sphere..." << std::endl;
         Data cloud;
-        cloud.coord_x = vector<double>(1, 0.1);
-        cloud.coord_y = vector<double>(1, 0.3);
-        cloud.coord_z = vector<double>(1, 0.5);
-        cloud.label = vector<double>(1, 0.0);
-        cloud.coord_x.push_back(0.3);
-        cloud.coord_y.push_back(-0.1);
-        cloud.coord_z.push_back(-0.4);
-        cloud.label.push_back(-1.0);
-        cloud.coord_x.push_back(0.25);
-        cloud.coord_y.push_back(0.02);
-        cloud.coord_z.push_back(-0.8);
-        cloud.label.push_back(1.0);
-        cloud.coord_x.push_back(-0.1);
-        cloud.coord_y.push_back(0.01);
-        cloud.coord_z.push_back(0.3);
-        cloud.label.push_back(1.0);
+        int ni = 6;
+        int nj = 6;
+        for(int i = 0; i < ni; ++i)
+        {
+                for(int j = 0; j < nj; ++j)
+                {
+                        // on
+                        cloud.coord_x.push_back(1.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud.coord_y.push_back(1.2*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud.coord_z.push_back(1.4*sin(2*3.1416*j/nj));
+                        cloud.label.push_back(0.0);
+                        // inside
+                        cloud.coord_x.push_back(0.5*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud.coord_y.push_back(0.5*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud.coord_z.push_back(0.5*sin(2*3.1416*j/nj));
+                        cloud.label.push_back(-1.0);
+                        // outside
+                        cloud.coord_x.push_back(2.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud.coord_y.push_back(2.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud.coord_z.push_back(2.0*sin(2*3.1416*j/nj));
+                        cloud.label.push_back(1.0);
+                }
+        }
 
         /*****  Create the model  *********************************************/
         std::cout << "Create the model..." << std::endl;
-        Model mug;
+        Model sphere;
         GaussianRegressor regresor;
         
-        regresor.create(cloud, mug);
+        regresor.create(cloud, sphere);
 
         cout << "Model points: " << endl;
-        cout << mug.P << endl << endl;
+        cout << sphere.P << endl << endl;
         cout << "Model labels (pre): " << endl;
-        cout << mug.Y << endl << endl;
-        cout << "Model Kpp: " << endl;
-        cout << mug.Kpp << endl << endl;
+        cout << sphere.Y << endl << endl;
+        // cout << "Model Kpp: " << endl;
+        // cout << sphere.Kpp << endl << endl;
+        // cout << "Model Kppdiff: " << endl;
+        // cout << sphere.Kppdiff << endl << endl;
+        cout << "Model Normal: " << endl;
+        cout << sphere.N << endl << endl;
+        cout << "Model Tx: " << endl;
+        cout << sphere.Tx << endl << endl;
+        cout << "Model Ty: " << endl;
+        cout << sphere.Ty << endl << endl;
+
 
         /*****  Query the model with a point  *********************************/
         std::cout << "Query the model with a point" << std::endl;
@@ -48,7 +64,7 @@ int main( int argc, char** argv )
         query.coord_y = vector<double>(1, 0.5);
         query.coord_z = vector<double>(1, 0.5);
 
-        regresor.estimate(mug, query);
+        regresor.estimate(sphere, query);
 
         cout << "Query value: " << endl;
         cout << query.coord_x.at(0) << " " << query.coord_y.at(0) << " " 
@@ -67,7 +83,7 @@ int main( int argc, char** argv )
         query.coord_y = vector<double>(1, 0.3);
         query.coord_z = vector<double>(1, 0.5);
 
-        regresor.estimate(mug, query);
+        regresor.estimate(sphere, query);
 
         cout << "Query same input: " << endl;
         cout << query.coord_x.at(0) << " " << query.coord_y.at(0) << " " 
