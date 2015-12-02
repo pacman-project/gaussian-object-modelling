@@ -27,11 +27,6 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-# Golem
-#SET(GOLEM_INCLUDE /usr/include CACHE PATH "Path prefix for Golem include")
-#SET(GOLEM_LIBRARY /usr/lib CACHE PATH "Path prefix for Golem library")
-#SET(GOLEM_BINARIES /usr/bin CACHE PATH "Path prefix for Golem binaries")
-
 add_service_files(
     FILES
     start_process.srv
@@ -55,65 +50,24 @@ catkin_package(
     CATKIN_DEPENDS roscpp message_runtime pacman_vision_comm message_generation
     )
 
+file(GLOB_RECURSE gp_INCLUDES RELATIVE ${PROJECT_SOURCE_DIR} include/*.h)
+
 include_directories(
     include
-    node/include
+    src/include
     ${catkin_INCLUDE_DIRS}
     ${Eigen_INCLUDE_DIRS}
-    #${GOLEM_INCLUDE}
     ${PCL_INCLUDE_DIRS}
 )
 
-add_executable(regression_server
-  src/regression_server.cpp
-)
-
-# add_dependencies(regression_server
-#   gp_regression_generate_messages_cpp
-# )
-
-target_link_libraries(regression_server
-  ${catkin_LIBRARIES}
-  #${GOLEM_LIBRARY}
-  #${PCL_LIBRARIES}
-)
-
-
-## Tests
-
-add_executable(test_gaussian
-  tests/test_gaussian.cpp
-)
-
-# add_dependencies(test_gaussian
-#   gp_regression_generate_messages_cpp
-# )
-
-target_link_libraries(test_gaussian
-  ${catkin_LIBRARIES}
-  #${PCL_LIBRARIES}
-)
-
-add_executable(test_gp
-  tests/test_gp.cpp
-  src/gp/SampleSet.cpp
-)
-
-# add_dependencies(test_gp
-#   gp_regression_generate_messages_cpp
-# )
-
-target_link_libraries(test_gp
-  ${catkin_LIBRARIES}
-  # ${PCL_LIBRARIES}
-)
-
-#Add ROS node
+# ROS node
 add_executable(gaussian_process
-    node/include/gp_node.h
-    node/gp_node.cpp
-    node/gp_node_main.cpp
-    src/gp/SampleSet.cpp)
+    src/include/gp_node.h
+    src/gp_node.cpp
+    src/gp_node_main.cpp
+    src/gp/SampleSet.cpp
+    ${gp_INCLUDES}
+)
 
 add_dependencies(gaussian_process
   gp_regression_generate_messages_cpp
@@ -123,3 +77,16 @@ target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
+
+## Tests
+
+add_executable(test_gaussian
+  tests/test_gaussian.cpp
+  ${gp_INCLUDES}
+)
+
+target_link_libraries(test_gaussian
+  ${catkin_LIBRARIES}
+)
+
+
