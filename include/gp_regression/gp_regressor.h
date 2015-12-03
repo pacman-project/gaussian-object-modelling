@@ -18,6 +18,8 @@ namespace gp_regression
  * \brief Helper function to compute a basis in the tangnet plane defined
  * by a normal vector
  */
+    // TODO:  This function  gets multiple  definition error,  since it's global
+    // (tabjones on Thursday 03/12/2015)
 void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
 {
         Eigen::Vector3d NN = N.normalized();

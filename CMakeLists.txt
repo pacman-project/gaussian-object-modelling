@@ -62,11 +62,8 @@ include_directories(
 
 # ROS node
 add_executable(gaussian_process
-    src/include/gp_node.h
     src/gp_node.cpp
     src/gp_node_main.cpp
-    src/gp/SampleSet.cpp
-    ${gp_INCLUDES}
 )
 
 add_dependencies(gaussian_process

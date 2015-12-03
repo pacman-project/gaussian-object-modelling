@@ -36,8 +36,8 @@
 #include <gp_regression/GetToExploreTrajectory.h>
 
 //GP
-#include <gp_regression/gp_regressor.h>
 #include <gp_regression/gp_regressors.h>
+#include <gp_regression/gp_planner.h>
 
 using namespace gp_regression;
 
