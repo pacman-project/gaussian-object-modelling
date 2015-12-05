@@ -13,6 +13,7 @@ namespace gp_regression
 struct Chart
 {
         Eigen::Vector3d C; // points
+        Eigen::Vector3d N; // (inward) normal t chart
         Eigen::Vector3d Tx; // tangent basis 1
         Eigen::Vector3d Ty; // tangent basis 2
         double R;  // size
@@ -41,9 +42,17 @@ public:
         * \param[in] Initial point on chart x_i'
         * \param[out] Point x_j such that f(x_j)~GP(m(x_j),k(x_j,x'))=0.
         */
-        void project(const Model &gp, const Chart &chart, const Eigen::Vector3d &in, Eigen::Vector3d &out)
+        int project(const Model &gp, const Chart &chart, const Eigen::Vector3d &in, Eigen::Vector3d &out)
         {
-                return;
+                Eigen::Vector3d current = in;
+                Chart currentChart = chart;
+                double h = 10.0; //
+                for(int i = 0; i < 100; ++i)
+                {
+                        out = current + h*currentChart.N;
+                        generateChart(gp, out, 1.0, currentChart);
+                }
+                return 0;
         }
 
         void generateChart(const Model &gp, const Eigen::Vector3d &C, const double &R, Chart &chart)
@@ -59,6 +68,7 @@ public:
                 std::vector<double> f, v;
                 gp_regression::GPRegressor<CovType> regressor;
                 regressor.evaluate(gp, q, f, v, N, Tx, Ty);
+                chart.N = N.row(0);
                 chart.Tx = Tx.row(0);
                 chart.Ty = Ty.row(0);
                 return;

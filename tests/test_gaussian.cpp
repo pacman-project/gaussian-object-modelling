@@ -157,9 +157,55 @@ int main( int argc, char** argv )
 
         cout << "Chart info: " << endl << endl;
         cout << "Center: " << chart.C << endl << endl;
+        cout << "N: " << chart.N << endl << endl;
         cout << "Tx: " << chart.Tx << endl << endl;
         cout << "Ty: " << chart.Ty << endl << endl;
         cout << "Size: " << chart.R << endl << endl;
+
+        // TEST Projection
+        // point in the model
+        Eigen::Vector3d init_center(10.0*cos(2*3.1416*3/ni)*cos(2*3.1416*2/nj),
+                               10.0*sin(2*3.1416*3/ni)*cos(2*3.1416*2/nj),
+                               10.0*sin(2*3.1416*2/nj));
+
+        // create the chart there
+        Chart init_chart;
+        projector.generateChart(sphere, center, 1.0, init_chart);
+
+        // dummy sample in the chart
+        Eigen::Vector3d point_in_tangent;
+        point_in_tangent = init_chart.C + 10.0*init_chart.Tx + 10.0*init_chart.Ty;
+
+        // project it
+        Eigen::Vector3d projected_point;
+        projector.project(sphere, init_chart, point_in_tangent, projected_point);
+
+        // check value
+        Data result;
+
+        result.coord_x.push_back(point_in_tangent(0));
+        result.coord_y.push_back(point_in_tangent(1));
+        result.coord_z.push_back(point_in_tangent(2));
+
+        result.coord_x.push_back(projected_point(0));
+        result.coord_y.push_back(projected_point(1));
+        result.coord_z.push_back(projected_point(2));
+
+        std::vector<double> f_projection, v_projection;
+
+        regresor.evaluate(sphere, result, f_projection, v_projection);
+
+        cout << "Tangent point x: " << endl;
+        cout << result.coord_x.at(0) << " " << result.coord_y.at(0) << " "
+                        << result.coord_z.at(0) << endl << endl;
+        cout << "Function at tangent point f(x): " << endl;
+        cout << f_projection.at(0) << endl << endl;
+
+        cout << "Projected point x: " << endl;
+        cout << result.coord_x.at(1) << " " << result.coord_y.at(1) << " "
+                        << result.coord_z.at(1) << endl << endl;
+        cout << "Function at projected point f(x): " << endl;
+        cout << f_projection.at(1) << endl << endl;
 
         return 0;
 }
