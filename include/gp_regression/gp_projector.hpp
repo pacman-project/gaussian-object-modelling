@@ -50,6 +50,17 @@ public:
         {
                 chart.C = C;
                 chart.R = R;
+                Data q;
+
+                q.coord_x.push_back( C(0) );
+                q.coord_y.push_back( C(1) );
+                q.coord_z.push_back( C(2) );
+                Eigen::MatrixXd N, Tx, Ty;
+                std::vector<double> f, v;
+                gp_regression::GPRegressor<CovType> regressor;
+                regressor.evaluate(gp, q, f, v, N, Tx, Ty);
+                chart.Tx = Tx.row(0);
+                chart.Ty = Ty.row(0);
                 return;
         }
 

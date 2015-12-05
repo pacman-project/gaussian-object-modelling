@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <gp_regression/gp_regressors.h>
+#include <gp_regression/gp_projector.hpp>
 
 using namespace gp_regression;
 using namespace std;
@@ -115,7 +116,6 @@ int main( int argc, char** argv )
         cout << "Query function f(x): " << endl;
         for(int i = 0; i < f.size(); ++i)
         {
-
                 cout << f.at(i) << " / ";
         }
         cout << endl << endl;
@@ -140,6 +140,26 @@ int main( int argc, char** argv )
 //        std::cout << "x*z: " << std::endl << x.dot(z) << std::endl << std::endl;
 //        std::cout << "y*z: " << std::endl << y.dot(z) << std::endl << std::endl;
 //        std::cout << "x*y: " << std::endl << x.dot(y) << std::endl << std::endl;
+
+        /*****  Test the GPProjector  *****************************/
+        cloud.label.clear();
+        f.clear();
+        v.clear();
+        Eigen::Vector3d center;
+        center(0) = query.coord_x.at(0);
+        center(1) = query.coord_y.at(0);
+        center(2) = query.coord_z.at(0);
+
+        GPProjector<Gaussian> projector;
+
+        Chart chart;
+        projector.generateChart(sphere, center, 1.0, chart);
+
+        cout << "Chart info: " << endl << endl;
+        cout << "Center: " << chart.C << endl << endl;
+        cout << "Tx: " << chart.Tx << endl << endl;
+        cout << "Ty: " << chart.Ty << endl << endl;
+        cout << "Size: " << chart.R << endl << endl;
 
         return 0;
 }
