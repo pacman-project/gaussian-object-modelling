@@ -37,7 +37,6 @@
 
 //GP
 #include <gp_regression/gp_regressors.h>
-#include <gp_regression/gp_planner.h>
 
 using namespace gp_regression;
 

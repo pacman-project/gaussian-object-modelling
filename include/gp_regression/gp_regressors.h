@@ -1,7 +1,7 @@
 #ifndef GP_REGRESSION___GP_REGRESSORS_H
 #define GP_REGRESSION___GP_REGRESSORS_H
 
-#include <gp_regression/gp_regressor.h>
+#include <gp_regression/gp_regressor.hpp>
 
 // Convenience typedefs. Note that these will use the default constructors!
 

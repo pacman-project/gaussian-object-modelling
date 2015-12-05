@@ -21,11 +21,6 @@ int main( int argc, char** argv )
                         cloud.coord_y.push_back(10.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
                         cloud.coord_z.push_back(10.0*sin(2*3.1416*j/nj));
                         cloud.label.push_back(0.0);
-                        // inside
-                        cloud.coord_x.push_back(0.1*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud.coord_y.push_back(0.1*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud.coord_z.push_back(0.1*sin(2*3.1416*j/nj));
-                        cloud.label.push_back(-1.0);
                         // outside
                         cloud.coord_x.push_back(20.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
                         cloud.coord_y.push_back(20.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
@@ -33,6 +28,12 @@ int main( int argc, char** argv )
                         cloud.label.push_back(1.0);
                 }
         }
+
+        // inside
+        cloud.coord_x.push_back(1.0*cos(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
+        cloud.coord_y.push_back(1.0*sin(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
+        cloud.coord_z.push_back(1.0*sin(2*3.1416*0/nj));
+        cloud.label.push_back(-1.0);
 
         /*****  Create the model  *********************************************/
         std::cout << "Create the model..." << std::endl;
@@ -82,8 +83,11 @@ int main( int argc, char** argv )
         query.coord_x = vector<double>(1, 10.0*cos(2*3.1416*23/77)*cos(2*3.1416*27/77));
         query.coord_y = vector<double>(1, 10.0*sin(2*3.1416*23/77)*cos(2*3.1416*27/77));
         query.coord_z = vector<double>(1, 10.0*sin(2*3.1416*27/77));
+        Eigen::MatrixXd N;
+        Eigen::MatrixXd Tx;
+        Eigen::MatrixXd Ty;
 
-        regresor.evaluate(sphere, query, f, v);
+        regresor.evaluate(sphere, query, f, v, N, Tx, Ty);
 
         cout << "Query value x: " << endl;
         cout << query.coord_x.at(0) << " " << query.coord_y.at(0) << " "
@@ -92,6 +96,13 @@ int main( int argc, char** argv )
         cout << f.at(0) << endl << endl;
         cout << "Query confidence V(f(x)): " << endl;
         cout << v.at(0) << endl << endl;
+
+        cout << "Query normal N(f(x)): " << endl;
+        cout << N.row(0) << endl << endl;
+        cout << "Query tangent X Tx(f(x)): " << endl;
+        cout << Tx.row(0) << endl << endl;
+        cout << "Query tangent Ty(f(x)): " << endl;
+        cout << Ty.row(0) << endl << endl;
 
         /*****  Query the model with a INPUT point  ***************************/
         std::cout << "Query the model with the same INPUT" << std::endl;
@@ -117,18 +128,18 @@ int main( int argc, char** argv )
         cout << endl << endl;
 
         /*****  Test the Tangent Basis generator  *****************************/
-        std::cout << "Test the Tangent Basis generator" << std::endl;
-        Eigen::Vector3d z(1.0, 1.0, 1.0);
-        std::cout << "z: " << std::endl << z << std::endl << std::endl;
+//        std::cout << "Test the Tangent Basis generator" << std::endl;
+//        Eigen::Vector3d z(1.0, 1.0, 1.0);
+//        std::cout << "z: " << std::endl << z << std::endl << std::endl;
 
-        Eigen::Vector3d x, y;
+//        Eigen::Vector3d x, y;
 
-        computeTangentBasis(z, x, y);
-        std::cout << "x: " << std::endl << x << std::endl << std::endl;
-        std::cout << "y: " << std::endl << y << std::endl << std::endl;
-        std::cout << "x*z: " << std::endl << x.dot(z) << std::endl << std::endl;
-        std::cout << "y*z: " << std::endl << y.dot(z) << std::endl << std::endl;
-        std::cout << "x*y: " << std::endl << x.dot(y) << std::endl << std::endl;
+//        regresor.computeTangentBasis(z, x, y);
+//        std::cout << "x: " << std::endl << x << std::endl << std::endl;
+//        std::cout << "y: " << std::endl << y << std::endl << std::endl;
+//        std::cout << "x*z: " << std::endl << x.dot(z) << std::endl << std::endl;
+//        std::cout << "y*z: " << std::endl << y.dot(z) << std::endl << std::endl;
+//        std::cout << "x*y: " << std::endl << x.dot(y) << std::endl << std::endl;
 
         return 0;
 }

@@ -50,7 +50,7 @@ catkin_package(
     CATKIN_DEPENDS roscpp message_runtime pacman_vision_comm message_generation
     )
 
-file(GLOB_RECURSE gp_INCLUDES RELATIVE ${PROJECT_SOURCE_DIR} include/*.h)
+file(GLOB_RECURSE gp_INCLUDES RELATIVE ${PROJECT_SOURCE_DIR} include/*.h include/*.hpp)
 
 include_directories(
     include
@@ -64,6 +64,7 @@ include_directories(
 add_executable(gaussian_process
     src/gp_node.cpp
     src/gp_node_main.cpp
+    ${gp_INCLUDES}
 )
 
 add_dependencies(gaussian_process
