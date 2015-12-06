@@ -16,7 +16,7 @@ namespace gp_regression
 {
 
 /**
- * \brief Container for input data representing the raw 3D points
+ * @brief The Data struct Container for input and query data.
  */
 struct Data
 {
@@ -27,7 +27,7 @@ struct Data
 };
 
 /**
- * \brief Container for model parameters that represent an object
+ * @brief The Model struct Container for a Gaussian Process model.
  */
 struct Model
 {
@@ -43,9 +43,7 @@ struct Model
 };
 
 /**
- * \brief Handle for propagating a single GP map from 3D points to paramters,
- * from-to parameters of 3D points, sample points, etc.
- *
+ * @brief The GPRegressor class
  */
 template <typename CovType>
 class GPRegressor
@@ -57,14 +55,10 @@ public:
         virtual ~GPRegressor() {}
 
         /**
-        * \brief Solves the regression problem, computes the model parameters.
-        * \param[in]  data 3D points.
-        * \param[out] gp Gaussian Process parameters.
-        * \pre All non-empty vectors must contain valid data and their size
-        * should be equal among them. Data vectors not used in this function can
-        * remain empty, so they can be used for 3D or 2D. For now, only 3D is
-        * assumed.
-        */
+         * @brief create Solves the regression problem given some input data.
+         * @param data Input data.
+         * @param gp Gaussian process parameters.
+         */
         void create(const Data &data, Model &gp)
         {
                 // validate data
@@ -111,14 +105,15 @@ public:
         }
 
         /**
-        * \brief Evaluate the data using the GP
-        * \param[in] query 3D points.
-        * \param[out] f the value of the function at those points.
-        * \param[out] v variance of the function evaluation result.
-        * \param[out] N gradient direction of f(x) at those points.
-        * \param[out] Tx, Ty Basis of the tangent plane at those points.
-        */
-        // f''(x)
+         * @brief evaluate The f''(x) version of evaluate.
+         * @param gp The gaussian process, f(x) ~ gp[m(x), v(x)].
+         * @param query The query value, x.
+         * @param f The function value, m(x).
+         * @param v The variance of the function value, v(x).
+         * @param N The normal at the query value, f'(x) = N(f(x))
+         * @param Tx First basis of the tangent plane at the query value.
+         * @param Ty Second basis of the tangent plane at the query value.
+         */
         void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v,
                       Eigen::MatrixXd &N, Eigen::MatrixXd &Tx, Eigen::MatrixXd &Ty)
         {
@@ -135,7 +130,14 @@ public:
                 }
         }
 
-        // f'(x)
+        /**
+         * @brief evaluate The f'(x) version of evaluate.
+         * @param gp The gaussian process, f(x) ~ gp[m(x), v(x)].
+         * @param query The query value, x.
+         * @param f The function value, m(x).
+         * @param v The variance of the function value, v(x).
+         * @param N The normal at the query value, f'(x) = N(f(x))
+         */
         void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
         {
                 // validate data
@@ -178,14 +180,20 @@ public:
                 convertToSTD(F, f);
                 convertToSTD(V_diagonal, v);
 
-                // normalize
-                for(int i = 0; i < N.rows(); ++i)
+                // normalize, or return real gradient value
+                /*for(int i = 0; i < N.rows(); ++i)
                 {
                         N.row(i).normalize();
-                }
+                }*/
         }
 
-        // f(x)
+        /**
+         * @brief evaluate The f(x) version of evaluate.
+         * @param gp The gaussian process, f(x) ~ gp[m(x), v(x)].
+         * @param query The query value, x.
+         * @param f The function value, m(x).
+         * @param v The variance of the function value, v(x).
+         */
         void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v)
         {
                 Eigen::MatrixXd dummyN;
@@ -194,23 +202,44 @@ public:
         }
 
         /**
-        * \brief Updates the GP with the new data
-        * \param[in] new_data 3D points.
-        */
+         * @brief update Updates the gaussian process with new_data.
+         * @param new_data This is the new data added to the model.
+         * @param gp The gaussian process to be updated
+         */
         void update(const Data &new_data, Model &gp)
         {
         }
 
+        /**
+         * @brief setCovFunction
+         * @param kernel It requires the same type of kernel the regressor was
+         * created with, but it can have different parameters. You need to use this function
+         * if you want to change the default parameters the regressor/cov. function
+         * are created with.
+         */
+        void setCovFunction(CovType &kernel)
+        {
+                kernel_ = &kernel;
+        }
+
+        /**
+         * @brief GPRegressor Default constructor, it uses the default constructor of
+         * the covariance function.
+         */
         GPRegressor()
         {
                 kernel_ = new CovType();
         }
 
-        private:
+private:
 
-        /*
-        * Conversion functions
-        */
+        /**
+         * @brief convertToEigen
+         * @param a
+         * @param b
+         * @param c
+         * @param M
+         */
         void convertToEigen(const std::vector<double> &a,
             const std::vector<double> &b,
             const std::vector<double> &c,
@@ -222,19 +251,32 @@ public:
                 M.col(2) = Eigen::Map<Eigen::VectorXd>((double *)c.data(), c.size());
         }
 
+        /**
+         * @brief convertToEigen
+         * @param a
+         * @param M
+         */
         void convertToEigen(const std::vector<double> &a, Eigen::VectorXd &M) const
         {
                 M = Eigen::Map<Eigen::VectorXd>((double *)a.data(), a.size());
         }
 
+        /**
+         * @brief convertToSTD
+         * @param M
+         * @param a
+         */
         void convertToSTD(const Eigen::VectorXd &M, std::vector<double> &a) const
         {
                 a = std::vector<double>(M.data(), M.data() + M.size());
         }
 
-        /*
-        * Utility functions
-        */
+        /**
+         * @brief buildEuclideanDistanceMatrix
+         * @param A
+         * @param B
+         * @param D
+         */
         void buildEuclideanDistanceMatrix(const Eigen::MatrixXd &A,
             const Eigen::MatrixXd &B,
             Eigen::MatrixXd &D) const
@@ -244,6 +286,10 @@ public:
                 D.rowwise() += B.cwiseProduct(B).rowwise().sum().transpose();
         }
 
+        /**
+         * @brief assertData
+         * @param data
+         */
         void assertData(const Data &data) const
         {
                 if (data.coord_x.empty() && data.coord_y.empty()
@@ -253,10 +299,12 @@ public:
                 }
         }
 
-        /*
-        * Helper function to compute a basis in the tangnet plane defined
-        * by a normal vector
-        */
+        /**
+         * @brief computeTangentBasis
+         * @param N
+         * @param Tx
+         * @param Ty
+         */
         void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
         {
                 Eigen::Vector3d NN = N.normalized();
