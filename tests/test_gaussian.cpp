@@ -191,7 +191,7 @@ int main( int argc, char** argv )
 
         // 3. dummy sample in the chart using the sigma of the kernel
         Eigen::Vector3d point_in_tangent;
-        point_in_tangent = init_chart.C + sigma*init_chart.Tx + sigma*init_chart.Ty;
+        point_in_tangent = init_chart.C + 2*sigma*init_chart.Tx + 2*sigma*init_chart.Ty;
 
         // 4. project onto surface
         Eigen::Vector3d projected_point;
@@ -240,7 +240,7 @@ int main( int argc, char** argv )
 
         // 6. dummy sample in the chart using the sigma of the kernel
         Eigen::Vector3d point_in_projected;
-        point_in_projected = projected_chart.C + sigma*projected_chart.Tx + sigma*projected_chart.Ty;
+        point_in_projected = projected_chart.C - 2*sigma*projected_chart.Tx + 2*sigma*projected_chart.Ty;
 
         // 7. project it again
         Eigen::Vector3d projected_point2;
