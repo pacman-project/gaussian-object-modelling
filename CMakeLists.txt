@@ -36,6 +36,9 @@ add_service_files(
 add_message_files(
     FILES
     SampleToExplore.msg
+    Chart.msg
+    Atlas.msg
+    MapCollection.msg
     )
 
 generate_messages(
