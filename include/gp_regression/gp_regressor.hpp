@@ -3,11 +3,12 @@
 
 #include <vector>
 #include <functional>
+#include <memory>
 
 #include <Eigen/Core>
 #include <Eigen/LU>
 #include <Eigen/SVD>
-#include<Eigen/StdVector>
+#include <Eigen/StdVector>
 
 #include <gp_regression/cov_functions.h>
 #include <gp_regression/gp_regression_exception.h>
@@ -24,6 +25,8 @@ struct Data
         std::vector<double> coord_y;
         std::vector<double> coord_z;
         std::vector<double> label;
+        typedef std::shared_ptr<Data> Ptr;
+        typedef std::shared_ptr<const Data> ConstPtr;
 };
 
 /**
@@ -40,6 +43,8 @@ struct Model
         Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel
         Eigen::VectorXd InvKppY; // weights
         Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel
+        typedef std::shared_ptr<Model> Ptr;
+        typedef std::shared_ptr<const Model> ConstPtr;
 };
 
 /**
@@ -59,48 +64,67 @@ public:
          * @param data Input data.
          * @param gp Gaussian process parameters.
          */
-        void create(const Data &data, Model &gp)
+        void create(Data::ConstPtr data, Model::Ptr gp)
         {
                 // validate data
                 assertData(data);
 
+                //reset output, we dont care what there was there
+                gp = std::make_shared<Model>();
+
                 // configure gp
-                convertToEigen(data.coord_x, data.coord_y, data.coord_z, gp.P);
-                convertToEigen(data.label, gp.Y);
-                gp.N.resize(gp.P.rows(), gp.P.cols());
-                gp.Tx.resize(gp.P.rows(), gp.P.cols());
-                gp.Ty.resize(gp.P.rows(), gp.P.cols());
+                convertToEigen(data->coord_x, data->coord_y, data->coord_z, gp->P);
+                convertToEigen(data->label, gp->Y);
+                gp->N.resize(gp->P.rows(), gp->P.cols());
+                gp->Tx.resize(gp->P.rows(), gp->P.cols());
+                gp->Ty.resize(gp->P.rows(), gp->P.cols());
 
                 // go! // ToDo: avoid the for loops.
-                buildEuclideanDistanceMatrix(gp.P, gp.P, gp.Kpp);
-                gp.Kppdiff = gp.Kpp;
-
-                for(int i = 0; i < gp.Kpp.rows(); ++i)
+                buildEuclideanDistanceMatrix(gp->P, gp->P, gp->Kpp);
+                gp->Kppdiff = gp->Kpp;
+                ///performance test1 just use nested collapsed loops
+                #pragma omp parallel for collapse(2)
+                for(int i = 0; i < gp->Kpp.rows(); ++i)
                 {
-                        for(int j = 0; j < gp.Kpp.cols(); ++j)
+                        for(int j = 0; j < gp->Kpp.cols(); ++j)
                         {
-                                gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j));
-                                gp.Kppdiff(i,j) = kernel_->computediff(gp.Kpp(i,j));
+                                gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
+                                gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
                         }
                 }
+                ///performance  test2  manually  collapse  loops  into  one  and
+                //parellize it
+                /*
+                 * int rows(gp.Kpp.rows()), cols(gp.Kpp.cols());
+                 * #pragma omp parallel for
+                 * for (int ij=0; ij < rows*cols; ++ij)
+                 * {
+                 *         int i = ij / cols;
+                 *         int j = ij % cols;
+                 *         gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j));
+                 *         gp.Kppdiff(i,j) = kernel_->computediff(gp.Kpp(i,j));
+                 * }
+                 */
 
-                gp.InvKpp = gp.Kpp.inverse();
-                gp.InvKppY = gp.InvKpp*gp.Y;
+                gp->InvKpp = gp->Kpp.inverse();
+                gp->InvKppY = gp->InvKpp*gp->Y;
 
                 // normal and tangent computation, could be done potentially in the
                 // loop above, but just to keep it slightly separated for now
-                for(int i = 0; i < gp.Kpp.rows(); ++i)
+                //(Cant collapse it), just parallize outer loop
+                #pragma omp parallel for
+                for(int i = 0; i < gp->Kpp.rows(); ++i)
                 {
-                        for(int j = 0; j < gp.Kpp.cols(); ++j)
+                        for(int j = 0; j < gp->Kpp.cols(); ++j)
                         {
-                                gp.N.row(i) += gp.InvKppY(j)*gp.Kppdiff(i,j)*(gp.P.row(i) - gp.P.row(j));
+                                gp->N.row(i) += gp->InvKppY(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
                         }
-                        gp.N.row(i).normalize();
-                        Eigen::Vector3d N = gp.N.row(i);
+                        gp->N.row(i).normalize();
+                        Eigen::Vector3d N = gp->N.row(i);
                         Eigen::Vector3d Tx, Ty;
                         computeTangentBasis(N, Tx, Ty);
-                        gp.Tx.row(i) = Tx;
-                        gp.Ty.row(i) = Ty;
+                        gp->Tx.row(i) = Tx;
+                        gp->Ty.row(i) = Ty;
                 }
         }
 
@@ -114,12 +138,13 @@ public:
          * @param Tx First basis of the tangent plane at the query value.
          * @param Ty Second basis of the tangent plane at the query value.
          */
-        void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v,
+        void evaluate(Model::ConstPtr gp, Data::Ptr query, std::vector<double> &f, std::vector<double> &v,
                       Eigen::MatrixXd &N, Eigen::MatrixXd &Tx, Eigen::MatrixXd &Ty)
         {
                 evaluate(gp, query, f, v, N);
                 Tx.resizeLike(N);
                 Ty.resizeLike(N);
+                #pragma omp parallel for
                 for(int i = 0; i < N.rows(); ++i)
                 {
                         Eigen::Vector3d tempTx, tempTy, tempN;
@@ -138,13 +163,15 @@ public:
          * @param v The variance of the function value, v(x).
          * @param N The normal at the query value, f'(x) = N(f(x))
          */
-        void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
+        void evaluate(Model::ConstPtr gp, Data::Ptr query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
         {
+                if(!gp)
+                        throw GPRegressionException("Empty Model pointer");
                 // validate data
                 assertData(query);
 
-                if (!query.label.empty())
-                throw GPRegressionException("Query is already labeled!");
+                if (!query->label.empty())
+                        throw GPRegressionException("Query is already labeled!");
 
                 // go!
                 Eigen::MatrixXd Q;
@@ -153,20 +180,22 @@ public:
                 //function evaluation and associated variance
                 Eigen::VectorXd F, V_diagonal;
                 Eigen::MatrixXd V;
-                convertToEigen(query.coord_x, query.coord_y, query.coord_z, Q);
-                buildEuclideanDistanceMatrix(Q, gp.P, Kqp);
+                convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
+                buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
                 N.resizeLike(Q);
 
+                #pragma omp parallel for collapse(2)
                 for(int i = 0; i < Kqp.rows(); ++i)
                 {
                         for(int j = 0; j < Kqp.cols(); ++j)
                         {
                                 Kqp(i,j) = kernel_->compute(Kqp(i,j));
-                                N.row(i) += gp.InvKppY(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp.P.row(j));
+                                N.row(i) += gp->InvKppY(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
                         }
                 }
                 Kpq = Kqp.transpose();
                 buildEuclideanDistanceMatrix(Q, Q, Kqq);
+                #pragma omp parallel for collapse(2)
                 for(int i = 0; i < Kqq.rows(); ++i)
                 {
                         for(int j = 0; j < Kqq.cols(); ++j)
@@ -174,8 +203,8 @@ public:
                                 Kqq(i,j) = kernel_->compute(Kqq(i,j));
                         }
                 }
-                F = Kqp*gp.InvKppY;
-                V = Kqq - Kqp*gp.InvKpp*Kpq;
+                F = Kqp*gp->InvKppY;
+                V = Kqq - Kqp*gp->InvKpp*Kpq;
                 V_diagonal = V.diagonal();
                 convertToSTD(F, f);
                 convertToSTD(V_diagonal, v);
@@ -194,10 +223,13 @@ public:
          * @param f The function value, m(x).
          * @param v The variance of the function value, v(x).
          */
-        void evaluate(const Model &gp, Data &query, std::vector<double> &f, std::vector<double> &v)
+        void evaluate(Model::ConstPtr gp, Data::Ptr query, std::vector<double> &f, std::vector<double> &v)
         {
+                if (!gp)
+                        throw GPRegressionException("Empty Model pointer");
+                assertData(query);
                 Eigen::MatrixXd dummyN;
-                dummyN.resize(query.coord_x.size(), 3);
+                dummyN.resize(query->coord_x.size(), 3);
                 evaluate(gp, query, f, v, dummyN);
         }
 
@@ -206,7 +238,7 @@ public:
          * @param new_data This is the new data added to the model.
          * @param gp The gaussian process to be updated
          */
-        void update(const Data &new_data, Model &gp)
+        void update(Data::ConstPtr new_data, Model::Ptr gp)
         {
         }
 
@@ -290,10 +322,12 @@ private:
          * @brief assertData
          * @param data
          */
-        void assertData(const Data &data) const
+        void assertData(Data::ConstPtr data) const
         {
-                if (data.coord_x.empty() && data.coord_y.empty()
-                    && data.coord_z.empty() && data.label.empty())
+                if (!data)
+                        throw GPRegressionException("Empty data pointer");
+                if (data->coord_x.empty() && data->coord_y.empty()
+                    && data->coord_z.empty() && data->label.empty())
                 {
                         throw GPRegressionException("All input data is empty!");
                 }

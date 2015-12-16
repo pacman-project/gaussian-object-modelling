@@ -16,7 +16,7 @@ int main (int argc, char *argv[])
     {
         //gogogo!
         ros::spinOnce();
-        node.sampleAndPublish();
+        node.Publish();
         rate.sleep();
     }
     //someone killed us :(
