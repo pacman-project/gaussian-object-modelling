@@ -89,16 +89,16 @@ public:
         */
         /**
          * @brief project Uses a gradient-descent method to project a point on a surface.
-         * @param gp The gp model such that f(x) ~ gp(m(x),k(x,x_i))
-         * @param regressor The regressor was used to generate the gp model.
-         * @param chart Initial chart
-         * @param in Initial point assumed on chart x_i', but not necessarily
-         * @param out Projected point on surface f(x_j) ~ 0
-         * @param step_size Scale of the gradient-descent step f(x)/f'(x).
-         * @param eps_f_eval Tolerance for function evaluation. If less than this, projection converged.
-         * @param max_iter Maximum number of iteration (function is evaluated at every iteration).
+         * @param[in] gp The gp model such that f(x) ~ gp(m(x),k(x,x_i))
+         * @param[in] regressor The regressor was used to generate the gp model.
+         * @param[in] chart Initial chart
+         * @param[in] in Initial point assumed on chart x_i', but not necessarily
+         * @param[out] out Projected point on surface f(x_j) ~ 0
+         * @param[in] step_size Scale of the gradient-descent step f(x)/f'(x).
+         * @param[in] eps_f_eval Tolerance for function evaluation. If less than this, projection converged.
+         * @param[in] max_iter Maximum number of iteration (function is evaluated at every iteration).
          * If greater than this, projection didn't converge.
-         * @param eps_x Tolerance for the (scaled) step. If less than this, projection didn't converge.
+         * @param[in] eps_x Tolerance for the (scaled) step. If less than this, projection didn't converge.
          * @return
          */
         bool project(Model::ConstPtr gp, GPRegressor<CovType> &regressor, Chart::ConstPtr chart, const Eigen::Vector3d &in,
@@ -203,7 +203,7 @@ public:
                 return 0;
         }
 
-        void generateChart(Model::ConstPtr gp, const Eigen::Vector3d &C, const double R, Chart::Ptr chart)
+        void generateChart(GPRegressor<CovType> &reg, Model::ConstPtr gp, const Eigen::Vector3d &C, const double R, Chart::Ptr &chart)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
@@ -218,21 +218,28 @@ public:
                 q->coord_z.push_back( C(2) );
                 Eigen::MatrixXd N, Tx, Ty;
                 std::vector<double> f, v;
-                gp_regression::GPRegressor<CovType> regressor;
-                regressor.evaluate(gp, q, f, v, N, Tx, Ty);
-                chart->N = N.row(0);
+                reg.evaluate(gp, q, f, v, N, Tx, Ty);
+                chart->N = N.row(0).normalized();
                 chart->Tx = Tx.row(0);
                 chart->Ty = Ty.row(0);
                 return;
         }
 
-        void addChartToAtlas(Chart::ConstPtr chart, Atlas::Ptr atlas, const int parent_index)
+        //TODO FIX this causes eigen assert fail, probably line 15-16,
+        //tried to fix it with that if size==1, but stil isnt working
+        void addChartToAtlas(Chart::ConstPtr chart, Atlas::Ptr &atlas, const int parent_index)
         {
                 if (!atlas)
                         throw GPRegressionException("Empty Atlas pointer");
                 if (!chart)
                         throw GPRegressionException("Empty Chart pointer");
                 atlas->charts.push_back(*chart);
+                if (atlas->charts.size() == 1){
+                //atlas was empty, adjacency is a scalar
+                    atlas->adjency.resize(1,1);
+                    atlas->adjency(0,0) = 1;
+                    return;
+                }
                 atlas->adjency.resize(atlas->adjency.rows() + 1, atlas->adjency.cols() + 1);
                 atlas->adjency(atlas->adjency.rows(), parent_index) = 1.0;
                 atlas->adjency(parent_index, atlas->adjency.cols()) = 1.0;

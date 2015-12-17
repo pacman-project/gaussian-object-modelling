@@ -61,10 +61,10 @@ public:
 
         /**
          * @brief create Solves the regression problem given some input data.
-         * @param data Input data.
-         * @param gp Gaussian process parameters.
+         * @param[in] data Input data.
+         * @param[out] gp Gaussian process parameters.
          */
-        void create(Data::ConstPtr data, Model::Ptr gp)
+        void create(Data::ConstPtr data, Model::Ptr &gp)
         {
                 // validate data
                 assertData(data);
@@ -130,15 +130,15 @@ public:
 
         /**
          * @brief evaluate The f''(x) version of evaluate.
-         * @param gp The gaussian process, f(x) ~ gp[m(x), v(x)].
-         * @param query The query value, x.
-         * @param f The function value, m(x).
-         * @param v The variance of the function value, v(x).
-         * @param N The normal at the query value, f'(x) = N(f(x))
-         * @param Tx First basis of the tangent plane at the query value.
-         * @param Ty Second basis of the tangent plane at the query value.
+         * @param[in] gp The gaussian process, f(x) ~ gp[m(x), v(x)].
+         * @param[in] query The query value, x.
+         * @param[out] f The function value, m(x).
+         * @param[out] v The variance of the function value, v(x).
+         * @param[out] N The normal at the query value, f'(x) = N(f(x))
+         * @param[out] Tx First basis of the tangent plane at the query value.
+         * @param[out] Ty Second basis of the tangent plane at the query value.
          */
-        void evaluate(Model::ConstPtr gp, Data::Ptr query, std::vector<double> &f, std::vector<double> &v,
+        void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v,
                       Eigen::MatrixXd &N, Eigen::MatrixXd &Tx, Eigen::MatrixXd &Ty)
         {
                 evaluate(gp, query, f, v, N);
@@ -157,13 +157,13 @@ public:
 
         /**
          * @brief evaluate The f'(x) version of evaluate.
-         * @param gp The gaussian process, f(x) ~ gp[m(x), v(x)].
-         * @param query The query value, x.
-         * @param f The function value, m(x).
-         * @param v The variance of the function value, v(x).
-         * @param N The normal at the query value, f'(x) = N(f(x))
+         * @param[in] gp The gaussian process, f(x) ~ gp[m(x), v(x)].
+         * @param[in] query The query value, x.
+         * @param[out] f The function value, m(x).
+         * @param[out] v The variance of the function value, v(x).
+         * @param[out] N The normal (un-normalized) at the query value, f'(x) = N(f(x))
          */
-        void evaluate(Model::ConstPtr gp, Data::Ptr query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
+        void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
         {
                 if(!gp)
                         throw GPRegressionException("Empty Model pointer");
@@ -223,7 +223,7 @@ public:
          * @param f The function value, m(x).
          * @param v The variance of the function value, v(x).
          */
-        void evaluate(Model::ConstPtr gp, Data::Ptr query, std::vector<double> &f, std::vector<double> &v)
+        void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");

@@ -81,13 +81,13 @@ target_link_libraries(gaussian_process
 
 ## Tests
 
-add_executable(test_gaussian
-  tests/test_gaussian.cpp
-  ${gp_INCLUDES}
-)
+# add_executable(test_gaussian
+#   tests/test_gaussian.cpp
+#   ${gp_INCLUDES}
+# )
 
-target_link_libraries(test_gaussian
-  ${catkin_LIBRARIES}
-)
+# target_link_libraries(test_gaussian
+#   ${catkin_LIBRARIES}
+# )
 
 
