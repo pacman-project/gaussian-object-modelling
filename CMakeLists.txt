@@ -67,7 +67,7 @@ include_directories(
 add_executable(gaussian_process
     src/gp_node.cpp
     src/gp_node_main.cpp
-    ${gp_INCLUDES}
+    #${gp_INCLUDES}
 )
 
 add_dependencies(gaussian_process
@@ -83,6 +83,12 @@ target_link_libraries(gaussian_process
 
 add_executable(test_gaussian
   tests/test_gaussian.cpp
+  ${gp_INCLUDES}
+)
+
+add_executable(test_gp
+  tests/test_gp.cpp
+  src/gp/SampleSet.cpp
   ${gp_INCLUDES}
 )
 
