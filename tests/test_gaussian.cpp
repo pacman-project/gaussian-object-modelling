@@ -10,7 +10,7 @@ int main( int argc, char** argv )
 {
         /*****  Generate INPUT data  ******************************************/
         std::cout << "Generate INPUT data for a sphere..." << std::endl;
-        Data cloud;
+        Data::Ptr cloud = std::make_shared<Data>();
         int ni = 10;
         int nj = 9;
         for(int i = 0; i < ni; ++i)
@@ -18,27 +18,27 @@ int main( int argc, char** argv )
                 for(int j = 0; j < nj; ++j)
                 {
                         // on
-                        cloud.coord_x.push_back(10.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud.coord_y.push_back(10.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud.coord_z.push_back(10.0*sin(2*3.1416*j/nj));
-                        cloud.label.push_back(0.0);
+                        cloud->coord_x.push_back(10.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_y.push_back(10.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_z.push_back(10.0*sin(2*3.1416*j/nj));
+                        cloud->label.push_back(0.0);
                         // outside
-                        cloud.coord_x.push_back(20.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud.coord_y.push_back(20.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud.coord_z.push_back(20.0*sin(2*3.1416*j/nj));
-                        cloud.label.push_back(1.0);
+                        cloud->coord_x.push_back(20.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_y.push_back(20.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_z.push_back(20.0*sin(2*3.1416*j/nj));
+                        cloud->label.push_back(1.0);
                 }
         }
 
         // inside
-        cloud.coord_x.push_back(1.0*cos(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
-        cloud.coord_y.push_back(1.0*sin(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
-        cloud.coord_z.push_back(1.0*sin(2*3.1416*0/nj));
-        cloud.label.push_back(-1.0);
+        cloud->coord_x.push_back(1.0*cos(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
+        cloud->coord_y.push_back(1.0*sin(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
+        cloud->coord_z.push_back(1.0*sin(2*3.1416*0/nj));
+        cloud->label.push_back(-1.0);
 
         /*****  Create the model  *********************************************/
         std::cout << "Create the model..." << std::endl;
-        Model sphere;
+        Model::Ptr sphere = std::make_shared<Model>();
 
         // set values according to the problem
         // std dev of input noise ~ 2.0m
@@ -48,38 +48,38 @@ int main( int argc, char** argv )
         Gaussian my_kernel(sigma, length);
         GaussianRegressor regresor;
         regresor.setCovFunction(my_kernel);
-        
+
         regresor.create(cloud, sphere);
 
         cout << "Model points: " << endl;
-        cout << sphere.P << endl << endl;
+        cout << sphere->P << endl << endl;
         cout << "Model labels (pre): " << endl;
-        cout << sphere.Y << endl << endl;
+        cout << sphere->Y << endl << endl;
         // cout << "Model Kpp: " << endl;
         // cout << sphere.Kpp << endl << endl;
         // cout << "Model Kppdiff: " << endl;
         // cout << sphere.Kppdiff << endl << endl;
         cout << "Model Normal: " << endl;
-        cout << sphere.N << endl << endl;
+        cout << sphere->N << endl << endl;
         cout << "Model Tx: " << endl;
-        cout << sphere.Tx << endl << endl;
+        cout << sphere->Tx << endl << endl;
         cout << "Model Ty: " << endl;
-        cout << sphere.Ty << endl << endl;
+        cout << sphere->Ty << endl << endl;
 
 
         /*****  Query the model with a point  *********************************/
         std::cout << "Query the model with a point" << std::endl;
-        Data query;
-        query.coord_x = vector<double>(1, 0.68);
-        query.coord_y = vector<double>(1, 0.5);
-        query.coord_z = vector<double>(1, 0.5);
+        Data::Ptr query = std::make_shared<Data>();
+        query->coord_x = vector<double>(1, 0.68);
+        query->coord_y = vector<double>(1, 0.5);
+        query->coord_z = vector<double>(1, 0.5);
         std::vector<double> f,v;
 
         regresor.evaluate(sphere, query, f, v);
 
         cout << "Query value x: " << endl;
-        cout << query.coord_x.at(0) << " " << query.coord_y.at(0) << " " 
-                        << query.coord_z.at(0) << endl << endl;
+        cout << query->coord_x.at(0) << " " << query->coord_y.at(0) << " "
+                        << query->coord_z.at(0) << endl << endl;
         cout << "Query function f(x): " << endl;
         cout << f.at(0) << endl << endl;
         cout << "Query confidence V(f(x)): " << endl;
@@ -89,9 +89,9 @@ int main( int argc, char** argv )
         std::cout << "Query the model with a point on the surface" << std::endl;
         f.clear();
         v.clear();
-        query.coord_x = vector<double>(1, 10.0*cos(2*3.1416*23/77)*cos(2*3.1416*27/77));
-        query.coord_y = vector<double>(1, 10.0*sin(2*3.1416*23/77)*cos(2*3.1416*27/77));
-        query.coord_z = vector<double>(1, 10.0*sin(2*3.1416*27/77));
+        query->coord_x = vector<double>(1, 10.0*cos(2*3.1416*23/77)*cos(2*3.1416*27/77));
+        query->coord_y = vector<double>(1, 10.0*sin(2*3.1416*23/77)*cos(2*3.1416*27/77));
+        query->coord_z = vector<double>(1, 10.0*sin(2*3.1416*27/77));
         Eigen::MatrixXd N;
         Eigen::MatrixXd Tx;
         Eigen::MatrixXd Ty;
@@ -99,8 +99,8 @@ int main( int argc, char** argv )
         regresor.evaluate(sphere, query, f, v, N, Tx, Ty);
 
         cout << "Query value x: " << endl;
-        cout << query.coord_x.at(0) << " " << query.coord_y.at(0) << " "
-                        << query.coord_z.at(0) << endl << endl;
+        cout << query->coord_x.at(0) << " " << query->coord_y.at(0) << " "
+                        << query->coord_z.at(0) << endl << endl;
         cout << "Query function f(x): " << endl;
         cout << f.at(0) << endl << endl;
         cout << "Query confidence V(f(x)): " << endl;
@@ -115,7 +115,7 @@ int main( int argc, char** argv )
 
         /*****  Query the model with a INPUT point  ***************************/
         std::cout << "Query the model with the same INPUT" << std::endl;
-        cloud.label.clear();
+        cloud->label.clear();
         f.clear();
         v.clear();
 
@@ -150,25 +150,25 @@ int main( int argc, char** argv )
 //        std::cout << "x*y: " << std::endl << x.dot(y) << std::endl << std::endl;
 
         /*****  Test the GPProjector  *****************************/
-        cloud.label.clear();
+        cloud->label.clear();
         f.clear();
         v.clear();
         Eigen::Vector3d center;
-        center(0) = query.coord_x.at(0);
-        center(1) = query.coord_y.at(0);
-        center(2) = query.coord_z.at(0);
+        center(0) = query->coord_x.at(0);
+        center(1) = query->coord_y.at(0);
+        center(2) = query->coord_z.at(0);
 
         GPProjector<Gaussian> projector;
 
-        Chart chart;
+        Chart::Ptr chart;
         projector.generateChart(sphere, center, 1.0, chart);
 
         cout << "Chart info: " << endl << endl;
-        cout << "Center: " << chart.C << endl << endl;
-        cout << "N: " << chart.N << endl << endl;
-        cout << "Tx: " << chart.Tx << endl << endl;
-        cout << "Ty: " << chart.Ty << endl << endl;
-        cout << "Size: " << chart.R << endl << endl;
+        cout << "Center: " << chart->C << endl << endl;
+        cout << "N: " << chart->N << endl << endl;
+        cout << "Tx: " << chart->Tx << endl << endl;
+        cout << "Ty: " << chart->Ty << endl << endl;
+        cout << "Size: " << chart->R << endl << endl;
 
         // TEST Projection
         // 1. point in the model
@@ -177,13 +177,13 @@ int main( int argc, char** argv )
                                10.0*sin(2*3.1416*2/nj));
 
         // 2. create the chart there
-        Chart init_chart;
+        Chart::Ptr init_chart = std::make_shared<Chart>();
         projector.generateChart(sphere, center, 1.0, init_chart);
 
-        Data init_p;
-        init_p.coord_x.push_back(init_center(0));
-        init_p.coord_y.push_back(init_center(1));
-        init_p.coord_z.push_back(init_center(2));
+        Data::Ptr init_p = std::make_shared<Data>();
+        init_p->coord_x.push_back(init_center(0));
+        init_p->coord_y.push_back(init_center(1));
+        init_p->coord_z.push_back(init_center(2));
         std::vector<double> init_f, init_v;
         regresor.evaluate(sphere, init_p, init_f, init_v);
 
@@ -191,44 +191,44 @@ int main( int argc, char** argv )
 
         // 3. dummy sample in the chart using the sigma of the kernel
         Eigen::Vector3d point_in_tangent;
-        point_in_tangent = init_chart.C + 2*sigma*init_chart.Tx + 2*sigma*init_chart.Ty;
+        point_in_tangent = init_chart->C + 2*sigma*init_chart->Tx + 2*sigma*init_chart->Ty;
 
         // 4. project onto surface
         Eigen::Vector3d projected_point;
         projector.project(sphere, regresor, init_chart, point_in_tangent, projected_point);
 
         // check results
-        Data result;
+        Data::Ptr result = std::make_shared<Data>();
 
-        result.coord_x.push_back(point_in_tangent(0));
-        result.coord_y.push_back(point_in_tangent(1));
-        result.coord_z.push_back(point_in_tangent(2));
+        result->coord_x.push_back(point_in_tangent(0));
+        result->coord_y.push_back(point_in_tangent(1));
+        result->coord_z.push_back(point_in_tangent(2));
 
-        result.coord_x.push_back(projected_point(0));
-        result.coord_y.push_back(projected_point(1));
-        result.coord_z.push_back(projected_point(2));
+        result->coord_x.push_back(projected_point(0));
+        result->coord_y.push_back(projected_point(1));
+        result->coord_z.push_back(projected_point(2));
 
         std::vector<double> f_result, v_result;
         regresor.evaluate(sphere, result, f_result, v_result);
 
         cout << "Point in tangent plane x: " << endl;
-        cout << result.coord_x.at(0) << " " << result.coord_y.at(0) << " "
-                        << result.coord_z.at(0) << endl << endl;
+        cout << result->coord_x.at(0) << " " << result->coord_y.at(0) << " "
+                        << result->coord_z.at(0) << endl << endl;
         cout << "Function at point in tangent plane f(x): " << endl;
         cout << f_result.at(0) << endl << endl;
         cout << "Variance at point in tangent plane V(f(x)): " << endl;
         cout << v_result.at(0) << endl << endl;
 
         cout << "Projected point x: " << endl;
-        cout << result.coord_x.at(1) << " " << result.coord_y.at(1) << " "
-                        << result.coord_z.at(1) << endl << endl;
+        cout << result->coord_x.at(1) << " " << result->coord_y.at(1) << " "
+                        << result->coord_z.at(1) << endl << endl;
         cout << "Function at projected point f(x): " << endl;
         cout << f_result.at(1) << endl << endl;
         cout << "Variance at projected point V(f(x)): " << endl;
         cout << v_result.at(1) << endl << endl;
 
         // 5. now generate chart in projeccted point
-        Chart projected_chart;
+        Chart::Ptr projected_chart = std::make_shared<Chart>();
         projector.generateChart(sphere, projected_point, 1.0, projected_chart);
 
         /*cout << "Projected chart info: " << endl << endl;
@@ -240,26 +240,26 @@ int main( int argc, char** argv )
 
         // 6. dummy sample in the chart using the sigma of the kernel
         Eigen::Vector3d point_in_projected;
-        point_in_projected = projected_chart.C - 2*sigma*projected_chart.Tx + 2*sigma*projected_chart.Ty;
+        point_in_projected = projected_chart->C - 2*sigma*projected_chart->Tx + 2*sigma*projected_chart->Ty;
 
         // 7. project it again
         Eigen::Vector3d projected_point2;
         projector.project(sphere, regresor, projected_chart, point_in_projected, projected_point2);
 
         // check value
-        Data result2;
+        Data::Ptr result2 = std::make_shared<Data>();
 
-        result2.coord_x.push_back(projected_point2(0));
-        result2.coord_y.push_back(projected_point2(1));
-        result2.coord_z.push_back(projected_point2(2));
+        result2->coord_x.push_back(projected_point2(0));
+        result2->coord_y.push_back(projected_point2(1));
+        result2->coord_z.push_back(projected_point2(2));
 
         std::vector<double> f_result2, v_result2;
 
         regresor.evaluate(sphere, result2, f_result2, v_result2);
 
         cout << "Projected point 2 x: " << endl;
-        cout << result.coord_x.at(0) << " " << result.coord_y.at(0) << " "
-                        << result2.coord_z.at(0) << endl << endl;
+        cout << result->coord_x.at(0) << " " << result->coord_y.at(0) << " "
+                        << result2->coord_z.at(0) << endl << endl;
         cout << "Function at projected point 2 f(x): " << endl;
         cout << f_result2.at(0) << endl << endl;
 
