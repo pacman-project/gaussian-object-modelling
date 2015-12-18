@@ -7,17 +7,25 @@
 using namespace gp;
 using namespace std;
 
+/* Random generators */
+template <typename Type> const Type random() {
+	return static_cast <Type> (rand()) / static_cast <Type> (RAND_MAX);
+};
 int main( int argc, char** argv )
 {
+//	test random number generator
+//	for (size_t i = 0; i < 100; ++i)
+//		printf("Random[%lu] = %f\n", i, random<double>());
+//	return 0;
         /*****  Global variables  ******************************************/
-        size_t N_sur = 1000, N_ext = 50, N_int = 1;
+        size_t N_sur = 100, N_ext = 50, N_int = 1;
         double noise = 0.001;
         const double PI = numeric_const<double>::PI;
 
         /* initialize random seed: */
   	srand (time(NULL));
 
-  	const bool prtInit = true;
+  	const bool prtInit = false;
   	const bool prtPreds = true;
 
         /*****  Generate Input data  ******************************************/
@@ -27,10 +35,10 @@ int main( int argc, char** argv )
         if (prtInit)
         	printf("Cloud points %lu:\n", N_sur);
         for (size_t i = 0; i < N_sur; ++i) {
-        	const double theta = 2*PI*(rand() / double(RAND_MAX)) - PI;
-        	const double z = 2*(rand() / double(RAND_MAX)) - 1;
+        	const double theta = 2*PI*random<double>() - PI;
+        	const double z = 2*random<double>() - 1;
         	Vec3 point(sin(theta)*sqrt(1-z*z), cos(theta)*sqrt(1-z*z), z);
-        	point += Vec3(2*noise*(rand() / double(RAND_MAX)) - noise, 2*noise*(rand() / double(RAND_MAX)) - noise, 2*noise*(rand() / double(RAND_MAX)) - noise);
+        	point += Vec3(2*noise*random<double>() - noise, 2*noise*random<double>() - noise, 2*noise*random<double>() - noise);
         	cloud.push_back(point);
 
         	double y = point.magnitudeSqr() - 1;
@@ -41,10 +49,10 @@ int main( int argc, char** argv )
        	if (prtInit)
        		printf("\nExternal points %lu:\n", N_ext);
        	for (size_t i = 0; i < N_ext; ++i) {
-        	const double theta = 2*PI*(rand() / double(RAND_MAX)) - PI;
-        	const double z = 2*(rand() / double(RAND_MAX)) - 1;
+        	const double theta = 2*PI*random<double>() - PI;
+        	const double z = 2*random<double>() - 1;
         	Vec3 point(sin(theta)*sqrt(2-z*z), cos(theta)*sqrt(2-z*z), z);
-        	point += Vec3(2*noise*(rand() / double(RAND_MAX)) - noise, 2*noise*(rand() / double(RAND_MAX)) - noise, 2*noise*(rand() / double(RAND_MAX)) - noise);
+        	point += Vec3(2*noise*random<double>() - noise, 2*noise*random<double>() - noise, 2*noise*random<double>() - noise);
         	cloud.push_back(point);
 
         	double y = point.magnitudeSqr() - 1;
@@ -78,15 +86,15 @@ int main( int argc, char** argv )
         if (prtPreds) cout << "y = " << targets[0] << " -> qf = " << qf << " qVar = " << qVar << endl << endl;
 
         /*****  Query the model with new points  *********************************/
-	const size_t testSize = 100;
+	const size_t testSize = 10;
 	const double range = 1.0;
 	Vec3Seq x_star; x_star.resize(testSize);
 	Vec y_star; y_star.resize(testSize);
 	for (size_t i = 0; i < testSize; ++i) {
-		const double theta = 2*PI*(rand() / double(RAND_MAX)) - PI;
-        	const double z = 2*(rand() / double(RAND_MAX)) - 1;
+		const double theta = 2*PI*random<double>() - PI;
+        	const double z = 2*random<double>() - 1;
         	Vec3 point(sin(theta)*sqrt(1-z*z), cos(theta)*sqrt(1-z*z), z);
-        	point += Vec3(2*noise*(rand() / double(RAND_MAX)) - noise, 2*noise*(rand() / double(RAND_MAX)) - noise, 2*noise*(rand() / double(RAND_MAX)) - noise);
+        	point += Vec3(2*noise*random<double>() - noise, 2*noise*random<double>() - noise, 2*noise*random<double>() - noise);
 
         	// save the point for later
         	x_star[i] = point;
@@ -101,16 +109,19 @@ int main( int argc, char** argv )
         	if (prtPreds)
         		cout << "f(x_star) = " << y << " -> f_star = " << f_star << " v_star = " << v_star << endl;
 	}
+	cout << endl;
 
 	/*****  Add point to the model  *********************************************/
 	gp->add_patterns(x_star, y_star);
 
-	// test on the first x_star point
-	Vec3 q2(x_star[0]);
-        const double q2f = gp->f(q2);
-        const double q2Var = gp->var(q2);
+	for (size_t i = 0; i < testSize; ++i) {
+		const double q2f = gp->f(x_star[i]);
+		const double q2Var = gp->var(x_star[i]);
 
-        if (prtPreds) cout << "y = " << y_star[0] << " -> q2f = " << q2f << " q2Var = " << q2Var << endl << endl;
+		if (prtPreds)
+			cout << "y = " << y_star[i] << " -> q2f = " << q2f << " q2Var = " << q2Var << endl;
+
+	}
 
 
 
