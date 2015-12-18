@@ -11,6 +11,7 @@
 #include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
+#include <visualization_msgs/MarkerArray.h>
 //PCL
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -77,7 +78,7 @@ class GaussianProcessNode
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
         // ros::ServiceServer srv_sample;
-        ros::Publisher pub_model; //, pub_point, pub_point_marker, pub_direction_marker;
+        ros::Publisher pub_model,  pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_points;
         //control if gp model was updated with new points and thus we need to
         //republish a new point cloud estimation
@@ -86,8 +87,11 @@ class GaussianProcessNode
         // int how_many_discoveries;
         //Gaussian Model object and Lapalce regressor
         Model::Ptr object_gp;
-        LaplaceRegressor regressor;
+        GaussianRegressor regressor;
+        //Atlas
         Atlas::Ptr atlas;
+        //atlas visualization
+        visualization_msgs::MarkerArrayPtr markers;
         //stored variances of sample points
         // std::vector<double> samples_var;
         //stored samples
@@ -118,6 +122,8 @@ class GaussianProcessNode
         bool computeGP();
         /** \brief Compute Atlas from a random starting point */
         bool computeAtlas();
+        /** \brief compute markers that compose an atlas */
+        void createAtlasMarkers();
         /** \brief Update the Gaussian Process with new points */
         void update();
         /** \brief Publish object model */

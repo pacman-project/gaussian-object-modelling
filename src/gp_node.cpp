@@ -14,6 +14,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
     // srv_sample = nh.advertiseService("sample_process", &GaussianProcessNode::cb_sample, this); not sure why this is needed
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
+    pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_points = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_point, this);
     // pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 0, true);
     // pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
@@ -192,6 +193,8 @@ void GaussianProcessNode::Publish ()
     // object_tree.reset();
     // //publish the model
     publishCloudModel();
+    //publish markers
+    publishAtlas();
     // publishSampleToExplore();
     // ROS_INFO("[GaussianProcessNode::%s]\tDone computing reconstructed model cloud.",__func__);
 }
@@ -356,6 +359,10 @@ bool GaussianProcessNode::computeGP()
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
     object_gp = std::make_shared<Model>();
+    double sigma = 0.002;
+    double length = 0.003;
+    Gaussian kernel(sigma, length);
+    regressor.setCovFunction(kernel);
     regressor.create(cloud, object_gp);
     start = true;
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -365,12 +372,40 @@ bool GaussianProcessNode::computeGP()
 }
 bool GaussianProcessNode::computeAtlas()
 {
+    //make sure we have a model and an object, we should have if start was called
+    if (!object_ptr || object_ptr->empty()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tNo object initialized, call start service.",__func__);
+        return false;
+    }
+    if (!object_gp){
+        ROS_ERROR("[GaussianProcessNode::%s]\tNo GP model initialized, call start service.",__func__);
+        return false;
+    }
+    //right now just create 20 discs at random.
+    int N = 20;
+    int num_points = object_ptr->size();
+    //init atlas
+    atlas = std::make_shared<Atlas>();
+    GPProjector<Gaussian> projector;
+    for (int i=0; i<N; ++i)
+    {
+        int r_id;
+        //get a random index
+        r_id = getRandIn(0, num_points -1);
+        Chart::Ptr chart;
+        Eigen::Vector3d center (object_ptr->points[r_id].x, object_ptr->points[r_id].y,
+            object_ptr->points[r_id].z);
+        //define a radius of the chart just take 3cm for now
+        projector.generateChart(regressor, object_gp, center, 0.03, chart);
+        atlas->charts.push_back(*chart);
+    }
+    createAtlasMarkers();
     return true;
 }
 //update gaussian model with new points from probe
 void GaussianProcessNode::update()
 {
-//     TODO: Actualy implement an update in  library, not just delete and recreate.
+//  TODO: Actualy implement an update in  library, not just delete and recreate.
 // (tabjones on Wednesday 16/12/2015)
     // discovered.clear();
     this->computeGP();
@@ -385,27 +420,123 @@ void GaussianProcessNode::publishCloudModel () const
         if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
             pub_model.publish(*model_ptr);
 }
+
+void GaussianProcessNode::createAtlasMarkers()
+{
+    //reset old markers
+    markers = boost::make_shared<visualization_msgs::MarkerArray>();
+    if (!atlas){
+        ROS_WARN("[GaussianProcessNode::%s]\tNo Atlas created, not computing any marker.",__func__);
+        return ;
+    }
+    //for each atlas
+    //TODO
+    int a (0); //atlas index
+    {
+        //for each chart in atlas, c is chart index
+        for(size_t c=0; c < atlas->charts.size(); ++c)
+        {
+            visualization_msgs::Marker disc;
+            disc.header.frame_id = object_ptr->header.frame_id;
+            disc.header.stamp = ros::Time();
+            disc.lifetime = ros::Duration(1);
+            std::string ns("A" + std::to_string(a) + "_C" + std::to_string(c));
+            disc.ns = ns;
+            disc.id = 0;
+            disc.type = visualization_msgs::Marker::CYLINDER;
+            disc.action = visualization_msgs::Marker::ADD;
+            // disc.points.push_back(center);
+            disc.scale.x = atlas->charts[c].R;
+            disc.scale.y = atlas->charts[c].R;
+            disc.scale.z = 0.002;
+            disc.color.a = 0.3;
+            disc.color.r = 1.0;
+            disc.color.b = 0.8;
+            disc.color.g = 0.0;
+            Eigen::Matrix3d rot;
+            rot << atlas->charts[c].Tx[0], atlas->charts[c].Ty[0], atlas->charts[c].N[0],
+                   atlas->charts[c].Tx[1], atlas->charts[c].Ty[1], atlas->charts[c].N[1],
+                   atlas->charts[c].Tx[2], atlas->charts[c].Ty[2], atlas->charts[c].N[2];
+            Eigen::Quaterniond q(rot);
+            q.normalize();
+            if (q.w() < 0) {
+                q.x() *= -1;
+                q.y() *= -1;
+                q.z() *= -1;
+                q.w() *= -1;
+            }
+            disc.pose.orientation.x = q.x();
+            disc.pose.orientation.y = q.y();
+            disc.pose.orientation.z = q.z();
+            disc.pose.orientation.w = q.w();
+            disc.pose.position.x = atlas->charts[c].C[0];
+            disc.pose.position.y = atlas->charts[c].C[1];
+            disc.pose.position.z = atlas->charts[c].C[2];
+            markers->markers.push_back(disc);
+            visualization_msgs::Marker aX,aY,aZ;
+            aX.header.frame_id = object_ptr->header.frame_id;
+            aY.header.frame_id = object_ptr->header.frame_id;
+            aZ.header.frame_id = object_ptr->header.frame_id;
+            aX.header.stamp = ros::Time();
+            aY.header.stamp = ros::Time();
+            aZ.header.stamp = ros::Time();
+            aX.lifetime = ros::Duration(1);
+            aY.lifetime = ros::Duration(1);
+            aZ.lifetime = ros::Duration(1);
+            aX.ns = aY.ns = aZ.ns = ns;
+            aX.id = 1;
+            aY.id = 2;
+            aZ.id = 3;
+            aX.type = aY.type = aZ.type = visualization_msgs::Marker::ARROW;
+            aX.action = aY.action = aZ.action = visualization_msgs::Marker::ADD;
+            geometry_msgs::Point end;
+            geometry_msgs::Point center;
+            center.x = atlas->charts[c].C[0];
+            center.y = atlas->charts[c].C[1];
+            center.z = atlas->charts[c].C[2];
+            // center.x = 0;
+            // center.y = 0;
+            // center.z = 0;
+            aX.points.push_back(center);
+            aY.points.push_back(center);
+            aZ.points.push_back(center);
+            end.x = center.x + atlas->charts[c].Tx[0]/100;
+            end.y = center.y + atlas->charts[c].Tx[1]/100;
+            end.z = center.z + atlas->charts[c].Tx[2]/100;
+            aX.points.push_back(end);
+            end.x = center.x + atlas->charts[c].Ty[0]/100;
+            end.y = center.y + atlas->charts[c].Ty[1]/100;
+            end.z = center.z + atlas->charts[c].Ty[2]/100;
+            aY.points.push_back(end);
+            end.x = center.x + atlas->charts[c].N[0]/100;
+            end.y = center.y + atlas->charts[c].N[1]/100;
+            end.z = center.z + atlas->charts[c].N[2]/100;
+            aZ.points.push_back(end);
+            std::cout<<"Tx "<<atlas->charts[c].Tx<<std::endl;
+            std::cout<<"Ty "<<atlas->charts[c].Ty<<std::endl;
+            std::cout<<"N "<<atlas->charts[c].N<<std::endl;
+            aX.scale.x = aY.scale.x = aZ.scale.x = 0.0002;
+            aX.scale.y = aY.scale.y = aZ.scale.y = 0.0004;
+            aX.scale.z = aY.scale.z = aZ.scale.z = 0.0004;
+            aX.color.a = aY.color.a = aZ.color.a = 0.5;
+            aX.color.b = aX.color.g = aY.color.r = aY.color.b = aZ.color.r = aZ.color.g = 0.0;
+            aX.color.r = aY.color.g = aZ.color.b = 1.0;
+            // aX.pose.position.x = aY.pose.position.x = aZ.pose.position.x = atlas->charts[c].C[0];
+            // aX.pose.position.y = aY.pose.position.y = aZ.pose.position.y = atlas->charts[c].C[1];
+            // aX.pose.position.y = aY.pose.position.y = aZ.pose.position.y = atlas->charts[c].C[2];
+            markers->markers.push_back(aX);
+            markers->markers.push_back(aY);
+            markers->markers.push_back(aZ);
+        }
+    }
+}
+
 //Publish sample (remove for now, we are publishing atlas markers)
 void GaussianProcessNode::publishAtlas () const
 {
-//     // TMP: The display marker for point and direction, useful for debug ;)
-//     geometry_msgs::PointStamped point_marker;
-//     point_marker.header = sample_to_explore.header;
-//     point_marker.point = sample_to_explore.point;
-//
-//     geometry_msgs::WrenchStamped direction_marker;
-//     direction_marker.header = sample_to_explore.header;
-//     direction_marker.wrench.force = sample_to_explore.direction;
-//
-//     //These checks are  to make sure we  have a gp and  there's actually someone
-//     // who listens to us
-//     if (start && pub_point.getNumSubscribers()>0)
-//     {
-//         pub_point.publish(sample_to_explore);
-//         pub_point_marker.publish(point_marker);
-//         pub_direction_marker.publish(direction_marker);
-//     }
-//
+    if (markers)
+        if(pub_markers.getNumSubscribers() > 0)
+            pub_markers.publish(*markers);
 }
 //test for occlusion of samples (now unused)
 //return:
