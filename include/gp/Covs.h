@@ -18,11 +18,21 @@
 
 #include <cmath>
 #include <boost/shared_ptr.hpp>
+#include <Eigen/Dense>
 
 //------------------------------------------------------------------------------
 
 namespace gp
 {
+
+//------------------------------------------------------------------------------
+
+static Eigen::VectorXd convertToEigen(const Vec& v) {
+	return Eigen::Map<Eigen::VectorXd>((double *)v.data(), v.size());
+}
+static Eigen::Vector3d convertToEigen(const Vec3& v) {
+	return Eigen::Map<Eigen::VectorXd>((double *)v.get(), 3);
+}
 
 //------------------------------------------------------------------------------
 
@@ -84,7 +94,9 @@ public:
 	  
         /** Compute the kernel */
         virtual inline double get(const Vec3& x1, const Vec3& x2) const { return x1.distance(x2); }
-        
+        /** Compute the derivate */
+	virtual inline double getDiff(const Vec3& x1, const Vec3& x2) const { return x1.distanceSqr(x2)*2; }
+
         /** Access to loghyper_change */
         inline bool getLogHyper() const { return loghyper_changed; }
         inline void setLogHyper(const bool b) { loghyper_changed = b; }

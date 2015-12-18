@@ -48,24 +48,32 @@ public:
 	
 	/** Get input vector at index k. */
 	//const Eigen::VectorXd & x(size_t k);
-	const Vec3& x(size_t k);
+	inline const Vec3& x(size_t k) const { 
+		return X[k];
+	}
 	
 	/** Get target value at index k. */
-	double y(size_t k);
+	inline double y(size_t k) const {
+		return Y[k];
+	}
 	/** Set target value at index i. */
 	bool set_y(size_t i, double y);
 	
 	/** Get reference to vector of target values. */
-	const Vec& y();
+	const Vec& y() const {
+		return Y;
+	}
 	
 	/** Get number of samples. */
-	inline size_t size() { return n; };
+	inline const size_t rows() const { return n; };
+	/** Get dim of samples. */
+	inline const size_t cols() const { return 3; };
 	
 	/** Clear sample set. */
 	void clear();
 	
 	/** Check if sample set is empty. */
-	inline bool empty () { return n==0; };
+	inline bool empty () const { return n==0; };
 
 private:
 	/** Container holding input vectors. */
