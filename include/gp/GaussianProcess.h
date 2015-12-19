@@ -137,15 +137,19 @@ public:
 			}
 			k(n) = cf->get(x, x);
 			kdiff(n) = cf->getDiff(x, x);
-
-            std::cout<<"before invkstar\n"<<std::flush;
-			const Eigen::VectorXd invKstar = k.inverse();
-            std::cout<<"invkstar\n"<<std::flush;
+			
+			//printf("K rows=%lu cols=%lu\n", k.rows(), k.cols());
+			Eigen::MatrixXd invKstar = k.transpose();
+			//printf("K^T rows=%lu cols=%lu\n", invKstar.rows(), invKstar.cols());
 			Vec yy = sampleset->y();
 			yy.push_back(fx);
-			const Eigen::VectorXd invKstarY = invKstar * convertToEigen(yy);
+			//const Eigen::VectorXd invKstarY = invKstar.col(0).dot(convertToEigen(yy));
+			//printf("K^TY rows=%lu cols=%lu\n", invKstarY.rows(), invKstarY.cols());
+			const double invKstarY = invKstar.row(0).dot(convertToEigen(yy));
+			//printf("K^TY %f\n", invKstarY);	
 			for (size_t i = 0; i < nnew; ++i)
-				normal += invKstarY(n)*kdiff(i)*(convertToEigen(sampleset->x(i) - x));
+				normal += invKstarY*kdiff(i)*(convertToEigen(sampleset->x(i) - x));
+
 			normal.normalize();
 			computeTangentBasis(normal, tx, ty);
 //		}
