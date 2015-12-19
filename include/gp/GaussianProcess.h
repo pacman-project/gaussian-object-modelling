@@ -66,7 +66,7 @@ public:
 
             /** Set to default */
             void setToDefault() {
-                initialLSize = 10000;
+                initialLSize = 1500;
                 noise = numeric_const<double>::ZERO;
                 covTypeDesc.setToDefault();
 

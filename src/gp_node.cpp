@@ -1,6 +1,6 @@
 #include <gp_node.h>
 #include <algorithm> //for std::max_element
-#include <chrono> //for time measurements
+// #include <chrono> //for time measurements
 #include <node_utils.hpp>
 
 using namespace gp_regression;
@@ -101,7 +101,7 @@ void GaussianProcessNode::cb_point(const geometry_msgs::PointStamped::ConstPtr &
 //gp computation
 bool GaussianProcessNode::computeGP()
 {
-    auto begin_time = std::chrono::high_resolution_clock::now();
+    // auto begin_time = std::chrono::high_resolution_clock::now();
     if(!object_ptr){
         //This  should never  happen  if compute  is  called from  start_process
         //service callback, however it does not hurt to add this extra check!
@@ -192,9 +192,10 @@ bool GaussianProcessNode::computeGP()
     gp = ld.create();
     gp->set(data);
     start = true;
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created. Total time consumed: %ld nanoseconds.",__func__, elapsed);
+    // auto end_time = std::chrono::high_resolution_clock::now();
+    // auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
+    // ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created. Total time consumed: %ld nanoseconds.",__func__, elapsed);
+    ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created.",__func__);
     return true;
 }
 bool GaussianProcessNode::computeAtlas()
