@@ -69,6 +69,11 @@ public:
         	const double power = -1*EE*invLength;
         	return twoSigma2*std::exp(power);
         }
+	//laplacian derivate = -1*invLenght*[sigma_f^2*exp(sqrt((p_1-p_2)'*(p_1-p_2))/(-leng))]
+	inline double getDiff(const Vec3& x1, const Vec3& x2) const {
+		const double EE = get(x1, x2);//sqrt(DD);
+		return -1 * invLength * EE;
+	}
 	
 	~Laplace(){}
 private:

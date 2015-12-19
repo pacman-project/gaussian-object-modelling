@@ -72,17 +72,17 @@ void SampleSet::add(const Vec3Seq& newInputs, const Vec& newTargets) {
 
 //------------------------------------------------------------------------------
 
-const Vec3& SampleSet::x(size_t k) {
-	return X[k];
-}
+//const Vec3& SampleSet::x(size_t k) {
+//	return X[k];
+//}
 
-double SampleSet::y(size_t k) {
-	return Y[k];
-}
+//double SampleSet::y(size_t k) {
+//	return Y[k];
+//}
 
-const Vec& SampleSet::y() {
-	return Y;
-}
+//const Vec& SampleSet::y() {
+//	return Y;
+//}
 
 bool SampleSet::set_y(size_t i, double y) {
 	if (i>=n) return false;
