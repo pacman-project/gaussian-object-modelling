@@ -22,7 +22,7 @@
 #include "gp/SampleSet.h"
 #include "gp/CovLaplace.h"
 #include "gp/CovThinPlate.h"
-#include <omp.h>
+// #include <omp.h>
 
 //------------------------------------------------------------------------------
 
@@ -114,7 +114,7 @@ public:
         Eigen::VectorXd v = L->topLeftCorner(n, n).triangularView<Eigen::Lower>().solve(*k_star);
 		return (double)cf->get(xStar, xStar) - v.dot(v); //cf->get(x_star, x_star) - v.dot(v);
     }
-    
+
     	/** Predict f, var, N, Tx and Ty */
 	virtual void evaluate(const Vec3& x, Real& fx, Real& varx, Eigen::Vector3d& normal, Eigen::Vector3d& tx, Eigen::Vector3d& ty) {
 		clock_t t = clock();
@@ -137,8 +137,10 @@ public:
 			}
 			k(n) = cf->get(x, x);
 			kdiff(n) = cf->getDiff(x, x);
-			
+
+            std::cout<<"before invkstar\n"<<std::flush;
 			const Eigen::VectorXd invKstar = k.inverse();
+            std::cout<<"invkstar\n"<<std::flush;
 			Vec yy = sampleset->y();
 			yy.push_back(fx);
 			const Eigen::VectorXd invKstarY = invKstar * convertToEigen(yy);
@@ -238,7 +240,7 @@ protected:
 	size_t initialLSize;
 
 	/** (inward) normal sequence */
-	Eigen::MatrixXd N; 
+	Eigen::MatrixXd N;
 	/** Tangent basis in x direction */
 	Eigen::MatrixXd Tx;
 	/** Tangen basis in y direction */
@@ -301,7 +303,7 @@ protected:
 		// atlas computation
 		if (desc.atlas) {
 			InvKppY = L->inverse() * convertToEigen(sampleset->y());
-			
+
 //#pragma omp parallel for
 			for (size_t i = 0; i < L->rows(); ++i) {
 				for (size_t j = 0; j < L->cols(); ++j)
@@ -315,7 +317,7 @@ protected:
 				Ty.row(i) = Tyi;
 			}
 		}
-		
+
 		// perform cholesky factorization
         //solver.compute(K.selfadjointView<Eigen::Lower>());
         L->topLeftCorner(n, n) = L->topLeftCorner(n, n).selfadjointView<Eigen::Lower>().llt().matrixL();
