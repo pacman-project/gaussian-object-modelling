@@ -236,14 +236,11 @@ bool GaussianProcessNode::computeAtlas()
 //update gaussian model with new points from probe
 void GaussianProcessNode::update(Vec3Seq &points)
 {
-    Vec3Seq new_p;
-    Vec3 p(object_ptr->points.at(object_ptr->size()-1).x,
-            object_ptr->points.at(object_ptr->size()-1).y,
-            object_ptr->points.at(object_ptr->size()-1).z);
-    new_p.push_back(p);
     Vec t;
-    t.push_back(0);
-    gp->add_patterns(new_p,t);
+    t.resize(points.size());
+    for (auto &x : t)
+        x=0;
+    gp->add_patterns(points,t);
     //TODO temp we dont have an updated atlas, just recreate it from scratch
     computeAtlas();
 }
