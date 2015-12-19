@@ -4,6 +4,7 @@
 //PCL
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <random_generation.hpp>
 
 /** Some utility functions to color points in point clouds */
 

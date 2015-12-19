@@ -1,11 +1,8 @@
-#ifndef GP_REGRESSION___RANDOM_GENERATION_HPP
-#define GP_REGRESSION___RANDOM_GENERATION_HPP
+#ifndef _RANDOM_GENERATION_HPP_
+#define _RANDOM_GENERATION_HPP_
 
 #include <random>
 #include <cmath>
-
-namespace gp_regression
-{
 
 ///Simple functions to quickly get uniformely distributed numbers in given
 //intervals
@@ -35,7 +32,6 @@ int getRandIn(const int a, const int b)
 {
         std::uniform_int_distribution<int> dis(a,b);
         return (dis(_engine_));
-}
 }
 
 #endif

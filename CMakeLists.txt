@@ -21,11 +21,11 @@ find_package(PCL REQUIRED)
 
 find_package(Eigen REQUIRED)
 
-find_package(OpenMP)
-if (OPENMP_FOUND)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
+# find_package(OpenMP)
+# if (OPENMP_FOUND)
+#     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+#     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+# endif()
 
 add_service_files(
     FILES
@@ -57,7 +57,6 @@ file(GLOB_RECURSE gp_INCLUDES RELATIVE ${PROJECT_SOURCE_DIR} include/*.h include
 
 include_directories(
     include
-    src/include
     ${catkin_INCLUDE_DIRS}
     ${Eigen_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
@@ -68,7 +67,6 @@ add_executable(gaussian_process
     src/gp_node.cpp
     src/gp_node_main.cpp
     src/gp/SampleSet.cpp
-    ${gp_INCLUDES}
 )
 
 add_dependencies(gaussian_process
@@ -90,7 +88,7 @@ target_link_libraries(gaussian_process
 add_executable(test_gp
   tests/test_gp.cpp
   src/gp/SampleSet.cpp
-  ${gp_INCLUDES}
+  # ${gp_INCLUDES}
 )
 
 # target_link_libraries(test_gaussian
