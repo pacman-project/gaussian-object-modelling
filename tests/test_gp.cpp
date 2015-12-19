@@ -111,6 +111,13 @@ int main( int argc, char** argv )
 	}
 	cout << endl;
 
+		/*****  Evaluate point and normal  *********************************************/
+		double fx, varx; 
+		Eigen::Vector3d normal, tx, ty;
+		gp->evaluate(x_star[0], fx, varx, normal, tx, ty);
+		if (prtPreds)
+			printf("Evaluate[0] -> f=%f var=%f normal=[%f %f %f]\n", fx, varx, normal(0), normal(1), normal(2));
+
 	/*****  Add point to the model  *********************************************/
 	gp->add_patterns(x_star, y_star);
 
