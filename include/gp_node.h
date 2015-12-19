@@ -19,16 +19,17 @@
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
 // #include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/extract_indices.h>
+// #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl/search/kdtree.h>
+// #include <pcl/search/kdtree.h>
 // General Utils
 #include <cmath>
 #include <fstream>
 #include <string>
 #include <stdlib.h>
+#include <map>
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>
 // This node services (includes custom messages)
@@ -81,36 +82,34 @@ class GaussianProcessNode
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_model,  pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_points;
-        //control if gp model was updated with new points and thus we need to
-        //republish a new point cloud estimation
-        // bool need_update;
-        //control how many new discovered points we need before updating the model
-        // int how_many_discoveries;
-        //Gaussian Model object and Lapalce regressor
-        // Model::Ptr object_gp;
+        //GP regressor and dataset
         LaplaceRegressor::Ptr gp;
         SampleSet::Ptr data;
-        //Atlas
+        //Atlas TODO temp until it is implemented in gp
+        struct Chart
+        {
+            uint8_t id;
+            Vec3 center;
+            F32 radius;
+            Eigen::Vector3d N;
+            Eigen::Vector3d Tx;
+            Eigen::Vector3d Ty;
+            uint8_t parent; //parent id, along with its depth level uniquely identifies branches
+        };
+        //key is the depth level
+        typedef std::multimap<uint8_t, Chart> Atlas;
+        std::shared_ptr<Atlas> atlas;
+        /////////////
         //atlas visualization
         visualization_msgs::MarkerArrayPtr markers;
-        //stored variances of sample points
-        // std::vector<double> samples_var;
-        //stored samples
-        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr samples_ptr;
-        //kdtree for object
-        // pcl::search::KdTree<pcl::PointXYZRGB>::Ptr object_tree;
         //kdtree for object, used by isSampleVisible method
-        pcl::search::KdTree<pcl::PointXYZRGB>::Ptr viewpoint_tree;
+        // pcl::search::KdTree<pcl::PointXYZRGB>::Ptr viewpoint_tree;
         //kdtree for hand
         // pcl::search::KdTree<pcl::PointXYZRGB>::Ptr hand_tree;
-        //sample to explore
-        // gp_regression::SampleToExplore sample_to_explore;
-        //vector of discovered points
-        // std::vector<pcl::PointXYZRGB> discovered;
 
         //test sample for occlusion, i.e tells if the sample can reach the camera
         //without "touching" other object points
-        int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
+        // int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res);
         //callback to sample process service, executes when service is called
@@ -126,12 +125,10 @@ class GaussianProcessNode
         /** \brief compute markers that compose an atlas */
         void createAtlasMarkers();
         /** \brief Update the Gaussian Process with new points */
-        void update();
+        void update(Vec3Seq &points);
         /** \brief Publish object model */
         void publishCloudModel() const;
         /** \brief Publish last computed atlas */
         void publishAtlas () const;
-        //Publish sample to explore
-        // void publishSampleToExplore() const;
 };
 #endif
