@@ -291,14 +291,23 @@ void GaussianProcessNode::createAtlasMarkers()
     sample.color.r = 0.0;
     sample.color.b = 0.0;
     sample.color.g = 1.0;
-    for (float x = -0.2; x<= 0.2; x += 0.01)
-        for (float y = -0.2; y<= 0.2; y += 0.01)
-            for (float z = 0.5; z<= 0.75; z += 0.01)
+    pcl::PointXYZRGB min, max;
+    pcl::getMinMax3D(*object_ptr, min, max);
+    float xm,xM,ym,yM,zm,zM;
+    xm = (-2*max.x + 4*min.x)*0.5;
+    ym = (-2*max.y + 4*min.y)*0.5;
+    zm = (-2*max.z + 4*min.z)*0.5;
+    xM = (4*max.x -2*min.x)*0.5;
+    yM = (4*max.y -2*min.y)*0.5;
+    zM = (4*max.z -2*min.z)*0.5;
+    for (float x = xm; x<= xM; x += 0.02)
+        for (float y = ym; y<= yM; y += 0.02)
+            for (float z = zm; z<= zM*2; z += 0.02)
             {
                 Vec3 q(x,y,z);
                 const double qf = gp->f(q);
                 //test if sample was classified as belonging to obj surface
-                if (qf <= 0.01 && qf >= -0.01){
+                if (qf <= 0.001 && qf >= -0.001){
                     //We can  add this sample to visualization
                     geometry_msgs::Point pt;
                     pt.x = x;
@@ -383,7 +392,7 @@ void GaussianProcessNode::createAtlasMarkers()
             end.y = start.y + c->second.N[1]/100;
             end.z = start.z + c->second.N[2]/100;
             aZ.points.push_back(end);
-            std::cout<<"N "<<c->second.N<<std::endl;
+            // std::cout<<"N "<<c->second.N<<std::endl;
             aX.scale.x = aY.scale.x = aZ.scale.x = 0.0002;
             aX.scale.y = aY.scale.y = aZ.scale.y = 0.0008;
             aX.scale.z = aY.scale.z = aZ.scale.z = 0.0008;
