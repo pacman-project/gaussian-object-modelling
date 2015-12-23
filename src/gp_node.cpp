@@ -321,6 +321,17 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.color.b = 0.8;
             disc.color.g = 0.0;
             Eigen::Matrix3d rot;
+            Eigen::Vector3d Nb,X,Y;
+            X << 1,0,0;
+            Y << 0,1,0;
+            if (X.dot(c->second.Tx) < 0)
+                c->second.Tx *= -1;
+            if (Y.dot(c->second.Ty) < 0)
+                c->second.Ty *= -1;
+            c->second.Tx.normalize();
+            c->second.Ty.normalize();
+            Nb = c->second.Tx.cross(c->second.Ty);
+            c->second.N = Nb;
             rot.col(0) = c->second.Tx;
             rot.col(1) = c->second.Ty;
             rot.col(1) = c->second.N;
