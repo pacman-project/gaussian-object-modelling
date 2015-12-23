@@ -116,6 +116,8 @@ public:
     }
 
     	/** Predict f, var, N, Tx and Ty */
+    // TODO:  Normal looks  wrong for some points,  Not sure why.
+    // (tabjones on Wednesday 23/12/2015)
 	virtual void evaluate(const Vec3& x, Real& fx, Real& varx, Eigen::Vector3d& normal, Eigen::Vector3d& tx, Eigen::Vector3d& ty) {
 		clock_t t = clock();
 
@@ -137,7 +139,7 @@ public:
 			}
 			k(n) = cf->get(x, x);
 			kdiff(n) = cf->getDiff(x, x);
-			
+
 			//printf("K rows=%lu cols=%lu\n", k.rows(), k.cols());
 			Eigen::MatrixXd invKstar = k.transpose();
 			//printf("K^T rows=%lu cols=%lu\n", invKstar.rows(), invKstar.cols());
@@ -146,7 +148,7 @@ public:
 			//const Eigen::VectorXd invKstarY = invKstar.col(0).dot(convertToEigen(yy));
 			//printf("K^TY rows=%lu cols=%lu\n", invKstarY.rows(), invKstarY.cols());
 			const double invKstarY = invKstar.row(0).dot(convertToEigen(yy));
-			//printf("K^TY %f\n", invKstarY);	
+			//printf("K^TY %f\n", invKstarY);
 			for (size_t i = 0; i < nnew; ++i)
 				normal += invKstarY*kdiff(i)*(convertToEigen(sampleset->x(i) - x));
 

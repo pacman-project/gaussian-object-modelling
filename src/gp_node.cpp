@@ -224,7 +224,19 @@ bool GaussianProcessNode::computeAtlas()
                          object_ptr->points[r_id].y,
                          object_ptr->points[r_id].z);
         Real fx, vx;
+        //evaluate N looks wrong  TODO FIX
         gp->evaluate(chart.center, fx, vx, chart.N, chart.Tx, chart.Ty);
+        //find a basis with N as new Z axis, dont use tx,ty
+        Eigen::Vector3d X,Y;
+        Eigen::Vector3d kinX(Eigen::Vector3d::UnitX());
+        chart.N.normalize();
+        //find a new x as close as possible to x kinect but orthonormal to N
+        X = kinX - (chart.N*(chart.N.dot(kinX)));
+        X.normalize();
+        Y = chart.N.cross(X);
+        Y.normalize();
+        chart.Tx = X;
+        chart.Ty = Y;
         //define a radius of the chart just take 3cm for now
         chart.radius = 0.03f;
         chart.id = r_id; //lets have the id = pointcloud id
@@ -279,9 +291,9 @@ void GaussianProcessNode::createAtlasMarkers()
     sample.color.r = 0.0;
     sample.color.b = 0.0;
     sample.color.g = 1.0;
-    for (float x = -0.2; x<= 0.2; x += 0.005)
-        for (float y = -0.2; y<= 0.2; y += 0.005)
-            for (float z = 0.5; z<= 0.75; z += 0.005)
+    for (float x = -0.2; x<= 0.2; x += 0.01)
+        for (float y = -0.2; y<= 0.2; y += 0.01)
+            for (float z = 0.5; z<= 0.75; z += 0.01)
             {
                 Vec3 q(x,y,z);
                 const double qf = gp->f(q);
@@ -321,28 +333,11 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.color.b = 0.8;
             disc.color.g = 0.0;
             Eigen::Matrix3d rot;
-            Eigen::Vector3d Nb,X,Y;
-            X << 1,0,0;
-            Y << 0,1,0;
-            if (X.dot(c->second.Tx) < 0)
-                c->second.Tx *= -1;
-            if (Y.dot(c->second.Ty) < 0)
-                c->second.Ty *= -1;
-            c->second.Tx.normalize();
-            c->second.Ty.normalize();
-            Nb = c->second.Tx.cross(c->second.Ty);
-            c->second.N = Nb;
             rot.col(0) = c->second.Tx;
             rot.col(1) = c->second.Ty;
-            rot.col(1) = c->second.N;
+            rot.col(2) = c->second.N;
             Eigen::Quaterniond q(rot);
             q.normalize();
-            if (q.w() < 0) {
-                q.x() *= -1;
-                q.y() *= -1;
-                q.z() *= -1;
-                q.w() *= -1;
-            }
             disc.pose.orientation.x = q.x();
             disc.pose.orientation.y = q.y();
             disc.pose.orientation.z = q.z();
@@ -376,7 +371,7 @@ void GaussianProcessNode::createAtlasMarkers()
             aX.points.push_back(start);
             aY.points.push_back(start);
             aZ.points.push_back(start);
-            end.x = start.x + c->second.Tx[0]/100;
+            end.x = start.x + c->second.Tx[0]/100; //since Tx is normalized this makes arrow 1cm long
             end.y = start.y + c->second.Tx[1]/100;
             end.z = start.z + c->second.Tx[2]/100;
             aX.points.push_back(end);
@@ -388,8 +383,6 @@ void GaussianProcessNode::createAtlasMarkers()
             end.y = start.y + c->second.N[1]/100;
             end.z = start.z + c->second.N[2]/100;
             aZ.points.push_back(end);
-            std::cout<<"Tx "<<c->second.Tx<<std::endl;
-            std::cout<<"Ty "<<c->second.Ty<<std::endl;
             std::cout<<"N "<<c->second.N<<std::endl;
             aX.scale.x = aY.scale.x = aZ.scale.x = 0.0002;
             aX.scale.y = aY.scale.y = aZ.scale.y = 0.0008;
