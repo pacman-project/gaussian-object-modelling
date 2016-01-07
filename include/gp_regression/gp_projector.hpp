@@ -77,23 +77,15 @@ public:
         //CovType* kernel_;
 
         /**
-        * \brief Solves the projection of a point x_j onto f(x)=0, where f(x) ~ GP(m(x),k(x,x')),
-        * using a gradient-descent like method: x^{k+1} = x^{k} - h*[f(x^{k})/f'(x^{k})],
-        * initialized at a point on the chart.
-        *
-        * \param[in] GP
-        * \param[in] Chart (x_i, Tx_i, Ty_i, r_i) where x_i is the cart center,
-        *            [Tx_i, Ty_i] is a basis of the tangent space, and r_i is the chart size.
-        * \param[in] Initial point on chart x_i'
-        * \param[out] Point x_j such that f(x_j)~GP(m(x_j),k(x_j,x'))=0.
-        */
-        /**
-         * @brief project Uses a gradient-descent method to project a point on a surface.
+         * @brief project Solves the projection of a point x_j onto f(x)=0, where f(x) ~ GP(m(x),k(x,x')),
+         * using a gradient-descent like method: x^{k+1} = x^{k} - h*[f(x^{k})/f'(x^{k})],
+         * initialized at a point on the chart.
          * @param[in] gp The gp model such that f(x) ~ gp(m(x),k(x,x_i))
          * @param[in] regressor The regressor was used to generate the gp model.
-         * @param[in] chart Initial chart
-         * @param[in] in Initial point assumed on chart x_i', but not necessarily
-         * @param[out] out Projected point on surface f(x_j) ~ 0
+         * @param[in] chart Chart (x_i, Tx_i, Ty_i, r_i) where x_i is the cart center,
+         *            [Tx_i, Ty_i] is a basis of the tangent space, and r_i is the chart size.
+         * @param[in] in Initial point on chart x_i'
+         * @param[out] out Projected point x_j such that f(x_j)~GP(m(x_j),k(x_j,x'))=0 ~ 0
          * @param[in] step_size Scale of the gradient-descent step f(x)/f'(x).
          * @param[in] eps_f_eval Tolerance for function evaluation. If less than this, projection converged.
          * @param[in] max_iter Maximum number of iteration (function is evaluated at every iteration).
