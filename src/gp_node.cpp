@@ -57,16 +57,41 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
     }
     else{
-        //User told us to load a clouds from a dir on disk instead.
-        if (pcl::io::loadPCDFile((req.cloud_dir+"/obj.pcd"), *object_ptr) != 0){
-            ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir+"obj.pcd").c_str());
-            return (false);
+        if(req.cloud_dir.compare("sphere") == 0){
+            object_ptr = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB> >();
+            const int ang_div = 36;
+            const int lin_div = 30;
+            const double radius = 0.05;
+            const double ang_step = M_PI * 2 / ang_div;
+            const double lin_step = 2 * radius / lin_div;
+            int j(0);
+            for (double lin=-radius+lin_step/2; lin< radius; lin+=lin_step)
+                for (double ang=0; ang < 2*M_PI; ang+=ang_step, ++j)
+                {
+                    double x = sqrt(radius*radius - lin*lin) * cos(ang);
+                    double y = sqrt(radius*radius - lin*lin) * sin(ang);
+                    double z = lin + 1.0; //add translation along z
+                    //add sphere points as blue model
+                    pcl::PointXYZRGB sp;
+                    sp.x = x;
+                    sp.y = y;
+                    sp.z = z;
+                    colorIt(0,0,255, sp);
+                    object_ptr->push_back(sp);
+                }
         }
-        if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0)
-            ROS_WARN("[GaussianProcessNode::%s]\tError loading cloud from %s, ignoring hand",__func__,(req.cloud_dir + "/hand.pcd").c_str());
-        //We  need  to  fill  point  cloud header  or  ROS  will  complain  when
-        //republishing this cloud. Let's assume it was published by asus kinect.
-        //I think it's just need the frame id
+        else{
+            //User told us to load a clouds from a dir on disk instead.
+            if (pcl::io::loadPCDFile((req.cloud_dir+"/obj.pcd"), *object_ptr) != 0){
+                ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir+"obj.pcd").c_str());
+                return (false);
+            }
+            if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0)
+                ROS_WARN("[GaussianProcessNode::%s]\tError loading cloud from %s, ignoring hand",__func__,(req.cloud_dir + "/hand.pcd").c_str());
+            //We  need  to  fill  point  cloud header  or  ROS  will  complain  when
+            //republishing this cloud. Let's assume it was published by asus kinect.
+            //I think it's just need the frame id
+        }
         object_ptr->header.frame_id="/camera_rgb_optical_frame";
         hand_ptr->header.frame_id="/camera_rgb_optical_frame";
         model_ptr->header.frame_id="/camera_rgb_optical_frame";
@@ -121,12 +146,18 @@ bool GaussianProcessNode::computeGP()
     Vec3Seq cloud;
     Vec targets;
 
+    gp_regression::Data::Ptr cloud_gp = std::make_shared<gp_regression::Data>();
+
     //Add object points as label 0
     for(const auto pt : object_ptr->points)
     {
         Vec3 point(pt.x ,pt.y ,pt.z);
         targets.push_back(0);
         cloud.push_back(point);
+            cloud_gp->coord_x.push_back(pt.x);
+            cloud_gp->coord_y.push_back(pt.y);
+            cloud_gp->coord_z.push_back(pt.z);
+            cloud_gp->label.push_back(0);
     }
     //add object to published model
     *model_ptr += *object_ptr;
@@ -149,6 +180,10 @@ bool GaussianProcessNode::computeGP()
     Vec3 cent( centroid[0], centroid[1], centroid[2]);
     cloud.push_back(cent);
     targets.push_back(-1);
+        cloud_gp->coord_x.push_back(centroid[0]);
+        cloud_gp->coord_y.push_back(centroid[1]);
+        cloud_gp->coord_z.push_back(centroid[2]);
+        cloud_gp->label.push_back(-1);
     pcl::PointXYZRGB cen;
     cen.x = centroid[0];
     cen.y = centroid[1];
@@ -176,6 +211,10 @@ bool GaussianProcessNode::computeGP()
             Vec3 sph (x,y,z);
             cloud.push_back(sph);
             targets.push_back(1);
+                cloud_gp->coord_x.push_back(x);
+                cloud_gp->coord_y.push_back(y);
+                cloud_gp->coord_z.push_back(z);
+                cloud_gp->label.push_back(1);
             //add sphere points to model as red
             pcl::PointXYZRGB sp;
             sp.x = x;
@@ -187,11 +226,15 @@ bool GaussianProcessNode::computeGP()
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
     data = boost::make_shared<gp::SampleSet>(cloud,targets);
-    LaplaceRegressor::Desc ld;
+    gp::LaplaceRegressor::Desc ld;
     ld.noise = 0.0;
     gp = ld.create();
     gp->set(data);
     start = true;
+        obj_gp = std::make_shared<gp_regression::Model>();
+        gp_regression::Gaussian kernel(0.002, 0.07);
+        reg.setCovFunction(kernel);
+        reg.create(cloud_gp, obj_gp);
     // auto end_time = std::chrono::high_resolution_clock::now();
     // auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
     // ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created. Total time consumed: %ld nanoseconds.",__func__, elapsed);
@@ -210,16 +253,22 @@ bool GaussianProcessNode::computeAtlas()
         return false;
     }
     //right now just create 10 discs at random all depth 0.
-    uint8_t N = 10;
+    uint8_t N = 3;
     int num_points = object_ptr->size();
     //init atlas
     atlas = std::make_shared<Atlas>();
+        gp_atlas=std::make_shared<gp_regression::Atlas>();
+        gp_regression::GPProjector<gp_regression::Gaussian> proj;
     for (uint8_t i=0; i<N; ++i)
     {
         int r_id;
         //get a random index
         r_id = getRandIn(0, num_points -1);
         Chart chart;
+            gp_regression::Chart::Ptr gp_chart;
+            Eigen::Vector3d c (object_ptr->points[r_id].x, object_ptr->points[r_id].y,
+                            object_ptr->points[r_id].z);
+            proj.generateChart(obj_gp, c, 0.03, gp_chart);
         chart.center.set(object_ptr->points[r_id].x,
                          object_ptr->points[r_id].y,
                          object_ptr->points[r_id].z);
@@ -230,6 +279,7 @@ bool GaussianProcessNode::computeAtlas()
         Eigen::Vector3d X,Y;
         Eigen::Vector3d kinX(Eigen::Vector3d::UnitX());
         chart.N.normalize();
+        Eigen::Vector3d newN = chart.N;
         //find a new x as close as possible to x kinect but orthonormal to N
         X = kinX - (chart.N*(chart.N.dot(kinX)));
         X.normalize();
@@ -242,6 +292,54 @@ bool GaussianProcessNode::computeAtlas()
         chart.id = r_id; //lets have the id = pointcloud id
         chart.parent = 0; //doesnt have a parent since its root
         atlas->insert(std::pair<uint8_t, Chart>(0,chart));
+            gp_chart->N.normalize();
+            X = kinX - (gp_chart->N * (gp_chart->N.dot(kinX)));
+            X.normalize();
+            Y = gp_chart->N.cross(X);
+            Y.normalize();
+            gp_chart->Tx = X;
+            gp_chart->Ty = Y;
+            gp_atlas->charts.push_back(*gp_chart);
+        //pcl
+        //compute a normal around the point neighborhood (2cm)
+        pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
+        std::vector<int> idx(object_ptr->points.size());
+        std::vector<float> dist(object_ptr->points.size());
+        kdtree.setInputCloud(object_ptr);
+        kdtree.radiusSearch(object_ptr->points[r_id], 0.05, idx, dist);
+        pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne_point;
+        ne_point.setInputCloud(object_ptr);
+        ne_point.useSensorOriginAsViewPoint();
+        float curv,nx,ny,nz;
+        ne_point.computePointNormal (*object_ptr, idx, nx,ny,nz, curv);
+        chart.N[0] = nx;
+        chart.N[1] = ny;
+        chart.N[2] = nz;
+        chart.N.normalize();
+        //find a new x as close as possible to x kinect but orthonormal to N
+        X = kinX - (chart.N*(chart.N.dot(kinX)));
+        X.normalize();
+        Y = chart.N.cross(X);
+        Y.normalize();
+        chart.Tx = X;
+        chart.Ty = Y;
+        //define a radius of the chart just take 3cm for now
+        chart.radius = 0.03f;
+        chart.id = r_id; //lets have the id = pointcloud id
+        chart.parent = 1; //doesnt have a parent since its root
+        atlas->insert(std::pair<uint8_t, Chart>(1,chart));
+        //
+        std::cout<<"Error from pcl normal new lib: ";
+        double e;
+        e = sqrt( (chart.N[0]-newN[0])*(chart.N[0]-newN[0]) +
+                  (chart.N[1]-newN[1])*(chart.N[1]-newN[1]) +
+                  (chart.N[2]-newN[2])*(chart.N[2]-newN[2]) );
+        std::cout<<e<<std::endl;
+        std::cout<<"Error from pcl normal old lib: ";
+        e = sqrt( (chart.N[0]-gp_chart->N[0])*(chart.N[0]-gp_chart->N[0]) +
+                  (chart.N[1]-gp_chart->N[1])*(chart.N[1]-gp_chart->N[1]) +
+                  (chart.N[2]-gp_chart->N[2])*(chart.N[2]-gp_chart->N[2]) );
+        std::cout<<e<<std::endl;
     }
     createAtlasMarkers();
     return true;
@@ -276,47 +374,84 @@ void GaussianProcessNode::createAtlasMarkers()
         ROS_WARN("[GaussianProcessNode::%s]\tNo Atlas created, not computing any marker.",__func__);
         return ;
     }
-    //fake deterministic sampling
-    visualization_msgs::Marker sample;
-    sample.header.frame_id = object_ptr->header.frame_id;
-    sample.header.stamp = ros::Time();
-    sample.lifetime = ros::Duration(1);
-    sample.ns = "samples";
-    sample.id = 0;
-    sample.type = visualization_msgs::Marker::POINTS;
-    sample.action = visualization_msgs::Marker::ADD;
-    sample.scale.x = 0.001;
-    sample.scale.y = 0.001;
-    sample.color.a = 0.3;
-    sample.color.r = 0.0;
-    sample.color.b = 0.0;
-    sample.color.g = 1.0;
-    pcl::PointXYZRGB min, max;
-    pcl::getMinMax3D(*object_ptr, min, max);
-    float xm,xM,ym,yM,zm,zM;
-    xm = (-2*max.x + 4*min.x)*0.5;
-    ym = (-2*max.y + 4*min.y)*0.5;
-    zm = (-2*max.z + 4*min.z)*0.5;
-    xM = (4*max.x -2*min.x)*0.5;
-    yM = (4*max.y -2*min.y)*0.5;
-    zM = (4*max.z -2*min.z)*0.5;
-    for (float x = xm; x<= xM; x += 0.02)
-        for (float y = ym; y<= yM; y += 0.02)
-            for (float z = zm; z<= zM*2; z += 0.02)
-            {
-                Vec3 q(x,y,z);
-                const double qf = gp->f(q);
-                //test if sample was classified as belonging to obj surface
-                if (qf <= 0.001 && qf >= -0.001){
-                    //We can  add this sample to visualization
-                    geometry_msgs::Point pt;
-                    pt.x = x;
-                    pt.y = y;
-                    pt.z = z;
-                    sample.points.push_back(pt);
-                }
-            }
-    markers->markers.push_back(sample);
+    // //fake deterministic sampling
+    // visualization_msgs::Marker sample;
+    // sample.header.frame_id = object_ptr->header.frame_id;
+    // sample.header.stamp = ros::Time();
+    // sample.lifetime = ros::Duration(1);
+    // sample.ns = "samples";
+    // sample.id = 0;
+    // sample.type = visualization_msgs::Marker::POINTS;
+    // sample.action = visualization_msgs::Marker::ADD;
+    // sample.scale.x = 0.001;
+    // sample.scale.y = 0.001;
+    // sample.color.a = 0.3;
+    // sample.color.r = 0.0;
+    // sample.color.b = 0.0;
+    // sample.color.g = 1.0;
+    // pcl::PointXYZRGB min, max;
+    // pcl::getMinMax3D(*object_ptr, min, max);
+    // float xm,xM,ym,yM,zm,zM;
+    // xm = (-max.x + 2*min.x)*0.5;
+    // ym = (-max.y + 2*min.y)*0.5;
+    // zm = (-max.z + 2*min.z)*0.5;
+    // xM = (2*max.x -min.x)*0.5;
+    // yM = (2*max.y -min.y)*0.5;
+    // zM = (2*max.z -min.z)*0.5;
+    // for (float x = xm; x<= xM; x += 0.01)
+    //     for (float y = ym; y<= yM; y += 0.01)
+    //         for (float z = zm; z<= zM*2; z += 0.01)
+    //         {
+    //             Vec3 q(x,y,z);
+    //             const double qf = gp->f(q);
+    //             //test if sample was classified as belonging to obj surface
+    //             if (qf <= 0.001 && qf >= -0.001){
+    //                 //We can  add this sample to visualization
+    //                 geometry_msgs::Point pt;
+    //                 pt.x = x;
+    //                 pt.y = y;
+    //                 pt.z = z;
+    //                 sample.points.push_back(pt);
+    //             }
+    //         }
+    // markers->markers.push_back(sample);
+    // //
+    // visualization_msgs::Marker sample_gp;
+    // sample_gp.header.frame_id = object_ptr->header.frame_id;
+    // sample_gp.header.stamp = ros::Time();
+    // sample_gp.lifetime = ros::Duration(1);
+    // sample_gp.ns = "gp_samples";
+    // sample_gp.id = 0;
+    // sample_gp.type = visualization_msgs::Marker::POINTS;
+    // sample_gp.action = visualization_msgs::Marker::ADD;
+    // sample_gp.scale.x = 0.001;
+    // sample_gp.scale.y = 0.001;
+    // sample_gp.color.a = 0.3;
+    // sample_gp.color.r = 1.0;
+    // sample_gp.color.b = 0.0;
+    // sample_gp.color.g = 0.0;
+    // for (float x = xm; x<= xM; x += 0.01)
+    //     for (float y = ym; y<= yM; y += 0.01)
+    //         for (float z = zm; z<= zM*2; z += 0.01)
+    //         {
+    //             gp_regression::Data::Ptr q = std::make_shared<gp_regression::Data>();
+    //             q->coord_x.push_back(x);
+    //             q->coord_y.push_back(y);
+    //             q->coord_z.push_back(z);
+    //             std::vector<double> qf ,qv;
+    //             reg.evaluate(obj_gp, q, qf, qv);
+    //             //test if sample was classified as belonging to obj surface
+    //             if (qf.at(0) <= 0.001 && qf.at(0) >= -0.001){
+    //                 //We can  add this sample to visualization
+    //                 geometry_msgs::Point pt;
+    //                 pt.x = x;
+    //                 pt.y = y;
+    //                 pt.z = z;
+    //                 sample_gp.points.push_back(pt);
+    //             }
+    //         }
+    // markers->markers.push_back(sample_gp);
+    //
     //Now show the Atlas
     // for each atlas (we have 1 now TODO loop)
     int a (0); //atlas index
@@ -339,8 +474,13 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.scale.z = 0.001;
             disc.color.a = 0.3;
             disc.color.r = 1.0;
-            disc.color.b = 0.8;
+            disc.color.b = 0.5;
             disc.color.g = 0.0;
+            if(c->first == 1){
+                disc.color.r = 0.0;
+                disc.color.b = 1.0;
+                disc.color.g = 0.0;
+            }
             Eigen::Matrix3d rot;
             rot.col(0) = c->second.Tx;
             rot.col(1) = c->second.Ty;
@@ -356,51 +496,110 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.pose.position.z = c->second.center[2];
             markers->markers.push_back(disc);
             visualization_msgs::Marker aX,aY,aZ;
-            aX.header.frame_id = object_ptr->header.frame_id;
-            aY.header.frame_id = object_ptr->header.frame_id;
+            // aX.header.frame_id = object_ptr->header.frame_id;
+            // aY.header.frame_id = object_ptr->header.frame_id;
             aZ.header.frame_id = object_ptr->header.frame_id;
-            aX.header.stamp = ros::Time();
-            aY.header.stamp = ros::Time();
+            // aX.header.stamp = ros::Time();
+            // aY.header.stamp = ros::Time();
             aZ.header.stamp = ros::Time();
-            aX.lifetime = ros::Duration(1);
-            aY.lifetime = ros::Duration(1);
+            // aX.lifetime = ros::Duration(1);
+            // aY.lifetime = ros::Duration(1);
             aZ.lifetime = ros::Duration(1);
             std::string nsa("NTxTy" + std::to_string(c->second.id));
             aX.ns = aY.ns = aZ.ns = nsa;
-            aX.id = 1;
-            aY.id = 2;
-            aZ.id = 3;
-            aX.type = aY.type = aZ.type = visualization_msgs::Marker::ARROW;
-            aX.action = aY.action = aZ.action = visualization_msgs::Marker::ADD;
+            // aX.id = 1;
+            // aY.id = 2;
+            aZ.id = 0;
+            if (c->first ==1)
+                aZ.id = 1;
+            aZ.type = visualization_msgs::Marker::ARROW;
+            aZ.action = visualization_msgs::Marker::ADD;
             geometry_msgs::Point end;
             geometry_msgs::Point start;
             start.x = c->second.center[0];
             start.y = c->second.center[1];
             start.z = c->second.center[2];
-            aX.points.push_back(start);
-            aY.points.push_back(start);
             aZ.points.push_back(start);
-            end.x = start.x + c->second.Tx[0]/100; //since Tx is normalized this makes arrow 1cm long
-            end.y = start.y + c->second.Tx[1]/100;
-            end.z = start.z + c->second.Tx[2]/100;
-            aX.points.push_back(end);
-            end.x = start.x + c->second.Ty[0]/100;
-            end.y = start.y + c->second.Ty[1]/100;
-            end.z = start.z + c->second.Ty[2]/100;
-            aY.points.push_back(end);
             end.x = start.x + c->second.N[0]/100;
             end.y = start.y + c->second.N[1]/100;
             end.z = start.z + c->second.N[2]/100;
             aZ.points.push_back(end);
-            // std::cout<<"N "<<c->second.N<<std::endl;
-            aX.scale.x = aY.scale.x = aZ.scale.x = 0.0002;
-            aX.scale.y = aY.scale.y = aZ.scale.y = 0.0008;
-            aX.scale.z = aY.scale.z = aZ.scale.z = 0.0008;
-            aX.color.a = aY.color.a = aZ.color.a = 0.5;
-            aX.color.b = aX.color.g = aY.color.r = aY.color.b = aZ.color.r = aZ.color.g = 0.0;
-            aX.color.r = aY.color.g = aZ.color.b = 1.0;
-            markers->markers.push_back(aX);
-            markers->markers.push_back(aY);
+            aZ.scale.x = 0.0002;
+            aZ.scale.y = 0.0008;
+            aZ.scale.z = 0.0008;
+            aZ.color.a = 0.5;
+            aZ.color.r = aZ.color.g = 0.0;
+            aZ.color.b = 1.0;
+            markers->markers.push_back(aZ);
+        }
+        //for each chart in atlas, c is chart index
+        for(size_t c=0; c < gp_atlas->charts.size(); ++c)
+        {
+            visualization_msgs::Marker disc;
+            disc.header.frame_id = object_ptr->header.frame_id;
+            disc.header.stamp = ros::Time();
+            disc.lifetime = ros::Duration(1);
+            std::string ns("GP_A" + std::to_string(a) + "_C" + std::to_string(c));
+            disc.ns = ns;
+            disc.id = 0;
+            disc.type = visualization_msgs::Marker::CYLINDER;
+            disc.action = visualization_msgs::Marker::ADD;
+            // disc.points.push_back(center);
+            disc.scale.x = gp_atlas->charts[c].R;
+            disc.scale.y = gp_atlas->charts[c].R;
+            disc.scale.z = 0.0005;
+            disc.color.a = 0.3;
+            disc.color.r = 0.0;
+            disc.color.b = 0.0;
+            disc.color.g = 1.0;
+            Eigen::Matrix3d rot;
+            gp_atlas->charts[c].Tx.normalize();
+            gp_atlas->charts[c].Ty.normalize();
+            gp_atlas->charts[c].N.normalize();
+            rot.col(0) =  gp_atlas->charts[c].Tx;
+            rot.col(1) =  gp_atlas->charts[c].Ty;
+            rot.col(2) =  gp_atlas->charts[c].N;
+            Eigen::Quaterniond q(rot);
+            q.normalize();
+            if (q.w()<0){
+                q.w() *= -1;
+                q.x() *= -1;
+                q.y() *= -1;
+                q.z() *= -1;
+            }
+            disc.pose.orientation.x = q.x();
+            disc.pose.orientation.y = q.y();
+            disc.pose.orientation.z = q.z();
+            disc.pose.orientation.w = q.w();
+            disc.pose.position.x = gp_atlas->charts[c].C[0];
+            disc.pose.position.y = gp_atlas->charts[c].C[1];
+            disc.pose.position.z = gp_atlas->charts[c].C[2];
+            geometry_msgs::Point center;
+            center.x = gp_atlas->charts[c].C[0];
+            center.y = gp_atlas->charts[c].C[1];
+            center.z = gp_atlas->charts[c].C[2];
+            disc.points.push_back(center);
+            markers->markers.push_back(disc);
+            visualization_msgs::Marker aZ;
+            aZ.header.frame_id = object_ptr->header.frame_id;
+            aZ.header.stamp = ros::Time();
+            aZ.lifetime = ros::Duration(1);
+            aZ.ns = ns;
+            aZ.id = 2;
+            aZ.type = visualization_msgs::Marker::ARROW;
+            aZ.action = visualization_msgs::Marker::ADD;
+            geometry_msgs::Point end;
+            aZ.points.push_back(center);
+            end.x = center.x + gp_atlas->charts[c].N[0]/100;
+            end.y = center.y + gp_atlas->charts[c].N[1]/100;
+            end.z = center.z + gp_atlas->charts[c].N[2]/100;
+            aZ.points.push_back(end);
+            aZ.scale.x = 0.0002;
+            aZ.scale.y = 0.0004;
+            aZ.scale.z = 0.0004;
+            aZ.color.a = 0.5;
+            aZ.color.r = aZ.color.g = 0.0;
+            aZ.color.b = 1.0;
             markers->markers.push_back(aZ);
         }
     }
