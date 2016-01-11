@@ -217,6 +217,17 @@ public:
     };
 
     /** Predict f_* ~ GP(x_*) */
+	void evaluate(const Vec3Seq& x, std::vector<Real>& fx, std::vector<Real>& vars) {
+		const size_t size = x.size();
+		fx.assign(size, 0.0);
+		vars.assign(size, 0.0);
+		for (size_t i = 0; i < size; ++i) {
+			fx[i] = f(x[i]);
+			vars[i] = var(x[i]);
+		}
+	}
+
+    /** Predict f_* ~ GP(x_*) */
     virtual double f(const Vec3& xStar) {
         if (sampleset->empty()) return 0;
 
@@ -241,93 +252,65 @@ public:
 		return (double)cf->get(xStar, xStar) - v.dot(v); //cf->get(x_star, x_star) - v.dot(v);
     }
 
-    	/** Predict f, var, N, Tx and Ty */
-    // TODO:  Normal looks  wrong for some points,  Not sure why.
-    // (tabjones on Wednesday 23/12/2015)
 	virtual void evaluate(const Vec3& x, Real& fx, Real& varx, Eigen::Vector3d& normal, Eigen::Vector3d& tx, Eigen::Vector3d& ty) {
-		clock_t t = clock();
-
-		fx = f(x);
-		varx = var(x);
-
-		const size_t n = sampleset->rows(), nnew = 1;
-		// resize L if necessary
-		if (sampleset->rows() + nnew > static_cast<std::size_t>(L->rows())) {
-			L->conservativeResize(nnew + initialLSize, nnew + initialLSize);
-		}
-//#pragma omp parallel for
-//		for (size_t j = n; j < nnew; ++j) {
-			Eigen::VectorXd k(n+nnew), kdiff(n+nnew);
-			for (size_t i = 0; i<n; ++i) {
-				k(i) = cf->get(sampleset->x(i), sampleset->x(n));
-				kdiff(i) = cf->getDiff(sampleset->x(i), sampleset->x(n));
-				//context.write("GP::add_patters(): Computing k(%lu, %lu)\r", i, j);
-			}
-			k(n) = cf->get(x, x);
-			kdiff(n) = cf->getDiff(x, x);
-
-			//printf("K rows=%lu cols=%lu\n", k.rows(), k.cols());
-			Eigen::MatrixXd invKstar = k.transpose();
-			//printf("K^T rows=%lu cols=%lu\n", invKstar.rows(), invKstar.cols());
-			Vec yy = sampleset->y();
-			yy.push_back(fx);
-			//const Eigen::VectorXd invKstarY = invKstar.col(0).dot(convertToEigen(yy));
-			//printf("K^TY rows=%lu cols=%lu\n", invKstarY.rows(), invKstarY.cols());
-			const double invKstarY = invKstar.row(0).dot(convertToEigen(yy));
-			//printf("K^TY %f\n", invKstarY);
-			for (size_t i = 0; i < nnew; ++i)
-				normal += invKstarY*kdiff(i)*(convertToEigen(sampleset->x(i) - x));
-
-			normal.normalize();
-			computeTangentBasis(normal, tx, ty);
-//		}
-		printf("GP::evaluate(): Elapsed time: %.4fs\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+	}
+	virtual void evaluate(Eigen::MatrixXd& normal, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {		
 	}
 
-	virtual void evaluate(Eigen::MatrixXd& normal, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {
+    	/** Predict f, var, N, Tx and Ty */
+	virtual void evaluate(const Vec3Seq& x, std::vector<Real>& fx, std::vector<Real>& varx, Eigen::MatrixXd& normals, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {
 		clock_t t = clock();
 
-		const size_t n = sampleset->rows();
+		// compute f(x) and V(x)
+		evaluate(x, fx, varx);
+
+		const size_t np = sampleset->rows(), nq = x.size(), n = sampleset->rows() + x.size();
 		const size_t dim = sampleset->cols();
 
 		// differential of covariance with selected kernel
-		Eigen::MatrixXd Kppdiff;
-		Kppdiff.resize(n, n);
-		N.resize(n, dim);
-		Tx.resize(n, dim);
-		Ty.resize(n, dim);
+		Eigen::MatrixXd Kqp, Kqpdiff;
+		// row = number of query points
+		// col = number of points in the kernels + 1
+		Kqp.resize(nq, np + 1);
+		Kqpdiff.resizeLike(Kqp);
+		normals.resize(nq, dim);
+		tx.resize(nq, dim);
+		ty.resize(nq, dim);
 
-		for (size_t i = 0; i < n; ++i) {
-			for (size_t j = 0; j <= i; ++j) {
-				Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j)/*, i == j ? delta_n : .0*/);
-//				context.write("KppDiff[%d, %d] = %f\n", i, j, Kppdiff(i, j));
+		// compute Kqp and KqpDiff
+		for (size_t i = 0; i < nq; ++i) {
+			for (size_t j = 0; j < np; ++j) {
+				Kqp(i, j) = cf->get(x[i], sampleset->x(j));
+				Kqpdiff(i, j) = cf->getDiff(x[i], sampleset->x(j));
 			}
-//			context.write("InvKppY[%d] = %f\n", i, InvKppY(i));
 		}
+		// compute error
+		Real error = 0.0;
 		//#pragma omp parallel for
-		for (size_t i = 0; i < n; ++i) {
-			for (size_t j = 0; j <= i; ++j)
-				N.row(i) += InvKppY(j)*Kppdiff(i, j)*(convertToEigen(sampleset->x(i) - sampleset->x(j)));
-				
-			N.row(i).normalize();
-//			context.write("N[%d] = [%f %f %f]\n", i, N(i, 0), N(i, 1), N(i, 2));
-			Eigen::Vector3d Ni = N.row(i);
+		for (size_t i = 0; i < nq; ++i) {
+			for (size_t j = 0; j < np; ++j)
+				normals.row(i) += InvKppY(j)*Kqpdiff(i, j)*(convertToEigen(x[i] - sampleset->x(j)));
+
+			normals.row(i).normalize();
+			Vec3 ni(normals(i, 0), normals(i, 1), normals(i, 2)), p = x[i];
+			p.normalise();
+			error += p.distance(ni);
+			//			context.write("N[%d] = [%f %f %f]\n", i, N(i, 0), N(i, 1), N(i, 2));
+			Eigen::Vector3d Ni = normals.row(i);
 			Eigen::Vector3d Txi, Tyi;
 			computeTangentBasis(Ni, Txi, Tyi);
-			Tx.row(i) = Txi;
-			Ty.row(i) = Tyi;
+			tx.row(i) = Txi;
+			ty.row(i) = Tyi;
 		}
-		normal = N;
-		tx = Tx;
-		ty = Ty;
-		//printf("GP::evaluate(): Elapsed time: %.4fs\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+		//printf("GP::evaluate(): Error=%lu\nElapsed time: %.4fs\n", error / nq, (float)(clock() - t) / CLOCKS_PER_SEC);
 	}
+
 
     /** Set training data */
     void set(SampleSet::Ptr trainingData) {
         sampleset = trainingData;
 	// param optimisation
-	optimisationPtr->find<CovTypePtr, CovTypeDesc>(this);
+//	optimisationPtr->find<CovTypePtr, CovTypeDesc>(this);
     }
 
     /** Get name of the covariance function */
@@ -451,6 +434,8 @@ protected:
 	Eigen::MatrixXd Ty;
 	/** Weights */
 	Eigen::VectorXd InvKppY;
+	/** Derivative of the kernel */
+	Eigen::MatrixXd Kppdiff;
 
     /** Compute k_* = K(x_*, x) */
     void update_k_star(const Vec3&x_star) {
@@ -499,29 +484,12 @@ protected:
                 const double k_ij = cf->get(sampleset->x(i), sampleset->x(j));
                 // add noise on the diagonal of the kernel
                 (*L)(i, j) = i == j ? k_ij + delta_n : k_ij;
+                Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j));
                 //printf("GP::compute(): Computing k(%lu, %lu)\r", i, j);
-//				if (desc.atlas)
-//					Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j));
+//				
             }
 		}
 		InvKppY = L->inverse() * convertToEigen(sampleset->y());
-		// atlas computation
-//		if (desc.atlas) {
-//			InvKppY = L->inverse() * convertToEigen(sampleset->y());
-
-////#pragma omp parallel for
-//			for (size_t i = 0; i < L->rows(); ++i) {
-//				for (size_t j = 0; j < L->cols(); ++j)
-//					N.row(i) += InvKppY(j)*Kppdiff(i, j)*(convertToEigen(sampleset->x(i) - sampleset->x(j)));
-
-//				N.row(i).normalize();
-//				Eigen::Vector3d Ni = N.row(i);
-//				Eigen::Vector3d Txi, Tyi;
-//				computeTangentBasis(Ni, Txi, Tyi);
-//				Tx.row(i) = Txi;
-//				Ty.row(i) = Tyi;
-//			}
-//		}
 
 		// perform cholesky factorization
         //solver.compute(K.selfadjointView<Eigen::Lower>());

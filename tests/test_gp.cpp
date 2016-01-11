@@ -18,7 +18,7 @@ int main( int argc, char** argv )
 //		printf("Random[%lu] = %f\n", i, random<double>());
 //	return 0;
         /*****  Global variables  ******************************************/
-        size_t N_sur = 100, N_ext = 50, N_int = 1;
+        size_t N_sur = 10, N_ext = 5, N_int = 1;
  	const Real surRho = 0.02, extRho = 0.04;
 	const Real surRhoSqr = surRho*surRho, extRhoSqr = extRho*extRho;
        double noise = 0.001;
@@ -127,22 +127,23 @@ int main( int argc, char** argv )
 	}
 	cout << endl;
 
-	/*****  Evaluate point and normal  *********************************************/
-//	double fx, varx; 
-//	Eigen::Vector3d normal, tx, ty;
-//	gp->evaluate(x_star[0], fx, varx, normal, tx, ty);
-//	if (prtPreds)
-//		printf("Evaluate[0] -> f=%f var=%f normal=[%f %f %f]\n", fx, varx, normal(0), normal(1), normal(2));
-		
-	Real fx, varx;
-	Eigen::MatrixXd normal, tx, ty;
-	Vec3Seq nn; nn.resize(N_sur);
-	gp->evaluate(normal, tx, ty);
-	printf("Normals size [%lu %lu]\n", normal.rows(), normal.cols());
-	for (size_t i = 0; i < N_sur; ++i) {		
-		nn[i] = Vec3(normal(i, 0), normal(i, 1), normal(i, 2));
-		printf("Normal[%lu] = [%f %f %f]\n", i, nn[i].x, nn[i].y, nn[i].z);
+	/*****  Evaluate points and normals  *********************************************/
+	printf("Evaluate %lu points and normals\n", testSize);
+	std::vector<Real> fx, varx;
+	Eigen::MatrixXd normals, tx, ty;
+	Vec3Seq nn; nn.resize(testSize);
+//		points.clear(); points.resize(testSize);
+	Real evalError = 0.0;
+	gp->evaluate(x_star, fx, varx, normals, tx, ty);
+	for (size_t i = 0; i < testSize; ++i) {
+		//points[i] = x_star[i];
+		nn[i] = Vec3(normals(i, 0), normals(i, 1), normals(i, 2));
+		evalError += std::pow(fx[i] - y_star[i], 2);
+		if (prtPreds)
+			printf("Evaluate[%lu]: f(x_star) = %f -> f_star = %f v_star = %f normal=[%f %f %f]\n", i, y_star[i], fx[i], varx[i], normals(i,0), normals(i,1), normals(i,2));
 	}
+	if (prtPreds)
+		printf("Evaluate(): error=%f avg=%f\n\n", evalError, evalError / testSize);
 
 
 	/*****  Add point to the model  *********************************************/
