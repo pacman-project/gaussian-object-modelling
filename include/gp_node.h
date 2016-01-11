@@ -40,7 +40,7 @@
 #include <gp/GaussianProcess.h>
 #include <gp/SampleSet.h>
 
-    #include <gp_regression/gp_modelling.h>
+    // #include <gp_regression/gp_modelling.h>
 
 using namespace gp;
 
@@ -73,7 +73,7 @@ class GaussianProcessNode
 
     private:
         //control if we can start processing, i.e. we have a model and clouds
-        bool start;
+        bool start, fake_sampling;
         //input object point cloud, this gets updated with new points from probe
         PtC::Ptr object_ptr;
         //input hand point cloud
@@ -86,12 +86,12 @@ class GaussianProcessNode
         ros::Publisher pub_model,  pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_points;
         //GP regressor and dataset
-        LaplaceRegressor::Ptr gp;
+        GaussianRegressor::Ptr gp;
         SampleSet::Ptr data;
 
-            gp_regression::GaussianRegressor reg;
-            gp_regression::Model::Ptr obj_gp;
-            gp_regression::Atlas::Ptr gp_atlas;
+            // gp_regression::GaussianRegressor reg;
+            // gp_regression::Model::Ptr obj_gp;
+            // gp_regression::Atlas::Ptr gp_atlas;
         //Atlas TODO temp until it is implemented in gp
         struct Chart
         {
