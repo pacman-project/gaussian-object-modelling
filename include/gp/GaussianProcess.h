@@ -310,7 +310,7 @@ public:
     void set(SampleSet::Ptr trainingData) {
         sampleset = trainingData;
 	// param optimisation
-//	optimisationPtr->find<CovTypePtr, CovTypeDesc>(this);
+	optimisationPtr->find<CovTypePtr, CovTypeDesc>(this);
     }
 
     /** Get name of the covariance function */
