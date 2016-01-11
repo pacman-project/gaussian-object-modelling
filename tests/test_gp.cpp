@@ -19,7 +19,9 @@ int main( int argc, char** argv )
 //	return 0;
         /*****  Global variables  ******************************************/
         size_t N_sur = 100, N_ext = 50, N_int = 1;
-        double noise = 0.001;
+ 	const Real surRho = 0.02, extRho = 0.04;
+	const Real surRhoSqr = surRho*surRho, extRhoSqr = extRho*extRho;
+       double noise = 0.001;
         const double PI = numeric_const<double>::PI;
 
         /* initialize random seed: */
@@ -35,13 +37,15 @@ int main( int argc, char** argv )
         if (prtInit)
         	printf("Cloud points %lu:\n", N_sur);
         for (size_t i = 0; i < N_sur; ++i) {
-        	const double theta = 2*PI*random<double>() - PI;
-        	const double z = 2*random<double>() - 1;
-        	Vec3 point(sin(theta)*sqrt(1-z*z), cos(theta)*sqrt(1-z*z), z);
+        	const Real theta = 2 * PI*random<double>() - PI;
+		const Real colatitude = (PI / 2) - (2 * PI*random<double>() - PI);
+		const Real z = (2 * random<double>()*surRho - surRho) * cos(colatitude);
+		Vec3 point(sin(theta)*sqrt(surRhoSqr - z*z), cos(theta)*sqrt(surRhoSqr - z*z), z);
+
         	point += Vec3(2*noise*random<double>() - noise, 2*noise*random<double>() - noise, 2*noise*random<double>() - noise);
         	cloud.push_back(point);
 
-        	double y = point.magnitudeSqr() - 1;
+        	double y = point.magnitudeSqr() - surRhoSqr;
         	if (prtInit) cout << "points[" << i << "] th(" << theta <<") = <" << point.x << " " << point.y << " " << point.z << ">" << " targets[" << i << "] = " << y << endl;
         	targets.push_back(y);
        	}
@@ -49,13 +53,14 @@ int main( int argc, char** argv )
        	if (prtInit)
        		printf("\nExternal points %lu:\n", N_ext);
        	for (size_t i = 0; i < N_ext; ++i) {
-        	const double theta = 2*PI*random<double>() - PI;
-        	const double z = 2*random<double>() - 1;
-        	Vec3 point(sin(theta)*sqrt(2-z*z), cos(theta)*sqrt(2-z*z), z);
+        	const Real theta = 2 * PI*random<double>() - PI;
+		const Real colatitude = (PI / 2) - (2 * PI*random<double>() - PI);
+		const Real z = (2 * random<double>()*extRho - extRho) * cos(colatitude);
+		Vec3 point(sin(theta)*sqrt(extRhoSqr - z*z), cos(theta)*sqrt(extRhoSqr - z*z), z);
         	point += Vec3(2*noise*random<double>() - noise, 2*noise*random<double>() - noise, 2*noise*random<double>() - noise);
         	cloud.push_back(point);
 
-        	double y = point.magnitudeSqr() - 1;
+        	double y = point.magnitudeSqr() - surRhoSqr;
         	if (prtInit)
         		if (prtInit) cout << "points[" << i << "] th(" << theta <<") = <" << point.x << " " << point.y << " " << point.z << ">" << " targets[" << i << "] = " << y << endl;
         	targets.push_back(y);
@@ -65,15 +70,26 @@ int main( int argc, char** argv )
        		printf("\nInternal point(s) %lu:\n", N_int);
        	Vec3 zero; zero.setZero();
        	cloud.push_back(zero);
-       	targets.push_back(zero.magnitudeSqr() - 1);
-       	if (prtInit) cout << "points[" << 1 << "] th(" << 0 <<") = <" << zero.x << " " << zero.y << " " << zero.z << ">" << " targets[" << 1 << "] = " << zero.magnitudeSqr() - 1 << endl << endl;
+       	targets.push_back(zero.magnitudeSqr() - surRhoSqr);
+       	if (prtInit) cout << "points[" << 1 << "] th(" << 0 <<") = <" << zero.x << " " << zero.y << " " << zero.z << ">" << " targets[" << 1 << "] = " << zero.magnitudeSqr() - surRhoSqr << endl << endl;
 
        	/*****  Create the model  *********************************************/
        	SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
-       	LaplaceRegressor::Desc laplaceDesc;
-       	laplaceDesc.noise = noise;
-        LaplaceRegressor::Ptr gp = laplaceDesc.create();
-        printf("Regressor created %s\n", gp->getName().c_str());
+#define gaussianReg
+#ifdef laplaceReg
+	LaplaceRegressor::Desc laplaceDesc;
+	laplaceDesc.covTypeDesc.inputDim = trainingData->rows();
+	laplaceDesc.noise = noise;
+	LaplaceRegressor::Ptr gp = laplaceDesc.create();
+	printf("Laplace Regressor created %s\n", gp->getName().c_str());
+#endif
+#ifdef gaussianReg
+	GaussianRegressor::Desc guassianDesc;
+	guassianDesc.covTypeDesc.inputDim = trainingData->rows();
+	guassianDesc.noise = noise;
+	GaussianRegressor::Ptr gp = guassianDesc.create();
+	printf("Gaussian Regressor created %s\n", gp->getName().c_str());
+#endif       	
         gp->set(trainingData);
         //ThinPlateRegressor gp(&trainingData);
 
@@ -111,12 +127,23 @@ int main( int argc, char** argv )
 	}
 	cout << endl;
 
-		/*****  Evaluate point and normal  *********************************************/
-		double fx, varx; 
-		Eigen::Vector3d normal, tx, ty;
-		gp->evaluate(x_star[0], fx, varx, normal, tx, ty);
-		if (prtPreds)
-			printf("Evaluate[0] -> f=%f var=%f normal=[%f %f %f]\n", fx, varx, normal(0), normal(1), normal(2));
+	/*****  Evaluate point and normal  *********************************************/
+//	double fx, varx; 
+//	Eigen::Vector3d normal, tx, ty;
+//	gp->evaluate(x_star[0], fx, varx, normal, tx, ty);
+//	if (prtPreds)
+//		printf("Evaluate[0] -> f=%f var=%f normal=[%f %f %f]\n", fx, varx, normal(0), normal(1), normal(2));
+		
+	Real fx, varx;
+	Eigen::MatrixXd normal, tx, ty;
+	Vec3Seq nn; nn.resize(N_sur);
+	gp->evaluate(normal, tx, ty);
+	printf("Normals size [%lu %lu]\n", normal.rows(), normal.cols());
+	for (size_t i = 0; i < N_sur; ++i) {		
+		nn[i] = Vec3(normal(i, 0), normal(i, 1), normal(i, 2));
+		printf("Normal[%lu] = [%f %f %f]\n", i, nn[i].x, nn[i].y, nn[i].z);
+	}
+
 
 	/*****  Add point to the model  *********************************************/
 	gp->add_patterns(x_star, y_star);

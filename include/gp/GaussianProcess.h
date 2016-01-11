@@ -22,6 +22,7 @@
 #include "gp/SampleSet.h"
 #include "gp/CovLaplace.h"
 #include "gp/CovThinPlate.h"
+#include "gp/CovSE.h"
 // #include <omp.h>
 
 //------------------------------------------------------------------------------
@@ -32,6 +33,126 @@ namespace gp {
 
 /** Utily constants */
 static const double log2pi = std::log(numeric_const<double>::TWO_PI);
+template <class CovTypePtr, class CovTypeDesc> class GaussianProcess;
+
+//------------------------------------------------------------------------------
+
+/** Gradient-based optimizer (RProp). */
+class Optimisation {
+public:
+	/** Pointer */
+	typedef boost::shared_ptr<Optimisation> Ptr;
+
+	/** Description file */
+	class Desc {
+	public:
+		/** Pointer to the descriptor */
+		typedef boost::shared_ptr<Desc> Ptr;
+
+		double delta0;
+		double deltaMin;
+		double deltaMax;
+		double etaMinus;
+		double etaPlus;
+		double epsStop;
+		size_t maxIter;
+
+		Desc() {
+			setToDefault();
+		}
+		void setToDefault() {
+			delta0 = 0.1;
+			deltaMin = 1e-6;
+			deltaMax = 50;
+			etaMinus = 0.5;
+			etaPlus = 1.2;
+			epsStop = 1e-4;
+
+			maxIter = 100;
+		}
+		bool isValid() {
+			return true;
+		}
+		/** Creates the object from the description. */
+		Optimisation::Ptr create() const {
+			Optimisation::Ptr pointer(new Optimisation);
+			pointer->create(*this);
+			return pointer;
+		}
+	};
+
+	template <typename CovTypePtr, typename CovTypeDesc> void find(GaussianProcess<CovTypePtr, CovTypeDesc>* gp, bool verbose = true) {
+		clock_t t = clock();
+		int paramDim = gp->cf->getParamDim();
+		Eigen::VectorXd delta = Eigen::VectorXd::Ones(paramDim) * delta0;
+		Eigen::VectorXd gradOld = Eigen::VectorXd::Zero(paramDim);
+		Eigen::VectorXd params = gp->cf->getLogHyper();
+		Eigen::VectorXd bestParams = params;
+		double best = log(0);
+
+		printf("Optimisation::find(): iter=0 params[l,s]=[%f, %f]\n", params(0), params(1));
+		for (size_t i = 0; i < maxIter; ++i) {
+			Eigen::VectorXd grad = -gp->logLikelihoodGradient();
+			gradOld = gradOld.cwiseProduct(grad);
+			for (int j = 0; j < gradOld.size(); ++j) {
+				if (gradOld(j) > 0) {
+					delta(j) = std::min(delta(j)*etaPlus, deltaMax);
+				}
+				else if (gradOld(j) < 0) {
+					delta(j) = std::max(delta(j)*etaMinus, deltaMin);
+					grad(j) = 0;
+				}
+				params(j) += -sign(grad(j)) * delta(j);
+			}
+			gradOld = grad;
+			if (gradOld.norm() < epsStop) break;
+			gp->cf->setLogHyper(params);
+			double lik = gp->logLikelihood();
+			if (verbose)
+				printf("Optimisation::find(): iter=%lu lik=%f params[l,s]=[%f, %f]\n", i+1, lik, params(0), params(1));
+			//std::cout << i << " " << -lik << std::endl;
+			if (lik > best) {
+				best = lik;
+				bestParams = params;
+			}
+		}
+		gp->cf->setLogHyper(bestParams);
+		printf("Optimisation::find(): best lik=%f params[l,s]=[%f, %f]\nElapsed time: %.4fs\n", best, bestParams(0), bestParams(1), (float)(clock() - t) / CLOCKS_PER_SEC);
+	}
+	/** D'ctor */
+//	~Optimisation() {} // don't need to do anything
+
+protected:
+	/** Optimisation parameters */
+	double delta0;
+	double deltaMin;
+	double deltaMax;
+	double etaMinus;
+	double etaPlus;
+	double epsStop;
+
+	size_t maxIter;
+
+	double sign(double x) {
+		if (x > 0) return 1.0;
+		if (x < 0) return -1.0;
+		return 0.0;
+	}
+
+	/** Create from descriptor */
+	void create(const Desc& desc) {
+		delta0 = desc.delta0;
+		deltaMin = desc.deltaMin;
+		deltaMax = desc.deltaMax;
+		etaMinus = desc.etaMinus;
+		etaPlus = desc.etaPlus;
+		epsStop = desc.epsStop;
+
+		maxIter = desc.maxIter;
+	};
+	/** Default C'ctor */
+	Optimisation() {}
+};
 
 //------------------------------------------------------------------------------
 
@@ -45,18 +166,21 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     /** Pointer to the class */
     typedef boost::shared_ptr<GaussianProcess<CovTypePtr, CovTypeDesc> > Ptr;
+    friend class Optimisation;
 
     /** Descriptor file */
     class Desc {
         public:
             /** Initial size of the kernel matrix */
-			size_t initialLSize;
+		size_t initialLSize;
             /** Noise use to compute K(x,x) */
 			double noise;
             /** Covariance description file */
             CovTypeDesc covTypeDesc;
 
-			/** Enable atlas */
+		/** Optimisation procedure descriptor file */
+		Optimisation::Desc::Ptr optimisationDescPtr;
+	/** Enable atlas */
 			bool atlas;
 
             /** C'tor */
@@ -69,8 +193,10 @@ public:
                 initialLSize = 1500;
                 noise = numeric_const<double>::ZERO;
                 covTypeDesc.setToDefault();
+                
+                optimisationDescPtr.reset(new Optimisation::Desc);
 
-				atlas = false;
+		atlas = false;
             }
 
             /** Creates the object from the description. */
@@ -158,10 +284,50 @@ public:
 		printf("GP::evaluate(): Elapsed time: %.4fs\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 	}
 
+	virtual void evaluate(Eigen::MatrixXd& normal, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {
+		clock_t t = clock();
+
+		const size_t n = sampleset->rows();
+		const size_t dim = sampleset->cols();
+
+		// differential of covariance with selected kernel
+		Eigen::MatrixXd Kppdiff;
+		Kppdiff.resize(n, n);
+		N.resize(n, dim);
+		Tx.resize(n, dim);
+		Ty.resize(n, dim);
+
+		for (size_t i = 0; i < n; ++i) {
+			for (size_t j = 0; j <= i; ++j) {
+				Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j)/*, i == j ? delta_n : .0*/);
+//				context.write("KppDiff[%d, %d] = %f\n", i, j, Kppdiff(i, j));
+			}
+//			context.write("InvKppY[%d] = %f\n", i, InvKppY(i));
+		}
+		//#pragma omp parallel for
+		for (size_t i = 0; i < n; ++i) {
+			for (size_t j = 0; j <= i; ++j)
+				N.row(i) += InvKppY(j)*Kppdiff(i, j)*(convertToEigen(sampleset->x(i) - sampleset->x(j)));
+				
+			N.row(i).normalize();
+//			context.write("N[%d] = [%f %f %f]\n", i, N(i, 0), N(i, 1), N(i, 2));
+			Eigen::Vector3d Ni = N.row(i);
+			Eigen::Vector3d Txi, Tyi;
+			computeTangentBasis(Ni, Txi, Tyi);
+			Tx.row(i) = Txi;
+			Ty.row(i) = Tyi;
+		}
+		normal = N;
+		tx = Tx;
+		ty = Ty;
+		//printf("GP::evaluate(): Elapsed time: %.4fs\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+	}
 
     /** Set training data */
     void set(SampleSet::Ptr trainingData) {
         sampleset = trainingData;
+	// param optimisation
+	optimisationPtr->find<CovTypePtr, CovTypeDesc>(this);
     }
 
     /** Get name of the covariance function */
@@ -217,6 +383,34 @@ public:
 		return (double)(- 0.5*y.dot(*alpha) - 0.5*det - 0.5*n*log2pi);
     }
 
+	Eigen::VectorXd logLikelihoodGradient()
+	{
+		compute(false);
+		update_alpha();
+		size_t n = sampleset->rows();
+		Eigen::VectorXd grad = Eigen::VectorXd::Zero(cf->getParamDim());
+		Eigen::VectorXd g(grad.size());
+		Eigen::MatrixXd W = Eigen::MatrixXd::Identity(n, n);
+
+		// compute kernel matrix inverse
+		L->topLeftCorner(n, n).triangularView<Eigen::Lower>().solveInPlace(W);
+		L->topLeftCorner(n, n).triangularView<Eigen::Lower>().transpose().solveInPlace(W);
+
+		W = (*alpha) * alpha->transpose() - W;
+
+		for (size_t i = 0; i < n; ++i) {
+			for (size_t j = 0; j <= i; ++j) {
+				cf->grad(sampleset->x(i), sampleset->x(j), g);
+				if (i == j) grad += W(i, j) * g * 0.5;
+				else grad += W(i, j) * g;
+			}
+		}
+
+		return grad;
+	}
+
+	inline Eigen::MatrixXd getNormals() const { return N; }
+
     /** D'tor */
     virtual ~GaussianProcess() {};
 
@@ -224,6 +418,10 @@ protected:
 
     /** Desriptor file */
     Desc desc;
+    
+    /** Optimisation procedure */
+    Optimisation::Ptr optimisationPtr;
+
 
     /** pointer to the covariance function type */
     CovTypePtr cf;
@@ -277,9 +475,9 @@ protected:
     }
 
     /** Compute covariance matrix and perform cholesky decomposition. */
-    virtual void compute() {
+    virtual void compute(const bool verbose = false) {
         // can previously computed values be used?
-        if (!cf->getLogHyper()) return;
+        if (!cf->isLogHyper()) return;
         clock_t t = clock();
         cf->setLogHyper(false);
         // input size
@@ -302,33 +500,34 @@ protected:
                 // add noise on the diagonal of the kernel
                 (*L)(i, j) = i == j ? k_ij + delta_n : k_ij;
                 //printf("GP::compute(): Computing k(%lu, %lu)\r", i, j);
-				if (desc.atlas)
-					Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j));
+//				if (desc.atlas)
+//					Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j));
             }
 		}
+		InvKppY = L->inverse() * convertToEigen(sampleset->y());
 		// atlas computation
-		if (desc.atlas) {
-			InvKppY = L->inverse() * convertToEigen(sampleset->y());
+//		if (desc.atlas) {
+//			InvKppY = L->inverse() * convertToEigen(sampleset->y());
 
-//#pragma omp parallel for
-			for (size_t i = 0; i < L->rows(); ++i) {
-				for (size_t j = 0; j < L->cols(); ++j)
-					N.row(i) += InvKppY(j)*Kppdiff(i, j)*(convertToEigen(sampleset->x(i) - sampleset->x(j)));
+////#pragma omp parallel for
+//			for (size_t i = 0; i < L->rows(); ++i) {
+//				for (size_t j = 0; j < L->cols(); ++j)
+//					N.row(i) += InvKppY(j)*Kppdiff(i, j)*(convertToEigen(sampleset->x(i) - sampleset->x(j)));
 
-				N.row(i).normalize();
-				Eigen::Vector3d Ni = N.row(i);
-				Eigen::Vector3d Txi, Tyi;
-				computeTangentBasis(Ni, Txi, Tyi);
-				Tx.row(i) = Txi;
-				Ty.row(i) = Tyi;
-			}
-		}
+//				N.row(i).normalize();
+//				Eigen::Vector3d Ni = N.row(i);
+//				Eigen::Vector3d Txi, Tyi;
+//				computeTangentBasis(Ni, Txi, Tyi);
+//				Tx.row(i) = Txi;
+//				Ty.row(i) = Tyi;
+//			}
+//		}
 
 		// perform cholesky factorization
         //solver.compute(K.selfadjointView<Eigen::Lower>());
         L->topLeftCorner(n, n) = L->topLeftCorner(n, n).selfadjointView<Eigen::Lower>().llt().matrixL();
         alpha_needs_update = true;
-        printf("GP::Compute(): Elapsed time: %.4fs\n", (float)(clock() - t)/CLOCKS_PER_SEC);
+        if (verbose) printf("GP::Compute(): Elapsed time: %.4fs\n", (float)(clock() - t)/CLOCKS_PER_SEC);
     }
 
 	/** Compute tangent basis. N must be normalised */
@@ -342,8 +541,10 @@ protected:
 
     /** Create from description file */
     void create(const Desc& desc) {
-		this->desc = desc;
+	this->desc = desc;
 
+	optimisationPtr = desc.optimisationDescPtr->create();
+        
         cf = desc.covTypeDesc.create();
         //sampleset = desc.trainingData;
         input_dim = 3;
@@ -364,6 +565,7 @@ protected:
 
 /** List of legal types */
 typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::Laplace::Desc> LaplaceRegressor;
+typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::CovSE::Desc> GaussianRegressor;
 //typedef GaussianProcess<gp::Laplace::Ptr, gp::Laplace::Desc> LaplaceRegressor;
 //typedef GaussianProcess<gp::ThinPlate> ThinPlateRegressor;
 //class LaplaceRegressor : public GaussianProcess<gp::Laplace> {};
