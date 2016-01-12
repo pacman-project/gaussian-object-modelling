@@ -467,17 +467,17 @@ protected:
         cf->setLogHyper(false);
         // input size
         const size_t n = sampleset->rows();
-		const size_t dim = sampleset->cols();
-		// resize L if necessary
+	const size_t dim = sampleset->cols();
+	// resize L if necessary
         if (n > L->rows()) L->resize(n + initialLSize, n + initialLSize);
         // compute kernel matrix (lower triangle)
         size_t counter = 0;
-		// differential of covariance with selected kernel
-		Eigen::MatrixXd Kppdiff;
-		Kppdiff.resize(n, n);
-		N.resize(n, dim);
-		Tx.resize(n, dim);
-		Ty.resize(n, dim);
+	// differential of covariance with selected kernel
+	Eigen::MatrixXd Kppdiff;
+	Kppdiff.resize(n, n);
+	N.resize(n, dim);
+	Tx.resize(n, dim);
+	Ty.resize(n, dim);
         //#pragma omp parallel for
         for(size_t i = 0; i < n; ++i) {
             for(size_t j = 0; j <= i; ++j) {
@@ -488,10 +488,10 @@ protected:
                 //printf("GP::compute(): Computing k(%lu, %lu)\r", i, j);
 //				
             }
-		}
-		InvKppY = L->inverse() * convertToEigen(sampleset->y());
+	}
+	InvKppY = L->topLeftCorner(n, n).inverse() * convertToEigen(sampleset->y());
 
-		// perform cholesky factorization
+	// perform cholesky factorization
         //solver.compute(K.selfadjointView<Eigen::Lower>());
         L->topLeftCorner(n, n) = L->topLeftCorner(n, n).selfadjointView<Eigen::Lower>().llt().matrixL();
         alpha_needs_update = true;
