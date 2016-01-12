@@ -255,8 +255,8 @@ bool GaussianProcessNode::computeAtlas()
         ROS_ERROR("[GaussianProcessNode::%s]\tNo GP model initialized, call start service.",__func__);
         return false;
     }
-    //right now just create 10 discs at random all depth 0.
-    uint8_t N = 5;
+    //right now just create N discs at random all depth 0.
+    uint8_t N = 20;
     int num_points = object_ptr->size();
     //init atlas
     atlas = std::make_shared<Atlas>();
@@ -378,6 +378,7 @@ void GaussianProcessNode::createAtlasMarkers()
         return ;
     }
     //fake deterministic sampling
+    fake_sampling = true;
     if (fake_sampling){
         visualization_msgs::Marker sample;
         sample.header.frame_id = object_ptr->header.frame_id;
