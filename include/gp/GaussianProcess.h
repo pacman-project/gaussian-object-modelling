@@ -193,7 +193,7 @@ public:
                 initialLSize = 1500;
                 noise = numeric_const<double>::ZERO;
                 covTypeDesc.setToDefault();
-                
+
                 optimisationDescPtr.reset(new Optimisation::Desc);
 
 		atlas = false;
@@ -252,10 +252,10 @@ public:
 		return (double)cf->get(xStar, xStar) - v.dot(v); //cf->get(x_star, x_star) - v.dot(v);
     }
 
-	virtual void evaluate(const Vec3& x, Real& fx, Real& varx, Eigen::Vector3d& normal, Eigen::Vector3d& tx, Eigen::Vector3d& ty) {
-	}
-	virtual void evaluate(Eigen::MatrixXd& normal, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {		
-	}
+	// virtual void evaluate(const Vec3& x, Real& fx, Real& varx, Eigen::Vector3d& normal, Eigen::Vector3d& tx, Eigen::Vector3d& ty) {
+	// }
+	// virtual void evaluate(Eigen::MatrixXd& normal, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {
+	// }
 
     	/** Predict f, var, N, Tx and Ty */
 	virtual void evaluate(const Vec3Seq& x, std::vector<Real>& fx, std::vector<Real>& varx, Eigen::MatrixXd& normals, Eigen::MatrixXd& tx, Eigen::MatrixXd& ty) {
@@ -401,7 +401,7 @@ protected:
 
     /** Desriptor file */
     Desc desc;
-    
+
     /** Optimisation procedure */
     Optimisation::Ptr optimisationPtr;
 
@@ -486,7 +486,7 @@ protected:
                 (*L)(i, j) = i == j ? k_ij + delta_n : k_ij;
                 Kppdiff(i, j) = cf->getDiff(sampleset->x(i), sampleset->x(j));
                 //printf("GP::compute(): Computing k(%lu, %lu)\r", i, j);
-//				
+//
             }
 	}
 	InvKppY = L->topLeftCorner(n, n).inverse() * convertToEigen(sampleset->y());
@@ -512,7 +512,7 @@ protected:
 	this->desc = desc;
 
 	optimisationPtr = desc.optimisationDescPtr->create();
-        
+
         cf = desc.covTypeDesc.create();
         //sampleset = desc.trainingData;
         input_dim = 3;

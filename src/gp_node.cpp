@@ -228,10 +228,15 @@ bool GaussianProcessNode::computeGP()
         }
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
+    if (cloud.size() != targets.size()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tTargets Points size mismatch, something went wrong. Aborting...",__func__);
+        start = false;
+        return false;
+    }
     data = boost::make_shared<gp::SampleSet>(cloud,targets);
     gp::GaussianRegressor::Desc grd;
     grd.covTypeDesc.inputDim = data->rows();
-    grd.noise = 0.001;
+    grd.noise = 0.0001;
     gp = grd.create();
     gp->set(data);
     start = true;
@@ -263,26 +268,38 @@ bool GaussianProcessNode::computeAtlas()
     atlas = std::make_shared<Atlas>();
         // gp_atlas=std::make_shared<gp_regression::Atlas>();
         // gp_regression::GPProjector<gp_regression::Gaussian> proj;
+    Vec3Seq points;
+    points.resize(N);
     for (uint8_t i=0; i<N; ++i)
     {
         int r_id;
         //get a random index
         r_id = getRandIn(0, num_points -1);
-        Chart chart;
             // gp_regression::Chart::Ptr gp_chart;
             // Eigen::Vector3d c (object_ptr->points[r_id].x, object_ptr->points[r_id].y,
             //                 object_ptr->points[r_id].z);
             // proj.generateChart(obj_gp, c, 0.03, gp_chart);
-        chart.center.set(object_ptr->points[r_id].x,
+        points[i] = Vec3(object_ptr->points[r_id].x,
                          object_ptr->points[r_id].y,
                          object_ptr->points[r_id].z);
-        Real fx, vx;
-
-        gp->evaluate(chart.center, fx, vx, chart.N, chart.Tx, chart.Ty);
+    }
+    //have to call matrix version of evaluate since scalar version is empty
+    std::vector<Real> fx, vx;
+    Eigen::MatrixXd NN,TTx,TTy;
+    gp->evaluate(points, fx, vx, NN, TTx, TTy);
+    for (size_t i=0; i<N; ++i)
+    {
+        std::cout<<"f(x) = "<<fx[i]<<std::endl;
+        Chart chart;
+        chart.center = points[i];
+        chart.N(0) = NN(i,0);
+        chart.N(1) = NN(i,1);
+        chart.N(2) = NN(i,2);
+        // chart.N.normalize();
+        std::cout<<"N(x) = "<<chart.N<<std::endl;
         //find a basis with N as new Z axis, dont use tx,ty
         Eigen::Vector3d X,Y;
         Eigen::Vector3d kinX(Eigen::Vector3d::UnitX());
-        // chart.N.normalize();
         //find a new x as close as possible to x kinect but orthonormal to N
         X = kinX - (chart.N*(chart.N.dot(kinX)));
         X.normalize();
@@ -292,7 +309,7 @@ bool GaussianProcessNode::computeAtlas()
         chart.Ty = Y;
         //define a radius of the chart just take 3cm for now
         chart.radius = 0.03f;
-        chart.id = r_id; //lets have the id = pointcloud id
+        chart.id = i;
         chart.parent = 0; //doesnt have a parent since its root
         atlas->insert(std::pair<uint8_t, Chart>(0,chart));
             // gp_chart->N.normalize();
@@ -309,7 +326,11 @@ bool GaussianProcessNode::computeAtlas()
         std::vector<int> idx(object_ptr->points.size());
         std::vector<float> dist(object_ptr->points.size());
         kdtree.setInputCloud(object_ptr);
-        kdtree.radiusSearch(object_ptr->points[r_id], 0.05, idx, dist);
+        pcl::PointXYZRGB pt;
+        pt.x = points[i].x;
+        pt.y = points[i].y;
+        pt.z = points[i].z;
+        kdtree.radiusSearch(pt, 0.05, idx, dist);
         pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne_point;
         ne_point.setInputCloud(object_ptr);
         ne_point.useSensorOriginAsViewPoint();
@@ -333,7 +354,7 @@ bool GaussianProcessNode::computeAtlas()
         // chart.parent = 1; //doesnt have a parent since its root
         // atlas->insert(std::pair<uint8_t, Chart>(1,chart));
         // //
-        std::cout<<"Error pclNormal - newlibNormal: ";
+        std::cout<<"NormalError: ";
         double e;
         e = sqrt( (pclN[0] - chart.N[0])*(pclN[0]-chart.N[0]) +
                   (pclN[1] - chart.N[1])*(pclN[1]-chart.N[1]) +
@@ -401,10 +422,10 @@ void GaussianProcessNode::createAtlasMarkers()
         float scale = 1.5;
         xm = ((1-scale)*max.x + (1+scale)*min.x)*0.5;
         ym = ((1-scale)*max.y + (1+scale)*min.y)*0.5;
-        zm = ((1-scale)*max.z + (1+scale)*min.z)*0.5;
+        zm = ((1-scale*1.5)*max.z + (1+scale*1.5)*min.z)*0.5;
         xM = ((1+scale)*max.x + (1-scale)*min.x)*0.5;
         yM = ((1+scale)*max.y + (1-scale)*min.y)*0.5;
-        zM = ((1+scale)*max.z + (1-scale)*min.z)*0.5;
+        zM = ((1+scale*1.5)*max.z + (1-scale*1.5)*min.z)*0.5;
         for (float x = xm; x<= xM; x += 0.01)
             for (float y = ym; y<= yM; y += 0.01)
                 for (float z = zm; z<= zM; z += 0.01)
@@ -479,9 +500,9 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.scale.x = c->second.radius;
             disc.scale.y = c->second.radius;
             disc.scale.z = 0.001;
-            disc.color.a = 0.3;
+            disc.color.a = 0.4;
             disc.color.r = 1.0;
-            disc.color.b = 0.5;
+            disc.color.b = 0.8;
             disc.color.g = 0.0;
             // if(c->first == 1){
             //     disc.color.r = 0.0;
