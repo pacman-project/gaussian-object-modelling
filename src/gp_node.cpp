@@ -229,9 +229,10 @@ bool GaussianProcessNode::computeGP()
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
     data = boost::make_shared<gp::SampleSet>(cloud,targets);
-    gp::GaussianRegressor::Desc gd;
-    gd.noise = 0.0;
-    gp = gd.create();
+    gp::GaussianRegressor::Desc grd;
+    grd.covTypeDesc.inputDim = data->rows();
+    grd.noise = 0.001;
+    gp = grd.create();
     gp->set(data);
     start = true;
         // obj_gp = std::make_shared<gp_regression::Model>();
@@ -276,13 +277,12 @@ bool GaussianProcessNode::computeAtlas()
                          object_ptr->points[r_id].y,
                          object_ptr->points[r_id].z);
         Real fx, vx;
-        //evaluate N looks wrong  TODO FIX
+
         gp->evaluate(chart.center, fx, vx, chart.N, chart.Tx, chart.Ty);
         //find a basis with N as new Z axis, dont use tx,ty
         Eigen::Vector3d X,Y;
         Eigen::Vector3d kinX(Eigen::Vector3d::UnitX());
-        chart.N.normalize();
-        Eigen::Vector3d newN = chart.N;
+        // chart.N.normalize();
         //find a new x as close as possible to x kinect but orthonormal to N
         X = kinX - (chart.N*(chart.N.dot(kinX)));
         X.normalize();
@@ -315,28 +315,29 @@ bool GaussianProcessNode::computeAtlas()
         ne_point.useSensorOriginAsViewPoint();
         float curv,nx,ny,nz;
         ne_point.computePointNormal (*object_ptr, idx, nx,ny,nz, curv);
-        chart.N[0] = nx;
-        chart.N[1] = ny;
-        chart.N[2] = nz;
-        chart.N.normalize();
-        //find a new x as close as possible to x kinect but orthonormal to N
-        X = kinX - (chart.N*(chart.N.dot(kinX)));
-        X.normalize();
-        Y = chart.N.cross(X);
-        Y.normalize();
-        chart.Tx = X;
-        chart.Ty = Y;
-        //define a radius of the chart just take 3cm for now
-        chart.radius = 0.03f;
-        chart.id = r_id; //lets have the id = pointcloud id
-        chart.parent = 1; //doesnt have a parent since its root
-        atlas->insert(std::pair<uint8_t, Chart>(1,chart));
-        //
-        std::cout<<"Error from pcl normal new lib: ";
+        Eigen::Vector3d pclN;
+        pclN[0] = nx;
+        pclN[1] = ny;
+        pclN[2] = nz;
+        pclN.normalize();
+        // //find a new x as close as possible to x kinect but orthonormal to N
+        // X = kinX - (pclN*(pclN.dot(kinX)));
+        // X.normalize();
+        // Y = pclN.cross(X);
+        // Y.normalize();
+        // chart.Tx = X;
+        // chart.Ty = Y;
+        // //define a radius of the chart just take 3cm for now
+        // chart.radius = 0.03f;
+        // chart.id = r_id; //lets have the id = pointcloud id
+        // chart.parent = 1; //doesnt have a parent since its root
+        // atlas->insert(std::pair<uint8_t, Chart>(1,chart));
+        // //
+        std::cout<<"Error pclNormal - newlibNormal: ";
         double e;
-        e = sqrt( (chart.N[0]-newN[0])*(chart.N[0]-newN[0]) +
-                  (chart.N[1]-newN[1])*(chart.N[1]-newN[1]) +
-                  (chart.N[2]-newN[2])*(chart.N[2]-newN[2]) );
+        e = sqrt( (pclN[0] - chart.N[0])*(pclN[0]-chart.N[0]) +
+                  (pclN[1] - chart.N[1])*(pclN[1]-chart.N[1]) +
+                  (pclN[2] - chart.N[2])*(pclN[2]-chart.N[2]) );
         std::cout<<e<<std::endl;
         // std::cout<<"Error from pcl normal old lib: ";
         // e = sqrt( (chart.N[0]-gp_chart->N[0])*(chart.N[0]-gp_chart->N[0]) +
@@ -482,11 +483,11 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.color.r = 1.0;
             disc.color.b = 0.5;
             disc.color.g = 0.0;
-            if(c->first == 1){
-                disc.color.r = 0.0;
-                disc.color.b = 1.0;
-                disc.color.g = 0.0;
-            }
+            // if(c->first == 1){
+            //     disc.color.r = 0.0;
+            //     disc.color.b = 1.0;
+            //     disc.color.g = 0.0;
+            // }
             Eigen::Matrix3d rot;
             rot.col(0) = c->second.Tx;
             rot.col(1) = c->second.Ty;
@@ -516,8 +517,8 @@ void GaussianProcessNode::createAtlasMarkers()
             // aX.id = 1;
             // aY.id = 2;
             aZ.id = 0;
-            if (c->first ==1)
-                aZ.id = 1;
+            // if (c->first ==1)
+            //     aZ.id = 1;
             aZ.type = visualization_msgs::Marker::ARROW;
             aZ.action = visualization_msgs::Marker::ADD;
             geometry_msgs::Point end;
