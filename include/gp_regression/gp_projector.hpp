@@ -195,7 +195,7 @@ public:
                 return 0;
         }
 
-        void generateChart(GPRegressor<CovType> &reg, Model::ConstPtr gp, const Eigen::Vector3d &C, const double R, Chart::Ptr &chart)
+        void generateChart(Model::ConstPtr gp, const Eigen::Vector3d &C, const double R, Chart::Ptr &chart)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
@@ -210,7 +210,8 @@ public:
                 q->coord_z.push_back( C(2) );
                 Eigen::MatrixXd N, Tx, Ty;
                 std::vector<double> f, v;
-                reg.evaluate(gp, q, f, v, N, Tx, Ty);
+                gp_regression::GPRegressor<CovType> regressor;
+                regressor.evaluate(gp, q, f, v, N, Tx, Ty);
                 chart->N = N.row(0).normalized();
                 chart->Tx = Tx.row(0);
                 chart->Ty = Ty.row(0);
