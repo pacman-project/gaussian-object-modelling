@@ -47,6 +47,9 @@ public:
 		
 		/** Set values to default */
 		void setToDefault() {
+			BaseCovFunc::Desc::setToDefault();
+			inputDim = 3;
+			paramDim = 2;
 			length = 1.0;
 		}
 		
@@ -63,14 +66,36 @@ public:
 	
 	/** Get name of the covariance functions */
 	virtual std::string getName() const {
-		return "Laplace";
+		return "ThinPlate";
 	}
 	
+	/** Compute the kernel */
+	virtual double get(const Eigen::VectorXd &x1, const Eigen::VectorXd &x2, const bool dirac = false) const {
+		const double EE = (x1 - x2).squaredNorm();
+		const double noise = dirac ? sn2 : .0;
+		return 2 * std::pow(EE, 3.0) - threeLength*pow(EE, 2.0) + length3;
+	}
+
         //thin plate kernel = 2.*EE.^3 - 3.*(leng).* EE.^2 + (leng*ones(size(EE))).^3
         inline double get(const Vec3& x1, const Vec3& x2) const {
         	const double EE = x1.distance(x2);
         	return 2*std::pow(EE, 3.0) - threeLength*pow(EE, 2.0) + length3;
         }
+
+	/** thin plate kernel derivative = 6.*EE.^2 - 6.*(leng).* EE */
+	inline double getDiff(const Vec3& x1, const Vec3& x2) const {
+		const double EE = x1.distance(x2);
+		return 6 * std::pow(EE, 2.0) - 2 * threeLength * EE;
+	}
+
+	/** Update parameter vector.
+	*  @param p new parameter vector */
+	virtual void setLogHyper(const Eigen::VectorXd &p) {
+		BaseCovFunc::setLogHyper(p);
+		threeLength = 3 * loghyper(0);
+		length3 = std::pow(loghyper(0), 3.0);
+		sn2 = loghyper(1) * loghyper(1); //2 * loghyper(1) * loghyper(1);//
+	}
 
         ~ThinPlate() {};
 
@@ -82,9 +107,13 @@ private:
         /** Create from descriptor */
 	void create(const Desc& desc) {
 		BaseCovFunc::create(desc);
-		threeLength = 3*desc.length;
-		length3 = std::pow(desc.length, 3.0);
+		loghyper(0) = desc.length;
+		loghyper(1) = desc.noise;
+		threeLength = 3 * loghyper(0);
+		length3 = std::pow(loghyper(0), 3.0);
+		sn2 = loghyper(1) * loghyper(1); //2 * loghyper(1) * loghyper(1);//
 	}
+	ThinPlate() : BaseCovFunc() {}
 };
 
 //------------------------------------------------------------------------------

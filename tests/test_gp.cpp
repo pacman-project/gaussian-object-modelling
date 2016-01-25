@@ -18,8 +18,8 @@ int main( int argc, char** argv )
 //		printf("Random[%lu] = %f\n", i, random<double>());
 //	return 0;
         /*****  Global variables  ******************************************/
-        size_t N_sur = 10, N_ext = 5, N_int = 1;
- 	const Real surRho = 0.02, extRho = 0.04;
+        size_t N_sur = 30, N_ext = 30, N_int = 1;
+ 	const Real surRho = 0.05, extRho = 0.4;
 	const Real surRhoSqr = surRho*surRho, extRhoSqr = extRho*extRho;
        double noise = 0.001;
         const double PI = numeric_const<double>::PI;
@@ -27,7 +27,7 @@ int main( int argc, char** argv )
         /* initialize random seed: */
   	srand (time(NULL));
 
-  	const bool prtInit = false;
+  	const bool prtInit = true;
   	const bool prtPreds = true;
 
         /*****  Generate Input data  ******************************************/
@@ -75,7 +75,8 @@ int main( int argc, char** argv )
 
        	/*****  Create the model  *********************************************/
        	SampleSet::Ptr trainingData(new SampleSet(cloud, targets));
-#define gaussianReg
+//#define gaussianReg
+#define cov_thin_plate
 #ifdef laplaceReg
 	LaplaceRegressor::Desc laplaceDesc;
 	laplaceDesc.covTypeDesc.inputDim = trainingData->rows();
@@ -87,9 +88,32 @@ int main( int argc, char** argv )
 	GaussianRegressor::Desc guassianDesc;
 	guassianDesc.covTypeDesc.inputDim = trainingData->rows();
 	guassianDesc.noise = noise;
+	guassianDesc.covTypeDesc.length = 0.03;
+	guassianDesc.covTypeDesc.sigma = 0.015;
+	guassianDesc.optimise = false;	
 	GaussianRegressor::Ptr gp = guassianDesc.create();
 	printf("Gaussian Regressor created %s\n", gp->getName().c_str());
-#endif       	
+#endif
+#ifdef cov_thin_plate
+	ThinPlateRegressor::Desc covDesc;
+	covDesc.initialLSize = trainingData->rows();
+	covDesc.covTypeDesc.inputDim = trainingData->cols();
+	covDesc.covTypeDesc.noise = 0.0001;
+	double l = 0.0;
+	for (size_t i = 0; i < cloud.size(); ++i) {
+		for (size_t j = i; j < cloud.size(); ++j) {
+			const double d = cloud[i].distance(cloud[j]);
+			if (l < d) l = d;
+		}
+	}
+	covDesc.covTypeDesc.length = l;
+	covDesc.optimise = false;
+	printf("ThinPlate cov: inputDim=%lu, parmDim=%lu, R=%f noise=%f\n", covDesc.covTypeDesc.inputDim, covDesc.covTypeDesc.paramDim,
+		covDesc.covTypeDesc.length, covDesc.covTypeDesc.noise);
+	ThinPlateRegressor::Ptr gp = covDesc.create();
+	printf("%s Regressor created\n", gp->getName().c_str());
+#endif
+   	
         gp->set(trainingData);
         //ThinPlateRegressor gp(&trainingData);
 

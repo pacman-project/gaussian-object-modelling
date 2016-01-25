@@ -178,6 +178,8 @@ public:
             /** Covariance description file */
             CovTypeDesc covTypeDesc;
 
+		/** Enable optimisation */
+		bool optimise;
 		/** Optimisation procedure descriptor file */
 		Optimisation::Desc::Ptr optimisationDescPtr;
 	/** Enable atlas */
@@ -194,6 +196,7 @@ public:
                 noise = numeric_const<double>::ZERO;
                 covTypeDesc.setToDefault();
                 
+                optimise = false;
                 optimisationDescPtr.reset(new Optimisation::Desc);
 
 		atlas = false;
@@ -310,6 +313,7 @@ public:
     void set(SampleSet::Ptr trainingData) {
         sampleset = trainingData;
 	// param optimisation
+	if (desc.optimise)
 	optimisationPtr->find<CovTypePtr, CovTypeDesc>(this);
     }
 
@@ -534,6 +538,8 @@ protected:
 /** List of legal types */
 typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::Laplace::Desc> LaplaceRegressor;
 typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::CovSE::Desc> GaussianRegressor;
+typedef GaussianProcess<gp::BaseCovFunc::Ptr, gp::ThinPlate::Desc> ThinPlateRegressor;
+
 //typedef GaussianProcess<gp::Laplace::Ptr, gp::Laplace::Desc> LaplaceRegressor;
 //typedef GaussianProcess<gp::ThinPlate> ThinPlateRegressor;
 //class LaplaceRegressor : public GaussianProcess<gp::Laplace> {};

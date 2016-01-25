@@ -79,6 +79,9 @@ public:
 		/** Size of parameter vector. */
 		size_t paramDim;
 
+		/** Noise parameter */
+		double noise;
+
 		/** Default C'tor */
 		Desc() {
 			setToDefault();
@@ -88,6 +91,7 @@ public:
 		void setToDefault() {
 			inputDim = 0;
 			paramDim = 2;
+			noise = 0.0;
 		}
 		
 		/** Creates the object from the description. */
@@ -183,6 +187,9 @@ protected:
 	/** Parameter vector containing the log hyperparameters of the covariance function.
 	*  The number of necessary parameters is given in param_dim. */
 	Eigen::VectorXd loghyper;
+
+	/** Noise on the input points */
+	double sn2; 
 
 	static inline double drand48() {
 		return (rand() / (RAND_MAX + 1.0));
