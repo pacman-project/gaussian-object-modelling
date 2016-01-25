@@ -80,10 +80,10 @@ target_link_libraries(gaussian_process
 
 ## Tests
 
-# add_executable(test_gaussian
-#   tests/test_gaussian.cpp
-#   ${gp_INCLUDES}
-# )
+add_executable(test_gaussian
+  tests/test_gaussian.cpp
+  ${gp_INCLUDES}
+)
 
 add_executable(test_gp
   tests/test_gp.cpp
@@ -91,8 +91,13 @@ add_executable(test_gp
   # ${gp_INCLUDES}
 )
 
-# target_link_libraries(test_gaussian
-#   ${catkin_LIBRARIES}
-# )
-
-
+# add a target to generate API documentation with Doxygen
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
+add_custom_target(doc
+${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+COMMENT "Generating API documentation with Doxygen" VERBATIM
+)
+endif(DOXYGEN_FOUND)

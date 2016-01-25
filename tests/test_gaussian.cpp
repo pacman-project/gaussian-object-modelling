@@ -18,22 +18,22 @@ int main( int argc, char** argv )
                 for(int j = 0; j < nj; ++j)
                 {
                         // on
-                        cloud->coord_x.push_back(10.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud->coord_y.push_back(10.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud->coord_z.push_back(10.0*sin(2*3.1416*j/nj));
+                        cloud->coord_x.push_back(0.05*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_y.push_back(0.05*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_z.push_back(0.05*sin(2*3.1416*j/nj));
                         cloud->label.push_back(0.0);
                         // outside
-                        cloud->coord_x.push_back(20.0*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud->coord_y.push_back(20.0*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud->coord_z.push_back(20.0*sin(2*3.1416*j/nj));
+                        cloud->coord_x.push_back(0.4*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_y.push_back(0.4*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_z.push_back(0.4*sin(2*3.1416*j/nj));
                         cloud->label.push_back(1.0);
                 }
         }
 
         // inside
-        cloud->coord_x.push_back(1.0*cos(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
-        cloud->coord_y.push_back(1.0*sin(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
-        cloud->coord_z.push_back(1.0*sin(2*3.1416*0/nj));
+        cloud->coord_x.push_back(0.001*cos(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
+        cloud->coord_y.push_back(0.001*sin(2*3.1416*0/ni)*cos(2*3.1416*0/nj));
+        cloud->coord_z.push_back(0.001*sin(2*3.1416*0/nj));
         cloud->label.push_back(-1.0);
 
         /*****  Create the model  *********************************************/
@@ -43,8 +43,8 @@ int main( int argc, char** argv )
         // set values according to the problem
         // std dev of input noise ~ 2.0m
         // radius of influence of kernel ~ 5.0m
-        double sigma = 2.0;
-        double length = 3.0;
+        double sigma = 0.02;
+        double length = 0.03;
         Gaussian my_kernel(sigma, length);
         GaussianRegressor regresor;
         regresor.setCovFunction(my_kernel);
@@ -161,7 +161,7 @@ int main( int argc, char** argv )
         GPProjector<Gaussian> projector;
 
         Chart::Ptr chart;
-        projector.generateChart(sphere, center, 1.0, chart);
+        projector.generateChart(regresor, sphere, center, 1.0, chart);
 
         cout << "Chart info: " << endl << endl;
         cout << "Center: " << chart->C << endl << endl;
@@ -178,7 +178,7 @@ int main( int argc, char** argv )
 
         // 2. create the chart there
         Chart::Ptr init_chart = std::make_shared<Chart>();
-        projector.generateChart(sphere, center, 1.0, init_chart);
+        projector.generateChart(regresor, sphere, center, 1.0, init_chart);
 
         Data::Ptr init_p = std::make_shared<Data>();
         init_p->coord_x.push_back(init_center(0));
@@ -229,7 +229,7 @@ int main( int argc, char** argv )
 
         // 5. now generate chart in projeccted point
         Chart::Ptr projected_chart = std::make_shared<Chart>();
-        projector.generateChart(sphere, projected_point, 1.0, projected_chart);
+        projector.generateChart(regresor, sphere, projected_point, 1.0, projected_chart);
 
         /*cout << "Projected chart info: " << endl << endl;
         cout << "Center: " << projected_chart.C << endl << endl;

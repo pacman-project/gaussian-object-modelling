@@ -228,10 +228,16 @@ bool GaussianProcessNode::computeGP()
         }
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
+    if (cloud.size() != targets.size()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tTargets Points size mismatch, something went wrong. Aborting...",__func__);
+        start = false;
+        return false;
+    }
     data = boost::make_shared<gp::SampleSet>(cloud,targets);
-    gp::GaussianRegressor::Desc gd;
-    gd.noise = 0.0;
-    gp = gd.create();
+    gp::GaussianRegressor::Desc grd;
+    grd.covTypeDesc.inputDim = data->rows();
+    grd.noise = 0.0001;
+    gp = grd.create();
     gp->set(data);
     start = true;
         // obj_gp = std::make_shared<gp_regression::Model>();
@@ -255,34 +261,45 @@ bool GaussianProcessNode::computeAtlas()
         ROS_ERROR("[GaussianProcessNode::%s]\tNo GP model initialized, call start service.",__func__);
         return false;
     }
-    //right now just create 10 discs at random all depth 0.
-    uint8_t N = 5;
+    //right now just create N discs at random all depth 0.
+    uint8_t N = 20;
     int num_points = object_ptr->size();
     //init atlas
     atlas = std::make_shared<Atlas>();
         // gp_atlas=std::make_shared<gp_regression::Atlas>();
         // gp_regression::GPProjector<gp_regression::Gaussian> proj;
+    Vec3Seq points;
+    points.resize(N);
     for (uint8_t i=0; i<N; ++i)
     {
         int r_id;
         //get a random index
         r_id = getRandIn(0, num_points -1);
-        Chart chart;
             // gp_regression::Chart::Ptr gp_chart;
             // Eigen::Vector3d c (object_ptr->points[r_id].x, object_ptr->points[r_id].y,
             //                 object_ptr->points[r_id].z);
             // proj.generateChart(obj_gp, c, 0.03, gp_chart);
-        chart.center.set(object_ptr->points[r_id].x,
+        points[i] = Vec3(object_ptr->points[r_id].x,
                          object_ptr->points[r_id].y,
                          object_ptr->points[r_id].z);
-        Real fx, vx;
-        //evaluate N looks wrong  TODO FIX
-        gp->evaluate(chart.center, fx, vx, chart.N, chart.Tx, chart.Ty);
+    }
+    //have to call matrix version of evaluate since scalar version is empty
+    std::vector<Real> fx, vx;
+    Eigen::MatrixXd NN,TTx,TTy;
+    gp->evaluate(points, fx, vx, NN, TTx, TTy);
+    for (size_t i=0; i<N; ++i)
+    {
+        std::cout<<"f(x) = "<<fx[i]<<std::endl;
+        Chart chart;
+        chart.center = points[i];
+        chart.N(0) = NN(i,0);
+        chart.N(1) = NN(i,1);
+        chart.N(2) = NN(i,2);
+        // chart.N.normalize();
+        std::cout<<"N(x) = "<<chart.N<<std::endl;
         //find a basis with N as new Z axis, dont use tx,ty
         Eigen::Vector3d X,Y;
         Eigen::Vector3d kinX(Eigen::Vector3d::UnitX());
-        chart.N.normalize();
-        Eigen::Vector3d newN = chart.N;
         //find a new x as close as possible to x kinect but orthonormal to N
         X = kinX - (chart.N*(chart.N.dot(kinX)));
         X.normalize();
@@ -292,7 +309,7 @@ bool GaussianProcessNode::computeAtlas()
         chart.Ty = Y;
         //define a radius of the chart just take 3cm for now
         chart.radius = 0.03f;
-        chart.id = r_id; //lets have the id = pointcloud id
+        chart.id = i;
         chart.parent = 0; //doesnt have a parent since its root
         atlas->insert(std::pair<uint8_t, Chart>(0,chart));
             // gp_chart->N.normalize();
@@ -309,34 +326,39 @@ bool GaussianProcessNode::computeAtlas()
         std::vector<int> idx(object_ptr->points.size());
         std::vector<float> dist(object_ptr->points.size());
         kdtree.setInputCloud(object_ptr);
-        kdtree.radiusSearch(object_ptr->points[r_id], 0.05, idx, dist);
+        pcl::PointXYZRGB pt;
+        pt.x = points[i].x;
+        pt.y = points[i].y;
+        pt.z = points[i].z;
+        kdtree.radiusSearch(pt, 0.05, idx, dist);
         pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne_point;
         ne_point.setInputCloud(object_ptr);
         ne_point.useSensorOriginAsViewPoint();
         float curv,nx,ny,nz;
         ne_point.computePointNormal (*object_ptr, idx, nx,ny,nz, curv);
-        chart.N[0] = nx;
-        chart.N[1] = ny;
-        chart.N[2] = nz;
-        chart.N.normalize();
-        //find a new x as close as possible to x kinect but orthonormal to N
-        X = kinX - (chart.N*(chart.N.dot(kinX)));
-        X.normalize();
-        Y = chart.N.cross(X);
-        Y.normalize();
-        chart.Tx = X;
-        chart.Ty = Y;
-        //define a radius of the chart just take 3cm for now
-        chart.radius = 0.03f;
-        chart.id = r_id; //lets have the id = pointcloud id
-        chart.parent = 1; //doesnt have a parent since its root
-        atlas->insert(std::pair<uint8_t, Chart>(1,chart));
-        //
-        std::cout<<"Error from pcl normal new lib: ";
+        Eigen::Vector3d pclN;
+        pclN[0] = nx;
+        pclN[1] = ny;
+        pclN[2] = nz;
+        pclN.normalize();
+        // //find a new x as close as possible to x kinect but orthonormal to N
+        // X = kinX - (pclN*(pclN.dot(kinX)));
+        // X.normalize();
+        // Y = pclN.cross(X);
+        // Y.normalize();
+        // chart.Tx = X;
+        // chart.Ty = Y;
+        // //define a radius of the chart just take 3cm for now
+        // chart.radius = 0.03f;
+        // chart.id = r_id; //lets have the id = pointcloud id
+        // chart.parent = 1; //doesnt have a parent since its root
+        // atlas->insert(std::pair<uint8_t, Chart>(1,chart));
+        // //
+        std::cout<<"NormalError: ";
         double e;
-        e = sqrt( (chart.N[0]-newN[0])*(chart.N[0]-newN[0]) +
-                  (chart.N[1]-newN[1])*(chart.N[1]-newN[1]) +
-                  (chart.N[2]-newN[2])*(chart.N[2]-newN[2]) );
+        e = sqrt( (pclN[0] - chart.N[0])*(pclN[0]-chart.N[0]) +
+                  (pclN[1] - chart.N[1])*(pclN[1]-chart.N[1]) +
+                  (pclN[2] - chart.N[2])*(pclN[2]-chart.N[2]) );
         std::cout<<e<<std::endl;
         // std::cout<<"Error from pcl normal old lib: ";
         // e = sqrt( (chart.N[0]-gp_chart->N[0])*(chart.N[0]-gp_chart->N[0]) +
@@ -378,6 +400,7 @@ void GaussianProcessNode::createAtlasMarkers()
         return ;
     }
     //fake deterministic sampling
+    fake_sampling = true;
     if (fake_sampling){
         visualization_msgs::Marker sample;
         sample.header.frame_id = object_ptr->header.frame_id;
@@ -399,10 +422,10 @@ void GaussianProcessNode::createAtlasMarkers()
         float scale = 1.5;
         xm = ((1-scale)*max.x + (1+scale)*min.x)*0.5;
         ym = ((1-scale)*max.y + (1+scale)*min.y)*0.5;
-        zm = ((1-scale)*max.z + (1+scale)*min.z)*0.5;
+        zm = ((1-scale*1.5)*max.z + (1+scale*1.5)*min.z)*0.5;
         xM = ((1+scale)*max.x + (1-scale)*min.x)*0.5;
         yM = ((1+scale)*max.y + (1-scale)*min.y)*0.5;
-        zM = ((1+scale)*max.z + (1-scale)*min.z)*0.5;
+        zM = ((1+scale*1.5)*max.z + (1-scale*1.5)*min.z)*0.5;
         for (float x = xm; x<= xM; x += 0.01)
             for (float y = ym; y<= yM; y += 0.01)
                 for (float z = zm; z<= zM; z += 0.01)
@@ -477,15 +500,15 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.scale.x = c->second.radius;
             disc.scale.y = c->second.radius;
             disc.scale.z = 0.001;
-            disc.color.a = 0.3;
+            disc.color.a = 0.4;
             disc.color.r = 1.0;
-            disc.color.b = 0.5;
+            disc.color.b = 0.8;
             disc.color.g = 0.0;
-            if(c->first == 1){
-                disc.color.r = 0.0;
-                disc.color.b = 1.0;
-                disc.color.g = 0.0;
-            }
+            // if(c->first == 1){
+            //     disc.color.r = 0.0;
+            //     disc.color.b = 1.0;
+            //     disc.color.g = 0.0;
+            // }
             Eigen::Matrix3d rot;
             rot.col(0) = c->second.Tx;
             rot.col(1) = c->second.Ty;
@@ -515,8 +538,8 @@ void GaussianProcessNode::createAtlasMarkers()
             // aX.id = 1;
             // aY.id = 2;
             aZ.id = 0;
-            if (c->first ==1)
-                aZ.id = 1;
+            // if (c->first ==1)
+            //     aZ.id = 1;
             aZ.type = visualization_msgs::Marker::ARROW;
             aZ.action = visualization_msgs::Marker::ADD;
             geometry_msgs::Point end;
