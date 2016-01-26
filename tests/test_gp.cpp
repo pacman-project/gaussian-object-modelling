@@ -90,7 +90,7 @@ int main( int argc, char** argv )
 	guassianDesc.noise = noise;
 	guassianDesc.covTypeDesc.length = 0.03;
 	guassianDesc.covTypeDesc.sigma = 0.015;
-	guassianDesc.optimise = false;	
+	guassianDesc.optimise = false;
 	GaussianRegressor::Ptr gp = guassianDesc.create();
 	printf("Gaussian Regressor created %s\n", gp->getName().c_str());
 #endif
@@ -113,7 +113,7 @@ int main( int argc, char** argv )
 	ThinPlateRegressor::Ptr gp = covDesc.create();
 	printf("%s Regressor created\n", gp->getName().c_str());
 #endif
-   	
+
         gp->set(trainingData);
         //ThinPlateRegressor gp(&trainingData);
 

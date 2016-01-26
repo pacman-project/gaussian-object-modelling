@@ -86,7 +86,7 @@ class GaussianProcessNode
         ros::Publisher pub_model,  pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_points;
         //GP regressor and dataset
-        GaussianRegressor::Ptr gp;
+        ThinPlateRegressor::Ptr gp;
         SampleSet::Ptr data;
 
             // gp_regression::GaussianRegressor reg;
@@ -137,5 +137,7 @@ class GaussianProcessNode
         void publishCloudModel() const;
         /** \brief Publish last computed atlas */
         void publishAtlas () const;
+
+        void fakeDeterministicSampling();
 };
 #endif
