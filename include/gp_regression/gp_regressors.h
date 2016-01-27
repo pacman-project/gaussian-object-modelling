@@ -10,7 +10,7 @@ namespace gp_regression
 
 class GaussianRegressor : public GPRegressor<gp_regression::Gaussian> {};
 class LaplaceRegressor : public GPRegressor<gp_regression::Laplace> {};
-// class InvMultiQuadRegressor : public GPRegressor<gp_regression::InvMultiQuad> {};
+class ThinPlateRegressor : public GPRegressor<gp_regression::ThinPlate> {};
 
 }
 

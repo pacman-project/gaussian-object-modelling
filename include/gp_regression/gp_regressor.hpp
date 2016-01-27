@@ -82,18 +82,20 @@ public:
                 // go! // ToDo: avoid the for loops.
                 buildEuclideanDistanceMatrix(gp->P, gp->P, gp->Kpp);
                 gp->Kppdiff = gp->Kpp;
-                ///performance test1 just use nested collapsed loops
-                #pragma omp parallel for collapse(2)
+                gp->Kppdiffdiff = gp->Kpp;
+                // performance test1 just use nested collapsed loops
+                // #pragma omp parallel for collapse(2)
                 for(int i = 0; i < gp->Kpp.rows(); ++i)
                 {
                         for(int j = 0; j < gp->Kpp.cols(); ++j)
                         {
                                 gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
                                 gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
+                                gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
                         }
                 }
-                ///performance  test2  manually  collapse  loops  into  one  and
-                //parellize it
+                // performance  test2  manually  collapse  loops  into  one  and
+                // parellize it
                 /*
                  * int rows(gp.Kpp.rows()), cols(gp.Kpp.cols());
                  * #pragma omp parallel for
@@ -111,8 +113,8 @@ public:
 
                 // normal and tangent computation, could be done potentially in the
                 // loop above, but just to keep it slightly separated for now
-                //(Cant collapse it), just parallize outer loop
-                #pragma omp parallel for
+                // (Cant collapse it), just parallize outer loop
+                // #pragma omp parallel for
                 for(int i = 0; i < gp->Kpp.rows(); ++i)
                 {
                         for(int j = 0; j < gp->Kpp.cols(); ++j)
@@ -144,7 +146,7 @@ public:
                 evaluate(gp, query, f, v, N);
                 Tx.resizeLike(N);
                 Ty.resizeLike(N);
-                #pragma omp parallel for
+                //#pragma omp parallel for
                 for(int i = 0; i < N.rows(); ++i)
                 {
                         Eigen::Vector3d tempTx, tempTy, tempN;
@@ -184,7 +186,7 @@ public:
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
                 N.resizeLike(Q);
 
-                #pragma omp parallel for collapse(2)
+                //#pragma omp parallel for collapse(2)
                 for(int i = 0; i < Kqp.rows(); ++i)
                 {
                         for(int j = 0; j < Kqp.cols(); ++j)
@@ -192,10 +194,11 @@ public:
                                 Kqp(i,j) = kernel_->compute(Kqp(i,j));
                                 N.row(i) += gp->InvKppY(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
                         }
+                        N.row(i).normalize();
                 }
                 Kpq = Kqp.transpose();
                 buildEuclideanDistanceMatrix(Q, Q, Kqq);
-                #pragma omp parallel for collapse(2)
+                //#pragma omp parallel for collapse(2)
                 for(int i = 0; i < Kqq.rows(); ++i)
                 {
                         for(int j = 0; j < Kqq.cols(); ++j)
