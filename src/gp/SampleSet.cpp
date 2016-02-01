@@ -66,12 +66,8 @@ void SampleSet::add(const Vec3Seq& newInputs, const RealSeq& newTargets, const V
 	assert(newInputs.size()==newTargets.size());
 	
 	n += newInputs.size(); 
-//        X.resize(n, 3);
-//        for (size_t i = 0; i < n; ++i) {
-//        	X.row(i) = Eigen::Map<Eigen::VectorXd>((double *)newInputs[i].v, 3);
-//        }
+
         X.insert(X.end(), newInputs.begin(), newInputs.end());
-//	Y.insert(Y.end(), newTargets.begin(), newTargets.end());
 
 	RealSeq tmp; tmp.assign(4 * newNormals.size(), .0);
 	for (size_t i = 0; i < newTargets.size(); ++i)

@@ -1,16 +1,85 @@
 #include <iostream>
 
+#include <fstream>
+#include <string>
+#include <Eigen/Dense>
+
+#include <iomanip>
+
 #include <gp_regression/gp_regressors.h>
 #include <gp_regression/gp_projector.hpp>
 
 using namespace gp_regression;
 using namespace std;
+using namespace Eigen;
+
+#define MAXBUFSIZE  ((int) 1e6)
+
+MatrixXd readMatrix(const char *filename)
+{
+        int cols = 0, rows = 0;
+        double buff[MAXBUFSIZE];
+
+        // Read numbers from file into buffer.
+        ifstream infile;
+        infile.open(filename);
+        while (! infile.eof())
+        {
+                string line;
+                getline(infile, line);
+
+                int temp_cols = 0;
+                stringstream stream(line);
+                while(! stream.eof())
+                    stream >> buff[cols*rows+temp_cols++];
+
+                if (temp_cols == 0)
+                    continue;
+
+                if (cols == 0)
+                    cols = temp_cols;
+
+                rows++;
+        }
+
+        infile.close();
+
+        rows--;
+
+        // Populate matrix with numbers.
+        MatrixXd result(rows,cols);
+        for (int i = 0; i < rows; i++)
+        for (int j = 0; j < cols; j++)
+            result(i,j) = buff[ cols*i+j ];
+
+        return result;
+};
+
 
 int main( int argc, char** argv )
 {
         /*****  Generate INPUT data  ******************************************/
-        std::cout << "Generate INPUT data for a sphere..." << std::endl;
+        std::cout << "Generate INPUT data..." << std::endl;
+
+        // ad-hoc absolute path for testing
+        std::string file("/home/pacman/Projects/catkin_ws/src/pacman-DR54/gaussian-object-modelling/tests/obj.ply");
+        MatrixXd data = readMatrix(file.c_str());
+
         Data::Ptr cloud = std::make_shared<Data>();
+
+        for(int i = 0; i < data.rows(); ++i)
+        {
+                //for(int j = 0; j < data.cols(); ++j)
+                //{
+                        // on
+                        cloud->coord_x.push_back( data(i, 0) );
+                        cloud->coord_y.push_back( data(i, 1) );
+                        cloud->coord_z.push_back( data(i, 2) );
+                        cloud->label.push_back(0.0);
+                //}
+        }
+
+        // outer sphere
         int ni = 10;
         int nj = 9;
         for(int i = 0; i < ni; ++i)
@@ -18,14 +87,14 @@ int main( int argc, char** argv )
                 for(int j = 0; j < nj; ++j)
                 {
                         // on
-                        cloud->coord_x.push_back(0.05*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        /*cloud->coord_x.push_back(0.05*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
                         cloud->coord_y.push_back(0.05*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
                         cloud->coord_z.push_back(0.05*sin(2*3.1416*j/nj));
-                        cloud->label.push_back(0.0);
+                        cloud->label.push_back(0.0);*/
                         // outside
-                        cloud->coord_x.push_back(0.4*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud->coord_y.push_back(0.4*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
-                        cloud->coord_z.push_back(0.4*sin(2*3.1416*j/nj));
+                        cloud->coord_x.push_back(0.3*cos(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_y.push_back(0.3*sin(2*3.1416*i/ni)*cos(2*3.1416*j/nj));
+                        cloud->coord_z.push_back(0.3*sin(2*3.1416*j/nj));
                         cloud->label.push_back(1.0);
                 }
         }
@@ -40,33 +109,86 @@ int main( int argc, char** argv )
         std::cout << "Create the model..." << std::endl;
         Model::Ptr sphere = std::make_shared<Model>();
 
-        // set values according to the problem
-        // std dev of input noise ~ 2.0m
-        // radius of influence of kernel ~ 5.0m
+        // set values according to the problem at hand
+        double R = 0.4;
         double sigma = 0.02;
         double length = 0.03;
-        Gaussian my_kernel(sigma, length);
-        GaussianRegressor regresor;
+        //ThinPlate my_kernel(R);
+        //ThinPlateRegressor regresor;
+        //Gaussian my_kernel(sigma, length);
+        //GaussianRegressor regresor;
+        Laplace my_kernel(sigma, length);
+        LaplaceRegressor regresor;
         regresor.setCovFunction(my_kernel);
-
         regresor.create(cloud, sphere);
 
-        cout << "Model points: " << endl;
+        // cout << "Model points: " << endl;
         cout << sphere->P << endl << endl;
-        cout << "Model labels (pre): " << endl;
-        cout << sphere->Y << endl << endl;
+        // cout << "Model labels (pre): " << endl;
+        // cout << sphere->Y << endl << endl;
         // cout << "Model Kpp: " << endl;
         // cout << sphere.Kpp << endl << endl;
         // cout << "Model Kppdiff: " << endl;
         // cout << sphere.Kppdiff << endl << endl;
-        cout << "Model Normal: " << endl;
-        cout << sphere->N << endl << endl;
-        cout << "Model Tx: " << endl;
-        cout << sphere->Tx << endl << endl;
-        cout << "Model Ty: " << endl;
-        cout << sphere->Ty << endl << endl;
+        // cout << "Model Normal: " << endl;
+        cout << sphere->N*0.01 << endl << endl;
+        // cout << "Model Tx: " << endl;
+        // cout << sphere->Tx << endl << endl;
+        // cout << "Model Ty: " << endl;
+        // cout << sphere->Ty << endl << endl;
+
+        return 0;
+
+        /*****  Plot the model with normals ***********************************/
+        cout << "Plot the model..." << endl;
+        int grid_x = 15;
+        int grid_y = 15;
+        int grid_z = 15;
+        double x_size = 0.1;
+        double y_size = 0.1;
+        double z_size = 0.1;
+        double x_res = 2*x_size/grid_x;
+        double y_res = 2*y_size/grid_y;
+        double z_res = 2*z_size/grid_z;
+
+        Data::Ptr grid = std::make_shared<Data>();
+
+        for(int i = 0; i < grid_x; ++i)
+        {
+                for(int j = 0; j< grid_y; ++j)
+                {
+                        for(int k = 0; k < grid_z; ++k)
+                        {
+                                // std::cout << "k: " << k << endl;
+                                // std::cout << "-z_size + z_res*i: " << -z_size + z_res*k << endl;
+
+                                grid->coord_x.push_back(-x_size + x_res*i);
+                                grid->coord_y.push_back(-y_size + y_res*j);
+                                grid->coord_z.push_back(-z_size + z_res*k);
+                        }
+                }
+        }
+
+        Eigen::MatrixXd Ngrid;
+        std::vector<double> F,V;
+        regresor.evaluate(sphere, grid, F, V, Ngrid);
+        cout << "Number of points in grid: " << F.size() << endl;
+        for(int i = 0; i < F.size(); ++i)
+        {
+                if(std::abs(F.at(i)) < 1e-1)
+                {
+                        cout << std::setprecision (std::numeric_limits<double>::digits10 + 1)
+                             << grid->coord_x.at(i) << " " << grid->coord_y.at(i) << " " << grid->coord_z.at(i) << " "
+                             << Ngrid(i,0)*0.01 << " " << Ngrid(i,1)*0.01 << " " << Ngrid(i,2)*0.01 << endl;
+                }
+                /*else
+                {
+                        cout << "No" << endl;
+                }*/
+        }
 
 
+        return 0;
         /*****  Query the model with a point  *********************************/
         std::cout << "Query the model with a point" << std::endl;
         Data::Ptr query = std::make_shared<Data>();
@@ -158,7 +280,9 @@ int main( int argc, char** argv )
         center(1) = query->coord_y.at(0);
         center(2) = query->coord_z.at(0);
 
-        GPProjector<Gaussian> projector;
+        //GPProjector<ThinPlate> projector;
+        GPProjector<Laplace> projector;
+        //GPProjector<Gaussian> projector;
 
         Chart::Ptr chart;
         projector.generateChart(regresor, sphere, center, 1.0, chart);
@@ -189,9 +313,9 @@ int main( int argc, char** argv )
 
         std::cout << "init V: " << init_v.at(0) << std::endl;
 
-        // 3. dummy sample in the chart using the sigma of the kernel
+        // 3. dummy sample in the chart using the R of the kernel
         Eigen::Vector3d point_in_tangent;
-        point_in_tangent = init_chart->C + 2*sigma*init_chart->Tx + 2*sigma*init_chart->Ty;
+        point_in_tangent = init_chart->C + 2*R*init_chart->Tx + 2*R*init_chart->Ty;
 
         // 4. project onto surface
         Eigen::Vector3d projected_point;
@@ -238,9 +362,9 @@ int main( int argc, char** argv )
         cout << "Ty: " << projected_chart.Ty << endl << endl;
         cout << "Size: " << projected_chart.R << endl << endl;*/
 
-        // 6. dummy sample in the chart using the sigma of the kernel
+        // 6. dummy sample in the chart using the R of the kernel
         Eigen::Vector3d point_in_projected;
-        point_in_projected = projected_chart->C - 2*sigma*projected_chart->Tx + 2*sigma*projected_chart->Ty;
+        point_in_projected = projected_chart->C - 2*R*projected_chart->Tx + 2*R*projected_chart->Ty;
 
         // 7. project it again
         Eigen::Vector3d projected_point2;

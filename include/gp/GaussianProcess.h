@@ -232,7 +232,7 @@ public:
 	}
 
     /** Predict f_* ~ GP(x_*) */
-     virtual Eigen::Vector4d f(const Vec3& xStar) {
+    virtual Eigen::Vector4d f(const Vec3& xStar) {
         if (sampleset->empty()) 
 		throw std::invalid_argument("No training data available");
 

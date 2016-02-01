@@ -38,7 +38,7 @@ public:
 	*/
 	SampleSet(const Vec3Seq& inputs, const RealSeq& targets, const Vec3Seq& normals);
 	
-	/** Destructor. */
+	/** Destructor. Does nothing */
 	virtual ~SampleSet();
 	
 	/** Add input-output patterns to sample set.

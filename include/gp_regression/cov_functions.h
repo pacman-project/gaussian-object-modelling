@@ -3,5 +3,6 @@
 
 #include <gp_regression/kernels/gaussian.hpp>
 #include <gp_regression/kernels/laplace.hpp>
+#include <gp_regression/kernels/thin_plate.hpp>
 
 #endif

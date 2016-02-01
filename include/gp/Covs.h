@@ -86,17 +86,17 @@ public:
 		Desc() {
 			setToDefault();
 		}
-		
+	
 		/** Set values to default */
 		void setToDefault() {
 			inputDim = 0;
 			paramDim = 2;
 			noise = 0.0;
 		}
-		
+	
 		/** Creates the object from the description. */
 		CREATE_FROM_OBJECT_DESC_0(BaseCovFunc, BaseCovFunc::Ptr)
-		
+	
 		/** Assert valid descriptor files */
 		bool isValid(){ 
 			if (inputDim < 0 || paramDim < 0)
@@ -111,8 +111,8 @@ public:
 		return "BaseCovFunc";
 	}
 	  
- //   /** Compute the kernel */
-    virtual inline double get(const Vec3& x1, const Vec3& x2, const bool dirac = false) const { 
+ 	/** Compute the kernel */
+    	virtual inline double get(const Vec3& x1, const Vec3& x2, const bool dirac = false) const { 
 		return get(convertToEigenXd(x1), convertToEigenXd(x2), dirac);
 	}
 	/** Compute the kernel */

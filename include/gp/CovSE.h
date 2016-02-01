@@ -117,7 +117,8 @@ public:
 private:
 	/** Hyper-parameters */
 	double ell; // second element of loghyper
-    double sf2; // first element of loghyper
+	
+	double sf2; // first element of loghyper
         
     /** Create from descriptor */
 	void create(const Desc& desc) {
