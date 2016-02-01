@@ -17,7 +17,7 @@ SampleSet::SampleSet() {
 	n = 0;
 }
 
-SampleSet::SampleSet(const Vec3Seq& inputs, const Vec& targets) {
+SampleSet::SampleSet(const Vec3Seq& inputs, const RealSeq& targets, const Vec3Seq& normals) {
 	assert(inputs.size()==targets.size());
 
 	n = inputs.size();
@@ -26,10 +26,17 @@ SampleSet::SampleSet(const Vec3Seq& inputs, const Vec& targets) {
 //        	X.row(i) = Eigen::Map<Eigen::VectorXd>((double *)inputs[i].v, 3);
 //        }
 	X.insert(X.end(), inputs.begin(), inputs.end());
-        Vec tmp = targets;
-        Y.insert(Y.end(), tmp.begin(), tmp.end());
-//        Y.resize(n);
-//        Y = Eigen::Map<Eigen::VectorXd>((double *)targets.data(), targets.size());
+       //	Y.insert(Y.end(), targets.begin(), targets.end());
+	
+	Y.assign(4 * n, .0);
+	for (size_t i = 0; i < targets.size(); ++i)
+		Y[i] = targets[i];
+	for (size_t i = 0; i < normals.size(); ++i) {
+		Y[n + 3 * i] = normals[i].x;
+		Y[n + 3 * i + 1] = normals[i].y;
+		Y[n + 3 * i + 2] = normals[i].z;
+	}
+
 }
 
 SampleSet::~SampleSet() {
@@ -55,7 +62,7 @@ SampleSet::~SampleSet() {
 //	n = X.size();
 //}
 
-void SampleSet::add(const Vec3Seq& newInputs, const Vec& newTargets) {
+void SampleSet::add(const Vec3Seq& newInputs, const RealSeq& newTargets, const Vec3Seq& newNormals) {
 	assert(newInputs.size()==newTargets.size());
 	
 	n += newInputs.size(); 
@@ -64,10 +71,18 @@ void SampleSet::add(const Vec3Seq& newInputs, const Vec& newTargets) {
 //        	X.row(i) = Eigen::Map<Eigen::VectorXd>((double *)newInputs[i].v, 3);
 //        }
         X.insert(X.end(), newInputs.begin(), newInputs.end());
-        Vec tmp = newTargets;
-        Y.insert(Y.end(), tmp.begin(), tmp.end());
-//	Y.resize(Y.size() + newTargets.size());
-//        Y = Eigen::Map<Eigen::VectorXd>((double *)newTargets.data(), newTargets.size());
+//	Y.insert(Y.end(), newTargets.begin(), newTargets.end());
+
+	RealSeq tmp; tmp.assign(4 * newNormals.size(), .0);
+	for (size_t i = 0; i < newTargets.size(); ++i)
+		tmp[i] = newTargets[i];
+	for (size_t i = 0; i < newNormals.size(); ++i) {
+		tmp[3 * i] = newNormals[i].x;
+		tmp[3 * i + 1] = newNormals[i].y;
+		tmp[3 * i + 2] = newNormals[i].z;
+	}
+	Y.insert(Y.end(), tmp.begin(), tmp.end());
+
 }
 
 //------------------------------------------------------------------------------

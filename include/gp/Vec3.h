@@ -541,9 +541,9 @@ public:
 
 /** Default type */
 typedef _Vec3<F64> Vec3;
-typedef std::vector<F64> Vec;
 typedef std::vector<Vec3> Vec3Seq;
 typedef F64 Real;
+typedef std::vector<Real> RealSeq;
 
 
 //------------------------------------------------------------------------------

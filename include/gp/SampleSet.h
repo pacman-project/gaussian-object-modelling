@@ -36,7 +36,7 @@ public:
 	/** C'tor.
 	*   @param x input 
 	*/
-	SampleSet(const Vec3Seq& inputs, const Vec& targets);
+	SampleSet(const Vec3Seq& inputs, const RealSeq& targets, const Vec3Seq& normals);
 	
 	/** Destructor. */
 	virtual ~SampleSet();
@@ -44,7 +44,7 @@ public:
 	/** Add input-output patterns to sample set.
 	* @param x input array
 	* @param y target values */
-	void add(const Vec3Seq& newInputs, const Vec& newTargets);
+	void add(const Vec3Seq& newInputs, const RealSeq& newTargets, const Vec3Seq& newNormals);
 	
 	/** Get input vector at index k. */
 	//const Eigen::VectorXd & x(size_t k);
@@ -60,7 +60,7 @@ public:
 	bool set_y(size_t i, double y);
 	
 	/** Get reference to vector of target values. */
-	const Vec& y() const {
+	const RealSeq y() const {
 		return Y;
 	}
 	
@@ -79,7 +79,7 @@ private:
 	/** Container holding input vectors. */
 	Vec3Seq X;
 	/** Container holding target values. */
-	Vec Y;
+	RealSeq Y;
 	/** Number of samples. */
 	size_t n;
 };

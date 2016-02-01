@@ -27,7 +27,7 @@ namespace gp
 
 //------------------------------------------------------------------------------
 
-static Eigen::VectorXd convertToEigen(const Vec& v) {
+static Eigen::VectorXd convertToEigen(const RealSeq& v) {
 	return Eigen::Map<Eigen::VectorXd>((double *)v.data(), v.size());
 }
 static Eigen::Vector3d convertToEigen(const Vec3& v) {
@@ -111,14 +111,34 @@ public:
 		return "BaseCovFunc";
 	}
 	  
-        /** Compute the kernel */
-        virtual inline double get(const Vec3& x1, const Vec3& x2) const { return x1.distance(x2); }
-	/** Compute the kernel */
-	virtual double get(const Eigen::VectorXd &x1, const Eigen::VectorXd &x2) const {
-		return x1.dot(x2);
+ //   /** Compute the kernel */
+    virtual inline double get(const Vec3& x1, const Vec3& x2, const bool dirac = false) const { 
+		return get(convertToEigenXd(x1), convertToEigenXd(x2), dirac);
 	}
-        /** Compute the derivate */
-	virtual inline double getDiff(const Vec3& x1, const Vec3& x2) const { return x1.distanceSqr(x2)*2; }
+	/** Compute the kernel */
+	virtual double get(const Eigen::VectorXd &x1, const Eigen::VectorXd &x2, const bool dirac = false) const {
+		const double z = ((x1 - x2)).squaredNorm();
+		const double noise = dirac ? sn2 : .0;
+
+		return z + noise;
+	}
+	virtual inline double getDiff(const Vec3& xi, const Vec3& xj, const size_t dx, const bool dirac = false) const {
+		return getDiff(convertToEigenXd(xi), convertToEigenXd(xj), dx, dirac);
+	}
+
+	virtual inline double getDiff(const Eigen::VectorXd& xi, const Eigen::VectorXd& xj, const size_t dx, const bool dirac = false) const {
+		return xi.dot(xj);
+	}
+
+	virtual inline double getDiff2(const Vec3& xi, const Vec3& xj, const size_t dx1, const size_t dx2, const bool dirac = false) const {
+		return getDiff2(convertToEigenXd(xi), convertToEigenXd(xj), dx1, dx2, dirac);
+	}
+	virtual inline double getDiff2(const Eigen::VectorXd& xi, const Eigen::VectorXd& xj, const size_t dx1, const size_t dx2, const bool dirac = false) const {
+		const double k = get(xi, xj, dirac); //sqrt(DD);
+		const double noise = dirac ? sn2 : .0;
+		return noise * k;
+	}
+
 
     /** Access to loghyper_change */
     inline bool isLogHyper() const { return loghyper_changed; }
