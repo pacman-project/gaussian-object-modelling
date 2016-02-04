@@ -111,14 +111,14 @@ int main( int argc, char** argv )
 
         // set values according to the problem at hand
         double R = 0.4;
-        double sigma = 0.02;
-        double length = 0.03;
-        //ThinPlate my_kernel(R);
-        //ThinPlateRegressor regresor;
-        //Gaussian my_kernel(sigma, length);
-        //GaussianRegressor regresor;
-        Laplace my_kernel(sigma, length);
-        LaplaceRegressor regresor;
+        // double sigma = 0.02;
+        // double length = 0.03;
+        ThinPlate my_kernel(R);
+        ThinPlateRegressor regresor;
+        // Gaussian my_kernel(sigma, length);
+        // GaussianRegressor regresor;
+        // Laplace my_kernel(sigma, length);
+        // LaplaceRegressor regresor;
         regresor.setCovFunction(my_kernel);
         regresor.create(cloud, sphere);
 
@@ -280,8 +280,8 @@ int main( int argc, char** argv )
         center(1) = query->coord_y.at(0);
         center(2) = query->coord_z.at(0);
 
-        //GPProjector<ThinPlate> projector;
-        GPProjector<Laplace> projector;
+        GPProjector<ThinPlate> projector;
+        //GPProjector<Laplace> projector;
         //GPProjector<Gaussian> projector;
 
         Chart::Ptr chart;

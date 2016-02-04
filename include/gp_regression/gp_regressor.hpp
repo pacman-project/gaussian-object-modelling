@@ -43,6 +43,7 @@ struct Model
         Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel
         Eigen::VectorXd InvKppY; // weights
         Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel
+        Eigen::MatrixXd Kppdiffdiff; // twice differential of covariance with selected kernel
         typedef std::shared_ptr<Model> Ptr;
         typedef std::shared_ptr<const Model> ConstPtr;
 };

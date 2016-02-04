@@ -28,7 +28,7 @@ public:
                 return 6*out;
         }
 
-        inline double computediff2(double &value)
+        inline double computediffdiff(double &value)
         {
                 return 12*value - 6*R_;
         }
