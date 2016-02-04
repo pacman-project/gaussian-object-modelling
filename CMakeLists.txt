@@ -91,6 +91,10 @@ add_executable(test_gp
   # ${gp_INCLUDES}
 )
 
+add_executable(test_eigen
+  tests/test_eigen.cpp
+)
+
 # add a target to generate API documentation with Doxygen
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
