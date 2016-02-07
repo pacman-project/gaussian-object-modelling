@@ -31,6 +31,7 @@ add_service_files(
     FILES
     StartProcess.srv
     GetToExploreTrajectory.srv
+    SelectNSamples.srv
     )
 
 add_message_files(
@@ -64,9 +65,10 @@ include_directories(
 
 # ROS node
 add_executable(gaussian_process
+    ${gp_INCLUDES}
     src/gp_node.cpp
     src/gp_node_main.cpp
-    src/gp/SampleSet.cpp
+    # src/gp/SampleSet.cpp
 )
 
 add_dependencies(gaussian_process
@@ -85,11 +87,11 @@ add_executable(test_gaussian
   ${gp_INCLUDES}
 )
 
-add_executable(test_gp
-  tests/test_gp.cpp
-  src/gp/SampleSet.cpp
-  # ${gp_INCLUDES}
-)
+# add_executable(test_gp
+#   tests/test_gp.cpp
+#   src/gp/SampleSet.cpp
+#   # ${gp_INCLUDES}
+# )
 
 add_executable(test_eigen
   tests/test_eigen.cpp

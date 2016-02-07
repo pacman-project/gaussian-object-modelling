@@ -1,6 +1,13 @@
 #ifndef _INCL_GP_NODE_H
 #define _INCL_GP_NODE_H
 
+// General Utils
+#include <cmath>
+#include <fstream>
+#include <string>
+#include <stdlib.h>
+#include <map>
+
 // ROS headers
 #include <ros/ros.h>
 #include <ros/console.h>
@@ -12,6 +19,7 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <visualization_msgs/MarkerArray.h>
+
 //PCL
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -25,27 +33,22 @@
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/search/kdtree.h>
-// General Utils
-#include <cmath>
-#include <fstream>
-#include <string>
-#include <stdlib.h>
-#include <map>
+
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>
+
 // This node services (includes custom messages)
 #include <gp_regression/StartProcess.h>
 #include <gp_regression/GetToExploreTrajectory.h>
-//GP
-#include <gp/GaussianProcess.h>
-#include <gp/SampleSet.h>
+#include <gp_regression/SelectNSamples.h>
 
-    // #include <gp_regression/gp_modelling.h>
-
-using namespace gp;
+// Gaussian Process library
+#include <gp_regression/gp_modelling.h>
 
 /* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
 missing or is improvable! */
+
+// EVERYTHING IS IMPROVABLE UP TO ONES AND ZEROS
 
 /**\brief Class GaussianProcessNode
  * {Wraps Gaussian process into a ROS node}
@@ -73,7 +76,7 @@ class GaussianProcessNode
 
     private:
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, fake_sampling;
+        bool start, fake_sampling, isAtlas;
         //input object point cloud, this gets updated with new points from probe
         PtC::Ptr object_ptr;
         //input hand point cloud
@@ -82,18 +85,20 @@ class GaussianProcessNode
         PtC::Ptr model_ptr;
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
+        ros::ServiceServer srv_rnd_tests_;
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_model,  pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_points;
         //GP regressor and dataset
-        GaussianRegressor::Ptr gp;
-        SampleSet::Ptr data;
+        // ThinPlateRegressor::Ptr gp;
+        // SampleSet::Ptr data;
 
-            // gp_regression::GaussianRegressor reg;
-            // gp_regression::Model::Ptr obj_gp;
-            // gp_regression::Atlas::Ptr gp_atlas;
+        gp_regression::ThinPlateRegressor reg_;
+        gp_regression::Model::Ptr obj_gp;
+        double R_; // current larger distance in object points
+        // gp_regression::Atlas::Ptr gp_atlas;
         //Atlas TODO temp until it is implemented in gp
-        struct Chart
+        /* struct Chart
         {
             uint8_t id;
             Vec3 center;
@@ -102,13 +107,19 @@ class GaussianProcessNode
             Eigen::Vector3d Tx;
             Eigen::Vector3d Ty;
             uint8_t parent; //parent id, along with its depth level uniquely identifies branches
-        };
+        };*/
+
         //key is the depth level
-        typedef std::multimap<uint8_t, Chart> Atlas;
-        std::shared_ptr<Atlas> atlas;
-        /////////////
-        //atlas visualization
+        // std::multimap<uint8_t, gp_regression::Chart> atlas;
+        // std::shared_ptr<Atlas> atlas;
+        // gp_regression::Atlas::Ptr atlas_;
+        gp_regression::Atlas atlas_;
+        // collection of atlases missing, working with 1 for now
+        // std::vector<gp_regression::Atlas::Ptr> globe_;
+
+        // visualization
         visualization_msgs::MarkerArrayPtr markers;
+
         //kdtree for object, used by isSampleVisible method
         // pcl::search::KdTree<pcl::PointXYZRGB>::Ptr viewpoint_tree;
         //kdtree for hand
@@ -119,12 +130,19 @@ class GaussianProcessNode
         // int isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const;
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res);
+
+        // this is a debug callback
+        bool cb_rnd_choose(gp_regression::SelectNSamples::Request& req, gp_regression::SelectNSamples::Response& res);
+        int cb_rnd_choose_counter;
+
         //callback to sample process service, executes when service is called
         // bool cb_sample(gp_regression::GetToExploreTrajectory::Request& req, gp_regression::GetToExploreTrajectory::Response& res);
         //callback for sub point subscriber
         // TODO: Convert this callback if  needed to accept probe points and not
         // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
-        void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
+        // void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
+        void fakeDeterministicSampling();
+
         /** \brief Compute a Gaussian Process from object and store it */
         bool computeGP();
         /** \brief Compute Atlas from a random starting point */
@@ -132,7 +150,7 @@ class GaussianProcessNode
         /** \brief compute markers that compose an atlas */
         void createAtlasMarkers();
         /** \brief Update the Gaussian Process with new points */
-        void update(Vec3Seq &points);
+        // void update(Vec3Seq &points);
         /** \brief Publish object model */
         void publishCloudModel() const;
         /** \brief Publish last computed atlas */
