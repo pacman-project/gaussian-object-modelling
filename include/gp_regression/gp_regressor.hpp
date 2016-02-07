@@ -34,16 +34,17 @@ struct Data
  */
 struct Model
 {
+        double R;          // larger pairwise distance in training (includes internal/external)
         Eigen::MatrixXd P; // points
-        Eigen::MatrixXd N; // (inward) normal at points
-        Eigen::MatrixXd Tx; // tangent basis 1
-        Eigen::MatrixXd Ty; // tangent basis 2
         Eigen::VectorXd Y;  // labels
-        Eigen::MatrixXd Kpp; // covariance with selected kernel
-        Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel
-        Eigen::VectorXd InvKppY; // weights
-        Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel
-        Eigen::MatrixXd Kppdiffdiff; // twice differential of covariance with selected kernel
+        Eigen::MatrixXd N; // (inward) normal at points [not computed by default]
+        Eigen::MatrixXd Tx; // tangent basis 1 [not computed by default]
+        Eigen::MatrixXd Ty; // tangent basis 2 [not computed by default]
+        Eigen::MatrixXd Kpp; // covariance with selected kernel, in case we need it
+        Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel, in case we needt
+        Eigen::VectorXd InvKppY; // weights, alpha, this is the only required thing to keep
+        Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel [not computed by default]
+        Eigen::MatrixXd Kppdiffdiff; // twice differential of covariance with selected kernel [not computed by default]
         typedef std::shared_ptr<Model> Ptr;
         typedef std::shared_ptr<const Model> ConstPtr;
 };
@@ -64,70 +65,76 @@ public:
          * @brief create Solves the regression problem given some input data.
          * @param[in] data Input data.
          * @param[out] gp Gaussian process parameters.
+         *
+         * \Note: the templatation of >bool withNormals> is not friendly readable,
+         *        however it makes it efficient by solving the branching at
+         *        compilation time (assuming a modern and good compiler)
          */
+        template <bool withNormals>
         void create(Data::ConstPtr data, Model::Ptr &gp)
         {
                 // validate data
                 assertData(data);
 
-                //reset output, we dont care what there was there
+                // reset output, we dont care what there was there... yeah, we are badasses
                 gp = std::make_shared<Model>();
 
-                // configure gp
+                // configure gp matrices
                 convertToEigen(data->coord_x, data->coord_y, data->coord_z, gp->P);
                 convertToEigen(data->label, gp->Y);
-                gp->N.resize(gp->P.rows(), gp->P.cols());
-                gp->Tx.resize(gp->P.rows(), gp->P.cols());
-                gp->Ty.resize(gp->P.rows(), gp->P.cols());
+                if(withNormals)
+                {
+                        gp->N.resize(gp->P.rows(), gp->P.cols());
+                        // gp->Tx.resize(gp->P.rows(), gp->P.cols());
+                        // gp->Ty.resize(gp->P.rows(), gp->P.cols());
+                }
 
-                // go! // ToDo: avoid the for loops.
+                // compute pairwise distance matrix
                 buildEuclideanDistanceMatrix(gp->P, gp->P, gp->Kpp);
-                gp->Kppdiff = gp->Kpp;
-                gp->Kppdiffdiff = gp->Kpp;
-                // performance test1 just use nested collapsed loops
-                // #pragma omp parallel for collapse(2)
+
+                // find larger pairwise distance and normalize pairwise distance matrix
+                gp->R = gp->Kpp.maxCoeff();
+
+                // copy euclidean matrix
+                if(withNormals)
+                {
+                        gp->Kppdiff.resizeLike(gp->Kpp);
+                        // gp->Kppdiffdiff.resizeLike(gp->Kpp);
+                }
+
                 for(int i = 0; i < gp->Kpp.rows(); ++i)
                 {
                         for(int j = 0; j < gp->Kpp.cols(); ++j)
                         {
+                                // do it in this order, so you can make the most of the same matrix
+                                if(withNormals)
+                                {
+                                        // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
+                                        gp->Kppdiff(i,j) = kernel_->compute(gp->Kpp(i,j));
+                                }
                                 gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
-                                gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
-                                gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
                         }
                 }
-                // performance  test2  manually  collapse  loops  into  one  and
-                // parellize it
-                /*
-                 * int rows(gp.Kpp.rows()), cols(gp.Kpp.cols());
-                 * #pragma omp parallel for
-                 * for (int ij=0; ij < rows*cols; ++ij)
-                 * {
-                 *         int i = ij / cols;
-                 *         int j = ij % cols;
-                 *         gp.Kpp(i,j) = kernel_->compute(gp.Kpp(i,j));
-                 *         gp.Kppdiff(i,j) = kernel_->computediff(gp.Kpp(i,j));
-                 * }
-                 */
 
                 gp->InvKpp = gp->Kpp.inverse();
                 gp->InvKppY = gp->InvKpp*gp->Y;
 
-                // normal and tangent computation, could be done potentially in the
-                // loop above, but just to keep it slightly separated for now
-                // (Cant collapse it), just parallize outer loop
-                // #pragma omp parallel for
-                for(int i = 0; i < gp->Kpp.rows(); ++i)
+                // normal and tangent computation
+                if(withNormals)
                 {
-                        for(int j = 0; j < gp->Kpp.cols(); ++j)
+                        for(int i = 0; i < gp->Kpp.rows(); ++i)
                         {
-                                gp->N.row(i) += gp->InvKppY(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
+                                for(int j = 0; j < gp->Kpp.cols(); ++j)
+                                {
+                                        gp->N.row(i) += gp->InvKppY(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
+                                }
+                                gp->N.row(i).normalize();
+                                Eigen::Vector3d N = gp->N.row(i);
+                                // Eigen::Vector3d Tx, Ty;
+                                // computeTangentBasis(N, Tx, Ty);
+                                // gp->Tx.row(i) = Tx;
+                                // gp->Ty.row(i) = Ty;
                         }
-                        gp->N.row(i).normalize();
-                        Eigen::Vector3d N = gp->N.row(i);
-                        Eigen::Vector3d Tx, Ty;
-                        computeTangentBasis(N, Tx, Ty);
-                        gp->Tx.row(i) = Tx;
-                        gp->Ty.row(i) = Ty;
                 }
         }
 
@@ -144,10 +151,13 @@ public:
         void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v,
                       Eigen::MatrixXd &N, Eigen::MatrixXd &Tx, Eigen::MatrixXd &Ty)
         {
+                if(!gp)
+                        throw GPRegressionException("Empty Model pointer");
+
                 evaluate(gp, query, f, v, N);
                 Tx.resizeLike(N);
                 Ty.resizeLike(N);
-                //#pragma omp parallel for
+
                 for(int i = 0; i < N.rows(); ++i)
                 {
                         Eigen::Vector3d tempTx, tempTy, tempN;
@@ -170,6 +180,7 @@ public:
         {
                 if(!gp)
                         throw GPRegressionException("Empty Model pointer");
+
                 // validate data
                 assertData(query);
 
@@ -178,28 +189,29 @@ public:
 
                 // go!
                 Eigen::MatrixXd Q;
-                Eigen::MatrixXd Kqp, Kpq, Kqpdiff;
+                Eigen::MatrixXd Kqp, Kpq;
                 Eigen::MatrixXd Kqq;
-                //function evaluation and associated variance
                 Eigen::VectorXd F, V_diagonal;
                 Eigen::MatrixXd V;
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
                 N.resizeLike(Q);
 
-                //#pragma omp parallel for collapse(2)
                 for(int i = 0; i < Kqp.rows(); ++i)
                 {
                         for(int j = 0; j < Kqp.cols(); ++j)
                         {
-                                Kqp(i,j) = kernel_->compute(Kqp(i,j));
                                 N.row(i) += gp->InvKppY(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
+                                Kqp(i,j) = kernel_->compute(Kqp(i,j));
                         }
                         N.row(i).normalize();
                 }
+                F = Kqp*gp->InvKppY;
+
+                // needed for the variance
                 Kpq = Kqp.transpose();
                 buildEuclideanDistanceMatrix(Q, Q, Kqq);
-                //#pragma omp parallel for collapse(2)
+
                 for(int i = 0; i < Kqq.rows(); ++i)
                 {
                         for(int j = 0; j < Kqq.cols(); ++j)
@@ -207,17 +219,13 @@ public:
                                 Kqq(i,j) = kernel_->compute(Kqq(i,j));
                         }
                 }
-                F = Kqp*gp->InvKppY;
+
                 V = Kqq - Kqp*gp->InvKpp*Kpq;
                 V_diagonal = V.diagonal();
+
+                // conversions
                 convertToSTD(F, f);
                 convertToSTD(V_diagonal, v);
-
-                // normalize, or return real gradient value
-                /*for(int i = 0; i < N.rows(); ++i)
-                {
-                        N.row(i).normalize();
-                }*/
         }
 
         /**
@@ -231,10 +239,47 @@ public:
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
+
                 assertData(query);
                 Eigen::MatrixXd dummyN;
-                dummyN.resize(query->coord_x.size(), 3);
                 evaluate(gp, query, f, v, dummyN);
+        }
+
+        /**
+         * @brief evaluate The f'(x) version of evaluate.
+         * @param[in] gp The gaussian process, f(x) ~ gp[m(x), v(x)].
+         * @param[in] query The query value, x.
+         * @param[out] f The function value, m(x).
+         */
+        void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f)
+        {
+                if(!gp)
+                        throw GPRegressionException("Empty Model pointer");
+
+                // validate data
+                assertData(query);
+
+                if (!query->label.empty())
+                        throw GPRegressionException("Query is already labeled!");
+
+                // go!
+                Eigen::MatrixXd Q;
+                Eigen::MatrixXd Kqp;
+                Eigen::VectorXd F;
+                convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
+                buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
+
+                for(int i = 0; i < Kqp.rows(); ++i)
+                {
+                        for(int j = 0; j < Kqp.cols(); ++j)
+                        {
+                                Kqp(i,j) = kernel_->compute(Kqp(i,j));
+                        }
+                }
+                F = Kqp*gp->InvKppY;
+
+                // conversions
+                convertToSTD(F, f);
         }
 
         /**
@@ -320,6 +365,8 @@ private:
                 D = -2*A*B.transpose();
                 D.colwise() += A.cwiseProduct(A).rowwise().sum();
                 D.rowwise() += B.cwiseProduct(B).rowwise().sum().transpose();
+                for(int i = 0; i < D.array().size(); ++i)
+                        D.array()(i) = std::sqrt(D.array()(i));
         }
 
         /**
@@ -345,11 +392,20 @@ private:
          */
         void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
         {
-                Eigen::Vector3d NN = N.normalized();
-                Eigen::Matrix3d TProj = Eigen::Matrix3d::Identity() - NN*NN.transpose();
-                Eigen::JacobiSVD<Eigen::Matrix3d> svd(TProj, Eigen::ComputeFullU | Eigen::ComputeFullV);
-                Tx = svd.matrixU().col(0);
-                Ty = svd.matrixU().col(1);
+                /*
+                 * Appears to be bad
+                 *
+                 * Eigen::Vector3d NN = N.normalized();
+                 * Eigen::Matrix3d TProj = Eigen::Matrix3d::Identity() - NN*NN.transpose();
+                 * Eigen::JacobiSVD<Eigen::Matrix3d> svd(TProj, Eigen::ComputeFullU | Eigen::ComputeFullV);
+                 * Tx = svd.matrixU().col(0);
+                 * Ty = svd.matrixU().col(1);
+                 *
+                 */
+                Tx = Eigen::Vector3d::UnitX() - (N*(N.dot(Eigen::Vector3d::UnitX())));
+                Tx.normalize();
+                Ty = N.cross(Tx);
+                Ty.normalize();
         }
 };
 
