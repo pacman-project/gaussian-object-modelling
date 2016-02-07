@@ -216,14 +216,13 @@ public:
                 return 0;
         }
 
-        void generateChart(GPRegressor<CovType> &reg, Model::ConstPtr gp, const Eigen::Vector3d &C, const double R, Chart::Ptr &chart)
+        void generateChart(GPRegressor<CovType> &reg, Model::ConstPtr gp, const Eigen::Vector3d &C, Chart::Ptr &chart)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
                 // reset chart, we dont care what there was
                 chart = std::make_shared<Chart>();
                 chart->C = C;
-                chart->R = R;
                 Data::Ptr q = std::make_shared<Data>();
                 q->coord_x.push_back( C(0) );
                 q->coord_y.push_back( C(1) );
@@ -234,6 +233,7 @@ public:
                 chart->N = N.row(0).normalized();
                 chart->Tx = Tx.row(0);
                 chart->Ty = Ty.row(0);
+                chart->R = v.at(0);
                 return;
         }
 
