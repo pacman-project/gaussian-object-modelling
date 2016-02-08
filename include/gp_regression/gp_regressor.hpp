@@ -384,12 +384,15 @@ private:
                 }
         }
 
+};
         /**
          * @brief computeTangentBasis
          * @param N
          * @param Tx
          * @param Ty
          */
+        //Moved outside of class, this is more an utility than an active part of
+        //regression. It is more convenient as a global function. - Tabjones
         void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
         {
                 /*
@@ -407,7 +410,6 @@ private:
                 Ty = N.cross(Tx);
                 Ty.normalize();
         }
-};
 
 
 
