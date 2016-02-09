@@ -18,6 +18,7 @@
 #include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
+#include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/MarkerArray.h>
 
 //PCL
@@ -67,18 +68,19 @@ class GaussianProcessNode
         /** \brief  Publish the object  model if there  is one along  with other
          *  markers.
          *
-         * Points belonging to object are blue, points belonging to the hand are
-         * cyan, points  belonging to external  sphere are red,  internal points
-         * are yellow.
+         * Points belonging to object are blue, points  belonging to external
+         * sphere are purple,  internal points are cyan.
          */
         void Publish();
         typedef pcl::PointCloud<pcl::PointXYZRGB> PtC;
 
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     private:
         //control if we can start processing, i.e. we have a model and clouds
         bool start, fake_sampling, isAtlas;
         //input object point cloud, this gets updated with new points from probe
         PtC::Ptr object_ptr;
+        Eigen::Vector4f object_centroid;
         //input hand point cloud
         PtC::Ptr hand_ptr;
         //reconstructed model cloud to republish including centroid and sphere
@@ -141,7 +143,7 @@ class GaussianProcessNode
         // TODO: Convert this callback if  needed to accept probe points and not
         // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
         // void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
-        void fakeDeterministicSampling();
+        void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
 
         /** \brief Compute a Gaussian Process from object and store it */
         bool computeGP();

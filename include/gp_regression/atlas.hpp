@@ -70,7 +70,9 @@ class AtlasBase
     };
 
     /**
-     * \brief Get a new intermediate point to reach, given the current point
+     * \brief Get a new intermediate point to reach, given the current point.
+     *
+     * I.E. set a new direction for RRT to explore
      */
     virtual Eigen::Vector3d getNextState(const Eigen::Vector3d& )=0;
 
@@ -84,12 +86,26 @@ class AtlasBase
      */
     virtual double cost(const Eigen::Vector3d&, const Eigen::Vector3d&)=0;
 
-
+    protected:
     ///Pointer to gp_model
     Model::Ptr gp_model;
-
 };
 
+class AtlasVarianceBased : public Atlas
+{
+    public:
+    typedef std::shared_ptr<AtlasVarianceBased> Ptr;
+    typedef std::shared_ptr<const AtlasVarianceBased> ConstPtr;
+
+    AtlasVarianceBased()=delete;
+    AtlasVarianceBased(Model::ConstPtr gp): gp_model(gp), var_factor()
+    {
+    }
+
+    protected:
+    //radius is inversely proportional to variance of its center, by this factor
+    double var_factor;
+};
 }
 
 #endif
