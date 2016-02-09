@@ -209,6 +209,7 @@ bool GaussianProcessNode::computeGP()
 
     /*****  Prepare the training data  *********************************************/
     gp_regression::Data::Ptr cloud_gp = std::make_shared<gp_regression::Data>();
+    double sigma2 = 1e-1;
 
     //      Surface Points
     // add object points with label 0
@@ -217,7 +218,7 @@ bool GaussianProcessNode::computeGP()
         cloud_gp->coord_y.push_back(pt.y);
         cloud_gp->coord_z.push_back(pt.z);
         cloud_gp->label.push_back(0);
-        cloud_gp->sigma2.push_back(1e-6);
+        cloud_gp->sigma2.push_back(sigma2);
     }
     // add object points to rviz in blue
     *model_ptr += *object_ptr;
@@ -229,7 +230,7 @@ bool GaussianProcessNode::computeGP()
     cloud_gp->coord_y.push_back(0);
     cloud_gp->coord_z.push_back(0);
     cloud_gp->label.push_back(-1.0);
-    cloud_gp->sigma2.push_back(1e-6);
+    cloud_gp->sigma2.push_back(sigma2);
     // add internal point to rviz in cyan
     pcl::PointXYZRGB cen;
     cen.x = 0;
@@ -262,7 +263,7 @@ bool GaussianProcessNode::computeGP()
             cloud_gp->coord_y.push_back(y);
             cloud_gp->coord_z.push_back(z);
             cloud_gp->label.push_back(1.0);
-            cloud_gp->sigma2.push_back(1e-6);
+            cloud_gp->sigma2.push_back(sigma2);
 
             // add sphere points to rviz in purple
             pcl::PointXYZRGB sp;
@@ -483,7 +484,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     double max_v (0.0);
     const auto total = std::lround( std::pow((2*scale+1)/pass, 3) );
     size_t count(0);
-    ROS_INFO("[GaussianProcessNode::%s]\tSampling %d grid points on GP ...",__func__, total);
+    ROS_INFO("[GaussianProcessNode::%s]\tSampling %ld grid points on GP ...",__func__, total);
     for (double x = -scale; x<= scale; x += pass)
         for (double y = -scale; y<= scale; y += pass)
             for (double z = -scale; z<= scale; z += pass)
@@ -494,7 +495,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
                 qq->coord_z.push_back(z);
                 std::vector<double> ff,vv;
                 reg_.evaluate(obj_gp, qq, ff, vv);
-                if (ff.at(0) <= 0.001 && ff.at(0) >= -0.001) {
+                if (ff.at(0) <= 0.01 && ff.at(0) >= -0.01) {
                     if (vv.at(0) <= min_v)
                         min_v = vv.at(0);
                     if (vv.at(0) >= max_v)
@@ -509,7 +510,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
             }
     std::cout<<std::endl;
 
-    ROS_INFO("[GaussianProcessNode::%s]\tFound %d points approximately on GP surface, plotting them.",__func__,
+    ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface, plotting them.",__func__,
             ssvv.size());
     const double mid_v = ( min_v + max_v ) * 0.5;
     std::cout<<"min "<<min_v<<" mid "<<mid_v<<" max "<<max_v<<std::endl;
