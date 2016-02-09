@@ -51,6 +51,7 @@ struct Data
         std::vector<double> coord_y;
         std::vector<double> coord_z;
         std::vector<double> label;
+        std::vector<double> sigma2;
         typedef std::shared_ptr<Data> Ptr;
         typedef std::shared_ptr<const Data> ConstPtr;
 };
@@ -138,7 +139,10 @@ public:
                                         // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
                                         gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
                                 }
-                                gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
+                                if (!(data->sigma2.empty()) && i==j)
+                                        gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j)) + data->sigma2.at(i);
+                                else
+                                        gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
                         }
                 }
 
