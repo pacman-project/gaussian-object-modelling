@@ -416,21 +416,6 @@ void GaussianProcessNode::fakeDeterministicSampling()
     if(!markers)
         return;
 
-    visualization_msgs::Marker sample;
-    sample.header.frame_id = object_ptr->header.frame_id;
-    sample.header.stamp = ros::Time::now();
-    sample.lifetime = ros::Duration(0);
-    sample.ns = "samples";
-    sample.id = 0;
-    sample.type = visualization_msgs::Marker::SPHERE_LIST;
-    sample.action = visualization_msgs::Marker::ADD;
-    sample.scale.x = 0.001;
-    sample.scale.y = 0.001;
-    sample.scale.z = 0.001;
-    sample.color.a = 0.7;
-    sample.color.r = 0.0;
-    sample.color.b = 0.0;
-    sample.color.g = 1.0;
     pcl::PointXYZRGB min, max;
     pcl::getMinMax3D(*object_ptr, min, max);
     double xm,xM,ym,yM,zm,zM;
@@ -443,37 +428,61 @@ void GaussianProcessNode::fakeDeterministicSampling()
     yM = ((1+scale)*max.y + (1-scale)*min.y)*0.5;
     zM = ((1+scale*1.5)*max.z + (1-scale*1.5)*min.z)*0.5;
 
-    gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+    gp_regression::Data::Ptr ss = std::make_shared<gp_regression::Data>();
+    std::vector<double> ssvv;
     gp_regression::ThinPlate my_kernel(R_);
     reg_.setCovFunction(my_kernel);
 
-    for (double x = xm; x<= xM; x += pass) {
-        for (double y = ym; y<= yM; y += pass) {
-            for (double z = zm; z<= zM; z += pass) {
-
-                qq->coord_x.clear();
-                qq->coord_y.clear();
-                qq->coord_z.clear();
+    double min_v (100.0);
+    double max_v (0.0);
+    ROS_INFO("[GaussianProcessNode::%s]\tSampling %d points on GP...")
+    for (double x = xm; x<= xM; x += pass)
+        for (double y = ym; y<= yM; y += pass)
+            for (double z = zm; z<= zM; z += pass)
+            {
+                gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
                 qq->coord_x.push_back(x);
                 qq->coord_y.push_back(y);
                 qq->coord_z.push_back(z);
-
-                std::vector<double> ff;
-                reg_.evaluate(obj_gp, qq, ff);
-
-                // there will be only one test point at a time
-                // so it is safe to evaluate at 0.
+                std::vector<double> ff,vv;
+                reg_.evaluate(obj_gp, qq, ff, vv);
                 if (ff.at(0) <= 0.001 && ff.at(0) >= -0.001) {
-                    geometry_msgs::Point pt;
-                    pt.x = x;
-                    pt.y = y;
-                    pt.z = z;
-                    sample.points.push_back(pt);
+                    if (vv.at(0) <= min_v)
+                        min_v = vv.at(0);
+                    if (vv.at(0) >= max_v)
+                        max_v = vv.at(0);
+                    ss->coord_x.push_back(x);
+                    ss->coord_y.push_back(y);
+                    ss->coord_z.push_back(z);
+                    ssvv.push_back(vv.at(0));
                 }
             }
-        }
+
+    const double mid_v = ( min_v + max_v ) * 0.5;
+    for (size_t i=0; i< ssvv.size(); ++i)
+    {
+        geometry_msgs::Point pt;
+        pt.x = ss->coord_x.at(i);
+        pt.y = ss->coord_y.at(i);
+        pt.z = ss->coord_z.at(i);
+        visualization_msgs::Marker sample;
+        sample.header.frame_id = object_ptr->header.frame_id;
+        sample.header.stamp = ros::Time::now();
+        sample.lifetime = ros::Duration(0);
+        sample.ns = "samples";
+        sample.id = i;
+        sample.type = visualization_msgs::Marker::SPHERE;
+        sample.action = visualization_msgs::Marker::ADD;
+        sample.scale.x = 0.001;
+        sample.scale.y = 0.001;
+        sample.scale.z = 0.001;
+        sample.color.a = 0.7;
+        sample.color.r = (ssvv.at(i)<mid_v) ? 1/(mid_v - min_v) * (ssvv.at(i) - min_v) : 1.0;
+        sample.color.b = 0.0;
+        sample.color.g = (ssvv.at(i)>mid_v) ? -1/(max_v - mid_v) * (ssvv.at(i) - mid_v) + 1 : 1.0;
+        sample.points.push_back(pt);
+        markers->markers.push_back(sample);
     }
-    markers->markers.push_back(sample);
 }
 
 void GaussianProcessNode::createAtlasMarkers()
@@ -656,3 +665,22 @@ void GaussianProcessNode::publishAtlas () const
 //     //we didn't intersect anything, this sample is not occluded
 //     return(1);
 // }
+
+
+///// MAIN ////////////////////////////////////////////////////////////////////
+
+int main (int argc, char *argv[])
+{
+    ros::init(argc, argv, "gaussian_process");
+    GaussianProcessNode node;
+    ros::Rate rate(50); //try to go at 50hz
+    while (node.nh.ok())
+    {
+        //gogogo!
+        ros::spinOnce();
+        node.Publish();
+        rate.sleep();
+    }
+    //someone killed us :(
+    return 0;
+}

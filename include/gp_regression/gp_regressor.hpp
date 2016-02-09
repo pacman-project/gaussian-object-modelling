@@ -17,6 +17,32 @@ namespace gp_regression
 {
 
 /**
+ * @brief computeTangentBasis
+ * @param N
+ * @param Tx
+ * @param Ty
+ */
+//Moved outside of class, this is more an utility than an active part of
+//regression. It is more convenient as a global function. - Tabjones
+void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
+{
+    /*
+     * Appears to be bad
+     *
+     * Eigen::Vector3d NN = N.normalized();
+     * Eigen::Matrix3d TProj = Eigen::Matrix3d::Identity() - NN*NN.transpose();
+     * Eigen::JacobiSVD<Eigen::Matrix3d> svd(TProj, Eigen::ComputeFullU | Eigen::ComputeFullV);
+     * Tx = svd.matrixU().col(0);
+     * Ty = svd.matrixU().col(1);
+     *
+     */
+    Tx = Eigen::Vector3d::UnitX() - (N*(N.dot(Eigen::Vector3d::UnitX())));
+    Tx.normalize();
+    Ty = N.cross(Tx);
+    Ty.normalize();
+}
+
+/**
  * @brief The Data struct Container for input and query data.
  */
 struct Data
@@ -385,34 +411,6 @@ private:
         }
 
 };
-        /**
-         * @brief computeTangentBasis
-         * @param N
-         * @param Tx
-         * @param Ty
-         */
-        //Moved outside of class, this is more an utility than an active part of
-        //regression. It is more convenient as a global function. - Tabjones
-        void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
-        {
-                /*
-                 * Appears to be bad
-                 *
-                 * Eigen::Vector3d NN = N.normalized();
-                 * Eigen::Matrix3d TProj = Eigen::Matrix3d::Identity() - NN*NN.transpose();
-                 * Eigen::JacobiSVD<Eigen::Matrix3d> svd(TProj, Eigen::ComputeFullU | Eigen::ComputeFullV);
-                 * Tx = svd.matrixU().col(0);
-                 * Ty = svd.matrixU().col(1);
-                 *
-                 */
-                Tx = Eigen::Vector3d::UnitX() - (N*(N.dot(Eigen::Vector3d::UnitX())));
-                Tx.normalize();
-                Ty = N.cross(Tx);
-                Ty.normalize();
-        }
-
-
-
 }
 
 #endif
