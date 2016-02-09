@@ -435,7 +435,7 @@ void GaussianProcessNode::fakeDeterministicSampling()
 
     double min_v (100.0);
     double max_v (0.0);
-    ROS_INFO("[GaussianProcessNode::%s]\tSampling %d points on GP...")
+    // ROS_INFO("[GaussianProcessNode::%s]\tSampling %d points on GP...");
     for (double x = xm; x<= xM; x += pass)
         for (double y = ym; y<= yM; y += pass)
             for (double z = zm; z<= zM; z += pass)
