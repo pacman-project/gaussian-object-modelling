@@ -136,7 +136,7 @@ public:
                                 if(withNormals)
                                 {
                                         // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
-                                        gp->Kppdiff(i,j) = kernel_->compute(gp->Kpp(i,j));
+                                        gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
                                 }
                                 gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
                         }
@@ -263,12 +263,51 @@ public:
          */
         void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v)
         {
-                if (!gp)
+                if(!gp)
                         throw GPRegressionException("Empty Model pointer");
 
+                // validate data
                 assertData(query);
-                Eigen::MatrixXd dummyN;
-                evaluate(gp, query, f, v, dummyN);
+
+                if (!query->label.empty())
+                        throw GPRegressionException("Query is already labeled!");
+
+                // go!
+                Eigen::MatrixXd Q;
+                Eigen::MatrixXd Kqp, Kpq;
+                Eigen::MatrixXd Kqq;
+                Eigen::VectorXd F, V_diagonal;
+                Eigen::MatrixXd V;
+                convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
+                buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
+
+                for(int i = 0; i < Kqp.rows(); ++i)
+                {
+                        for(int j = 0; j < Kqp.cols(); ++j)
+                        {
+                                Kqp(i,j) = kernel_->compute(Kqp(i,j));
+                        }
+                }
+                F = Kqp*gp->InvKppY;
+
+                // needed for the variance
+                Kpq = Kqp.transpose();
+                buildEuclideanDistanceMatrix(Q, Q, Kqq);
+
+                for(int i = 0; i < Kqq.rows(); ++i)
+                {
+                        for(int j = 0; j < Kqq.cols(); ++j)
+                        {
+                                Kqq(i,j) = kernel_->compute(Kqq(i,j));
+                        }
+                }
+
+                V = Kqq - Kqp*gp->InvKpp*Kpq;
+                V_diagonal = V.diagonal();
+
+                // conversions
+                convertToSTD(F, f);
+                convertToSTD(V_diagonal, v);
         }
 
         /**
