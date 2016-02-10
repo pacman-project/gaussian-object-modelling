@@ -64,9 +64,11 @@ struct Model
         double R;          // larger pairwise distance in training (includes internal/external)
         Eigen::MatrixXd P; // points
         Eigen::VectorXd Y;  // labels
+        Eigen::VectorXd S2;  // noise
         Eigen::MatrixXd N; // (inward) normal at points [not computed by default]
         Eigen::MatrixXd Tx; // tangent basis 1 [not computed by default]
         Eigen::MatrixXd Ty; // tangent basis 2 [not computed by default]
+        Eigen::MatrixXd Kpp; // the covariance matrix
         Eigen::LDLT<Eigen::MatrixXd> cholesker; // the robust cholesky-based solver
         Eigen::VectorXd alpha; // weights, alpha, this is the only required thing to keep
         Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel [not computed by default]
@@ -108,6 +110,8 @@ public:
                 // configure gp matrices
                 convertToEigen(data->coord_x, data->coord_y, data->coord_z, gp->P);
                 convertToEigen(data->label, gp->Y);
+                convertToEigen(data->sigma2, gp->S2);
+
                 if(withNormals)
                 {
                         gp->N.resize(gp->P.rows(), gp->P.cols());
@@ -116,46 +120,45 @@ public:
                 }
 
                 // compute pairwise distance matrix / covariance
-                Eigen::MatrixXd Kpp;
-                buildEuclideanDistanceMatrix(gp->P, gp->P,Kpp);
+                buildEuclideanDistanceMatrix(gp->P, gp->P, gp->Kpp);
 
                 // find larger pairwise distance and normalize pairwise distance matrix
-                gp->R = Kpp.maxCoeff();
+                gp->R = gp->Kpp.maxCoeff();
 
                 // copy euclidean matrix
                 if(withNormals)
                 {
-                        gp->Kppdiff.resizeLike(Kpp);
+                        gp->Kppdiff.resizeLike(gp->Kpp);
                         // gp->Kppdiffdiff.resizeLike(Kpp);
                 }
 
-                for(int i = 0; i < Kpp.rows(); ++i)
+                for(int i = 0; i < gp->Kpp.rows(); ++i)
                 {
-                        for(int j = 0; j < Kpp.cols(); ++j)
+                        for(int j = 0; j < gp->Kpp.cols(); ++j)
                         {
                                 // do it in this order, so you can make the most of the same matrix
                                 if(withNormals)
                                 {
                                         // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
-                                        gp->Kppdiff(i,j) = kernel_->computediff(Kpp(i,j));
+                                        gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
                                 }
                                 if (!(data->sigma2.empty()) && i==j)
-                                        Kpp(i,j) = kernel_->compute(Kpp(i,j)) + data->sigma2.at(i);
+                                        gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j)) + data->sigma2.at(i);
                                 else
-                                        Kpp(i,j) = kernel_->compute(Kpp(i,j));
+                                        gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
                         }
                 }
 
                 gp->cholesker.setZero();
-                gp->cholesker.compute(Kpp);
+                gp->cholesker.compute(gp->Kpp);
                 gp->alpha = gp->cholesker.solve(gp->Y);
 
                 // normal and tangent computation
                 if(withNormals)
                 {
-                        for(int i = 0; i < Kpp.rows(); ++i)
+                        for(int i = 0; i < gp->Kpp.rows(); ++i)
                         {
-                                for(int j = 0; j < Kpp.cols(); ++j)
+                                for(int j = 0; j < gp->Kpp.cols(); ++j)
                                 {
                                         gp->N.row(i) += gp->alpha(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
                                 }
@@ -235,7 +238,7 @@ public:
                                 N.row(i) += gp->alpha(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
                                 Kqp(i,j) = kernel_->compute(Kqp(i,j));
                         }
-                        N.row(i).normalize();
+                        // N.row(i).normalize(); // to return the gradient properly
                 }
                 F = Kqp*gp->alpha;
 
@@ -346,9 +349,122 @@ public:
          * @brief update Updates the gaussian process with new_data.
          * @param new_data This is the new data added to the model.
          * @param gp The gaussian process to be updated
+         *
+         *  \Note: The template could be avoided with an argument,
+         *         just keeping it for consistency
          */
+        template <bool withNormals>
         void update(Data::ConstPtr new_data, Model::Ptr gp)
         {
+                // validate new data
+                assertData(new_data);
+
+                if(!gp)
+                        throw GPRegressionException("Empty model pointer");
+
+                // configure gp matrices
+                Eigen::MatrixXd new_P;
+                Eigen::VectorXd new_Y, new_S2;
+                convertToEigen(new_data->coord_x, new_data->coord_y, new_data->coord_z, new_P);
+                convertToEigen(new_data->label, new_Y);
+                convertToEigen(new_data->sigma2, new_S2);
+
+                int n = new_data->label.size();
+                int p = gp->Y.rows();
+
+                // compute extra values
+                if(withNormals)
+                {
+                        // ToDO
+                        // gp->N.resize(gp->P.rows(), gp->P.cols());
+                        // gp->Tx.resize(gp->P.rows(), gp->P.cols());
+                        // gp->Ty.resize(gp->P.rows(), gp->P.cols());
+                }
+
+                // compute pairwise distance matrix / covariance
+                Eigen::MatrixXd Kpn, Knn, Knp;
+                buildEuclideanDistanceMatrix(new_P, new_P, Knn);
+                buildEuclideanDistanceMatrix(gp->P, new_P, Kpn);
+
+                // copy euclidean matrix
+                if(withNormals)
+                {
+                        // ToDO
+                        // gp->Kppdiff.resizeLike(gp->Kpp);
+                        // gp->Kppdiffdiff.resizeLike(Kpp);
+                }
+
+                for(int i = 0; i < p; ++i)
+                {
+                        for(int j = 0; j < n; ++j)
+                        {
+                                // do it in this order, so you can make the most of the same matrix
+                                if(withNormals)
+                                {
+                                        // ToDO
+                                        // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
+                                        // gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
+                                }
+                                Kpn(i,j) = kernel_->compute(Kpn(i,j));
+                        }
+                }
+                Knp = Kpn.transpose();
+
+                for(int i = 0; i < n; ++i)
+                {
+                        for(int j = 0; j < n; ++j)
+                        {
+                                // do it in this order, so you can make the most of the same matrix
+                                if(withNormals)
+                                {
+                                        // ToDO
+                                        // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
+                                        // gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
+                                }
+                                if (!(new_data->sigma2.empty()) && i==j)
+                                        Knn(i,j) = kernel_->compute(Knn(i,j)) + new_data->sigma2.at(i);
+                                else
+                                        Knn(i,j) = kernel_->compute(Knn(i,j));
+                        }
+                }
+
+                gp->Kpp.conservativeResize(gp->Kpp.rows() + n, gp->Kpp.cols() + n);
+                gp->Kpp.block(p, p, n, n) = Knn;
+                gp->Kpp.block(0, p, p, n) = Kpn;
+                gp->Kpp.block(p, 0, n, p) = Knp;
+
+                gp->Y.conservativeResize(p + n);
+                gp->Y.block(p, 0, n, 1) = new_Y;
+                gp->S2.conservativeResize(p + n);
+                gp->S2.block(p, 0, n, 1) = new_S2;
+                gp->P.conservativeResize(p + n, 3);
+                gp->P.block(p, 0, n, 3) = new_P;
+
+                // ToDO: find new larger pairwise distance
+                // gp->R = gp->Kpp.maxCoeff();
+
+                gp->cholesker.setZero();
+                gp->cholesker.compute(gp->Kpp);
+                gp->alpha = gp->cholesker.solve(gp->Y);
+
+                // normal and tangent computation
+                if(withNormals)
+                {       // ToDO
+                        /*for(int i = 0; i < Kpp.rows(); ++i)
+                        {
+                                for(int j = 0; j < Kpp.cols(); ++j)
+                                {
+                                        gp->N.row(i) += gp->alpha(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
+                                }
+                                gp->N.row(i).normalize();
+                                Eigen::Vector3d N = gp->N.row(i);
+                                // Eigen::Vector3d Tx, Ty;
+                                // computeTangentBasis(N, Tx, Ty);
+                                // gp->Tx.row(i) = Tx;
+                                // gp->Ty.row(i) = Ty;
+                        }*/
+                }
+                return;
         }
 
         /**
