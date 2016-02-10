@@ -67,9 +67,8 @@ struct Model
         Eigen::MatrixXd N; // (inward) normal at points [not computed by default]
         Eigen::MatrixXd Tx; // tangent basis 1 [not computed by default]
         Eigen::MatrixXd Ty; // tangent basis 2 [not computed by default]
-        Eigen::MatrixXd Kpp; // covariance with selected kernel, in case we need it
-        Eigen::MatrixXd InvKpp; // inverse of covariance with selected kernel, in case we needt
-        Eigen::VectorXd InvKppY; // weights, alpha, this is the only required thing to keep
+        Eigen::LDLT<Eigen::MatrixXd> cholesker; // the robust cholesky-based solver
+        Eigen::VectorXd alpha; // weights, alpha, this is the only required thing to keep
         Eigen::MatrixXd Kppdiff; // differential of covariance with selected kernel [not computed by default]
         Eigen::MatrixXd Kppdiffdiff; // twice differential of covariance with selected kernel [not computed by default]
         typedef std::shared_ptr<Model> Ptr;
@@ -116,47 +115,49 @@ public:
                         // gp->Ty.resize(gp->P.rows(), gp->P.cols());
                 }
 
-                // compute pairwise distance matrix
-                buildEuclideanDistanceMatrix(gp->P, gp->P, gp->Kpp);
+                // compute pairwise distance matrix / covariance
+                Eigen::MatrixXd Kpp;
+                buildEuclideanDistanceMatrix(gp->P, gp->P,Kpp);
 
                 // find larger pairwise distance and normalize pairwise distance matrix
-                gp->R = gp->Kpp.maxCoeff();
+                gp->R = Kpp.maxCoeff();
 
                 // copy euclidean matrix
                 if(withNormals)
                 {
-                        gp->Kppdiff.resizeLike(gp->Kpp);
-                        // gp->Kppdiffdiff.resizeLike(gp->Kpp);
+                        gp->Kppdiff.resizeLike(Kpp);
+                        // gp->Kppdiffdiff.resizeLike(Kpp);
                 }
 
-                for(int i = 0; i < gp->Kpp.rows(); ++i)
+                for(int i = 0; i < Kpp.rows(); ++i)
                 {
-                        for(int j = 0; j < gp->Kpp.cols(); ++j)
+                        for(int j = 0; j < Kpp.cols(); ++j)
                         {
                                 // do it in this order, so you can make the most of the same matrix
                                 if(withNormals)
                                 {
                                         // gp->Kppdiffdiff(i,j) = kernel_->computediffdiff(gp->Kpp(i,j));
-                                        gp->Kppdiff(i,j) = kernel_->computediff(gp->Kpp(i,j));
+                                        gp->Kppdiff(i,j) = kernel_->computediff(Kpp(i,j));
                                 }
                                 if (!(data->sigma2.empty()) && i==j)
-                                        gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j)) + data->sigma2.at(i);
+                                        Kpp(i,j) = kernel_->compute(Kpp(i,j)) + data->sigma2.at(i);
                                 else
-                                        gp->Kpp(i,j) = kernel_->compute(gp->Kpp(i,j));
+                                        Kpp(i,j) = kernel_->compute(Kpp(i,j));
                         }
                 }
 
-                gp->InvKpp = gp->Kpp.inverse();
-                gp->InvKppY = gp->InvKpp*gp->Y;
+                gp->cholesker.setZero();
+                gp->cholesker.compute(Kpp);
+                gp->alpha = gp->cholesker.solve(gp->Y);
 
                 // normal and tangent computation
                 if(withNormals)
                 {
-                        for(int i = 0; i < gp->Kpp.rows(); ++i)
+                        for(int i = 0; i < Kpp.rows(); ++i)
                         {
-                                for(int j = 0; j < gp->Kpp.cols(); ++j)
+                                for(int j = 0; j < Kpp.cols(); ++j)
                                 {
-                                        gp->N.row(i) += gp->InvKppY(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
+                                        gp->N.row(i) += gp->alpha(j)*gp->Kppdiff(i,j)*(gp->P.row(i) - gp->P.row(j));
                                 }
                                 gp->N.row(i).normalize();
                                 Eigen::Vector3d N = gp->N.row(i);
@@ -222,7 +223,7 @@ public:
                 Eigen::MatrixXd Kqp, Kpq;
                 Eigen::MatrixXd Kqq;
                 Eigen::VectorXd F, V_diagonal;
-                Eigen::MatrixXd V;
+                Eigen::MatrixXd V, Vt;
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
                 N.resizeLike(Q);
@@ -231,12 +232,12 @@ public:
                 {
                         for(int j = 0; j < Kqp.cols(); ++j)
                         {
-                                N.row(i) += gp->InvKppY(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
+                                N.row(i) += gp->alpha(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
                                 Kqp(i,j) = kernel_->compute(Kqp(i,j));
                         }
                         N.row(i).normalize();
                 }
-                F = Kqp*gp->InvKppY;
+                F = Kqp*gp->alpha;
 
                 // needed for the variance
                 Kpq = Kqp.transpose();
@@ -245,7 +246,9 @@ public:
                 for(int i = 0; i < Kqq.array().size(); ++i)
                         Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
-                V = Kqq - Kqp*gp->InvKpp*Kpq;
+                V = gp->cholesker.matrixL().solve(Kpq);
+                Vt = V.transpose();
+                V = Kqq - Vt*V;
                 V_diagonal = V.diagonal();
 
                 // conversions
@@ -276,14 +279,14 @@ public:
                 Eigen::MatrixXd Kqp, Kpq;
                 Eigen::MatrixXd Kqq;
                 Eigen::VectorXd F, V_diagonal;
-                Eigen::MatrixXd V;
+                Eigen::MatrixXd V, Vt;
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
 
                 for(int i = 0; i < Kqp.array().size(); ++i)
                         Kqp.array()(i) = kernel_->compute(Kqp.array()(i));
 
-                F = Kqp*gp->InvKppY;
+                F = Kqp*gp->alpha;
 
                 // needed for the variance
                 Kpq = Kqp.transpose();
@@ -292,7 +295,9 @@ public:
                 for(int i = 0; i < Kqq.array().size(); ++i)
                         Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
-                V = Kqq - Kqp*gp->InvKpp*Kpq;
+                V = gp->cholesker.matrixL().solve(Kpq);
+                Vt = V.transpose();
+                V = Kqq - Vt*V;
                 V_diagonal = V.diagonal();
 
                 // conversions
@@ -327,7 +332,7 @@ public:
                 for(int i = 0; i < Kqp.array().size(); ++i)
                         Kqp.array()(i) = kernel_->compute(Kqp.array()(i));
 
-                F = Kqp*gp->InvKppY;
+                F = Kqp*gp->alpha;
 
                 // conversions
                 convertToSTD(F, f);
