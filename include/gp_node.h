@@ -97,7 +97,8 @@ class GaussianProcessNode
 
         gp_regression::ThinPlateRegressor reg_;
         gp_regression::Model::Ptr obj_gp;
-        double R_; // current larger distance in object points
+        double R_; // current larger distance in object points (set to 2*out_sphere_rad)
+        const double out_sphere_rad;
         // gp_regression::Atlas::Ptr gp_atlas;
         //Atlas TODO temp until it is implemented in gp
         /* struct Chart
@@ -143,7 +144,7 @@ class GaussianProcessNode
         // TODO: Convert this callback if  needed to accept probe points and not
         // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
         // void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
-        void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
+        void fakeDeterministicSampling(const size_t total=1e4);
 
         /** \brief Compute a Gaussian Process from object and store it */
         bool computeGP();
