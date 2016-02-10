@@ -333,7 +333,7 @@ bool GaussianProcessNode::computeAtlas()
     int N = 20;
 
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    fakeDeterministicSampling(2e4);
+    fakeDeterministicSampling(1.3, 0.01);
     if (fake_sampling){
         int num_points = markers->markers[0].points.size();
 
@@ -456,7 +456,7 @@ void GaussianProcessNode::publishCloudModel () const
 }
 
 // for visualization purposes
-void GaussianProcessNode::fakeDeterministicSampling(const size_t total)
+void GaussianProcessNode::fakeDeterministicSampling(const double scale, const double pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
     if(!markers || !fake_sampling)
@@ -481,46 +481,20 @@ void GaussianProcessNode::fakeDeterministicSampling(const size_t total)
 
     double min_v (100.0);
     double max_v (0.0);
+    size_t count(0);
+    const auto total = std::lround( std::pow((2*scale+1)/pass, 3) );
     ROS_INFO("[GaussianProcessNode::%s]\tSampling %d grid points on GP ...",__func__, total);
-    double x,y,z;
-    for (size_t count = 0; count < total; ++count)
-    {
-        const double U = getRandIn(0,1, true);
-        const double xi = getRandIn(-1,1, true);
-        const double yi = getRandIn(-1,1, true);
-        const double zi = getRandIn(-1,1, true);
-        const double mod = std::sqrt(xi*xi + yi*yi + zi*zi);
-
-        x = out_sphere_rad * std::cbrt(U)/mod * xi;
-        y = out_sphere_rad * std::cbrt(U)/mod * yi;
-        z = out_sphere_rad * std::cbrt(U)/mod * zi;
-
-        gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
-        qq->coord_x.push_back(x);
-        qq->coord_y.push_back(y);
-        qq->coord_z.push_back(z);
-        std::vector<double> ff;
-        reg_.evaluate(obj_gp, qq, ff);
-        if (ff.at(0) <= 0.005 && ff.at(0) >= -0.005) {
-            for (size_t i=0; i<3e2; ++i)
+    for (double x = -scale; x<= scale; x += pass)
+        for (double y = -scale; y<= scale; y += pass)
+            for (double z = -scale; z<= scale; z += pass)
             {
-                const double U = getRandIn(0,1, true);
-                const double xi = getRandIn(-1,1, true);
-                const double yi = getRandIn(-1,1, true);
-                const double zi = getRandIn(-1,1, true);
-                const double mod = std::sqrt(xi*xi + yi*yi + zi*zi);
-
-                x += 0.1 * std::cbrt(U)/mod * xi;
-                y += 0.1 * std::cbrt(U)/mod * yi;
-                z += 0.1 * std::cbrt(U)/mod * zi;
-                qq->coord_x.clear();
-                qq->coord_y.clear();
-                qq->coord_z.clear();
+                gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
                 qq->coord_x.push_back(x);
                 qq->coord_y.push_back(y);
                 qq->coord_z.push_back(z);
+                std::vector<double> ff;
                 reg_.evaluate(obj_gp, qq, ff);
-                if (ff.at(0) <= 0.001 && ff.at(0) >= -0.001) {
+                if (ff.at(0) <= 0.01 && ff.at(0) >= -0.01) {
                     std::vector<double> vv;
                     reg_.evaluate(obj_gp, qq, ff,vv);
                     if (vv.at(0) <= min_v)
@@ -532,10 +506,9 @@ void GaussianProcessNode::fakeDeterministicSampling(const size_t total)
                     ss->coord_z.push_back(z);
                     ssvv.push_back(vv.at(0));
                 }
+                ++count;
+                std::cout<<" -> "<<count<<"/"<<total<<"\r";
             }
-        }
-        std::cout<<" -> "<<count<<"/"<<total<<"\r";
-    }
     std::cout<<std::endl;
 
     ROS_INFO("[GaussianProcessNode::%s]\tFound %d points approximately on GP surface, plotting them.",__func__,
@@ -560,8 +533,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const size_t total)
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\t Total time consumed: %d minutes.", __func__, elapsed );
-
+    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
 }
 
 void GaussianProcessNode::createAtlasMarkers()

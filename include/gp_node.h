@@ -144,7 +144,7 @@ class GaussianProcessNode
         // TODO: Convert this callback if  needed to accept probe points and not
         // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
         // void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
-        void fakeDeterministicSampling(const size_t total=1e4);
+        void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
 
         /** \brief Compute a Gaussian Process from object and store it */
         bool computeGP();
