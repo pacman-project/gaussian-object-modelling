@@ -18,24 +18,16 @@ namespace gp_regression
 
 /**
  * @brief computeTangentBasis
- * @param N
- * @param Tx
- * @param Ty
+ * @param[in] grad  The gradient (Unnormalized)
+ * @param[out] N The Normal (normalized)
+ * @param[out] Tx First tangent unit vector
+ * @param[out] Ty Second tangent unit vector
  */
 //Moved outside of class, this is more an utility than an active part of
 //regression. It is more convenient as a global function. - Tabjones
-void computeTangentBasis(const Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
+void computeTangentBasis(const Eigen::Vector3d &grad, Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
 {
-    /*
-     * Appears to be bad
-     *
-     * Eigen::Vector3d NN = N.normalized();
-     * Eigen::Matrix3d TProj = Eigen::Matrix3d::Identity() - NN*NN.transpose();
-     * Eigen::JacobiSVD<Eigen::Matrix3d> svd(TProj, Eigen::ComputeFullU | Eigen::ComputeFullV);
-     * Tx = svd.matrixU().col(0);
-     * Ty = svd.matrixU().col(1);
-     *
-     */
+    N = grad.normalized();
     Tx = Eigen::Vector3d::UnitX() - (N*(N.dot(Eigen::Vector3d::UnitX())));
     Tx.normalize();
     Ty = N.cross(Tx);
@@ -54,6 +46,14 @@ struct Data
         std::vector<double> sigma2;
         typedef std::shared_ptr<Data> Ptr;
         typedef std::shared_ptr<const Data> ConstPtr;
+        void clear()
+        {
+            coord_x.clear();
+            coord_y.clear();
+            coord_z.clear();
+            label.clear();
+            sigma2.clear();
+        }
 };
 
 /**
@@ -194,9 +194,9 @@ public:
 
                 for(int i = 0; i < N.rows(); ++i)
                 {
-                        Eigen::Vector3d tempTx, tempTy, tempN;
-                        tempN = N.row(i);
-                        computeTangentBasis(tempN, tempTx, tempTy);
+                        Eigen::Vector3d tempTx, tempTy, tempN, tempG;
+                        tempG = N.row(i);
+                        computeTangentBasis(tempG, tempN, tempTx, tempTy);
                         Tx.row(i) = tempTx;
                         Ty.row(i) = tempTy;
                 }
