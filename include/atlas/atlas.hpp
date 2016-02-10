@@ -77,6 +77,7 @@ namespace gp_atlas_rrt
             return Ty;
         }
 
+        Eigen::MatrixXd samples; //collection of uniform disc samples (nx3)
         private:
         std::size_t id;       // unique identifier
         Eigen::Vector3d C;     // origin point
@@ -113,6 +114,7 @@ class AtlasBase
     }
     /**
      * \brief get all node ids the given node is connected to
+     * TODO this should go to the planner
      */
     virtual std::vector<std::size_t> getConnections (const std::size_t &id) const
     {
@@ -150,6 +152,7 @@ class AtlasBase
 
     /**
      * \brief Connect two nodes
+     * TODO this should go to the planner
      */
     virtual void connect(const std::size_t, const std::size_t)=0;
 
@@ -161,6 +164,7 @@ class AtlasBase
     ///Node storage
     std::vector<Chart> nodes;
     ///Connection map
+    //TODO this should be moved to the planner
     std::unordered_map<std::size_t, std::vector<std::size_t>> branches;
 
     /**
@@ -237,15 +241,15 @@ class AtlasVariance : public AtlasBase
 
     AtlasVariance()=delete;
     AtlasVariance(const gp_regression::Model::Ptr &gp, const gp_regression::ThinPlateRegressor::Ptr &reg):
-        AtlasBase(gp,reg), var_factor(1.96), disc_samples(500)
+        AtlasBase(gp,reg), var_factor(1.96), disc_samples(200)
     {
     }
 
-    protected:
-    //radius is proportional to sqrt variance of its center times 95% confidence
-    double var_factor;
-    //how many disc samples to try
-    std::size_t disc_samples;
+    /// recieve a starting point
+    virtual void init(const Eigen::Vector3d &root)
+    {
+        //TODO
+    }
 
     virtual std::size_t createNode(const Eigen::Vector3d& center)
     {
@@ -279,6 +283,9 @@ class AtlasVariance : public AtlasBase
         const Eigen::Vector3d C = nodes.at(id).getCenter();
         const Eigen::Vector3d G = nodes.at(id).getGradient();
         const double R = nodes.at(id).getRadius();
+        //prepare the samples storage
+        nodes.at(id).samples.resize(disc_samples, 3);
+        std::vector<double> f,v;
         //transformation into the kinect frame from local
         Eigen::Matrix4d Tkl;
         Tkl <<  Tx(0), Ty(0), N(0), C(0),
@@ -287,6 +294,8 @@ class AtlasVariance : public AtlasBase
                 0,     0,     0,    1;
         //keep the max variance found
         double max_v(0.0);
+        //and which sample it was
+        std::size_t s_idx(0);
         //uniform disc sampling
         for (std::size_t i=0; i<disc_samples; ++i)
         {
@@ -304,11 +313,36 @@ class AtlasVariance : public AtlasBase
             query->coord_x.push_back(pK(0));
             query->coord_y.push_back(pK(1));
             query->coord_z.push_back(pK(2));
-
-            //todo evaluate ... to be continued
+            //store the sample for future use (even plotting)
+            nodes.at(id).samples(i,0) = pK(0);
+            nodes.at(id).samples(i,1) = pK(1);
+            nodes.at(id).samples(i,2) = pK(2);
+            //evaluate the sample
+            gp_reg->evaluate(gp_model, query, f, v);
+            if (v.at(0) > max_v){
+                max_v = v.at(0);
+                s_idx = i;
+            }
         }
-
+        //the winner is:
+        Eigen::Vector3d chosen = nodes.at(id).samples.row(s_idx);
+        Eigen::Vector3d nextState;
+        //project the chosen
+        project(chosen, nextState, G);
+        //and done
+        return nextState;
     }
+
+    virtual bool isSolution(const Chart&)
+    {
+        //TODO
+    }
+
+    protected:
+    //radius is proportional to sqrt variance of its center times 95% confidence
+    double var_factor;
+    //how many disc samples to try
+    std::size_t disc_samples;
 };
 }
 
