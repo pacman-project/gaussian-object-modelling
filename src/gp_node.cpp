@@ -333,7 +333,7 @@ bool GaussianProcessNode::computeAtlas()
     int N = 20;
 
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    fakeDeterministicSampling(1.3, 0.01);
+    fakeDeterministicSampling(1.3, 0.05);
     if (fake_sampling){
         int num_points = markers->markers[0].points.size();
 
@@ -561,8 +561,8 @@ void GaussianProcessNode::createAtlasMarkers()
             disc.type = visualization_msgs::Marker::CYLINDER;
             disc.action = visualization_msgs::Marker::ADD;
             //TODO these need to read the chart radius
-            disc.scale.x = 0.3; // atlas_.charts_.at(i).R;
-            disc.scale.y = 0.3; // atlas_.charts_.at(i).R;
+            disc.scale.x = atlas_.charts_.at(i).R;
+            disc.scale.y = atlas_.charts_.at(i).R;
             disc.scale.z = 0.01;
             disc.color.a = 0.9;
             disc.color.r = 0.545;
