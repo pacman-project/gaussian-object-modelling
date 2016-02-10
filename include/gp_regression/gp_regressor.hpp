@@ -246,9 +246,11 @@ public:
                 for(int i = 0; i < Kqq.array().size(); ++i)
                         Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
-                V = gp->cholesker.matrixL().solve(Kpq);
-                Vt = V.transpose();
-                V = Kqq - Vt*V;
+                // V = gp->cholesker.matrixL().solve(Kpq); // this is giving negative and large values
+                                                           // perhaps it is not the correct function
+                V = gp->cholesker.solve(Kpq);
+                // Vt = V.transpose();
+                V = Kqq - Kqp*V;
                 V_diagonal = V.diagonal();
 
                 // conversions
@@ -295,9 +297,11 @@ public:
                 for(int i = 0; i < Kqq.array().size(); ++i)
                         Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
-                V = gp->cholesker.matrixL().solve(Kpq);
-                Vt = V.transpose();
-                V = Kqq - Vt*V;
+                // V = gp->cholesker.matrixL().solve(Kpq); // this is giving negative and large values
+                                                           // perhaps it is not the correct function
+                V = gp->cholesker.solve(Kpq);
+                // Vt = V.transpose();
+                V = Kqq - Kqp*V;
                 V_diagonal = V.diagonal();
 
                 // conversions
