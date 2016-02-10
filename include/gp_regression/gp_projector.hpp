@@ -233,7 +233,8 @@ public:
                 chart->N = N.row(0).normalized();
                 chart->Tx = Tx.row(0);
                 chart->Ty = Ty.row(0);
-                chart->R = v.at(0);
+                // the size of the chart reflects the 95% confidence interval
+                chart->R = 1.96*std::sqrt(v.at(0));
                 return;
         }
 
