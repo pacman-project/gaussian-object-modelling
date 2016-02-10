@@ -10,7 +10,12 @@ namespace gp_regression
 
 class GaussianRegressor : public GPRegressor<gp_regression::Gaussian> {};
 class LaplaceRegressor : public GPRegressor<gp_regression::Laplace> {};
-class ThinPlateRegressor : public GPRegressor<gp_regression::ThinPlate> {};
+class ThinPlateRegressor : public GPRegressor<gp_regression::ThinPlate>
+{
+    public:
+    typedef std::shared_ptr<ThinPlateRegressor> Ptr;
+    typedef std::shared_ptr<const ThinPlateRegressor> ConstPtr;
+};
 
 }
 
