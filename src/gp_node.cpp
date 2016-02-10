@@ -460,6 +460,7 @@ void GaussianProcessNode::publishCloudModel () const
 // for visualization purposes
 void GaussianProcessNode::fakeDeterministicSampling(const double scale, const double pass)
 {
+    auto begin_time = std::chrono::high_resolution_clock::now();
     if(!markers || !fake_sampling)
         return;
 
@@ -529,6 +530,11 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
         samples.colors.push_back(cl);
     }
     markers->markers.push_back(samples);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
+    ROS_INFO("[GaussianProcessNode::%s]\t Total time consumed: %d minutes.", __func__, elapsed );
+
 }
 
 void GaussianProcessNode::createAtlasMarkers()
