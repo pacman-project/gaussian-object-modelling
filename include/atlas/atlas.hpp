@@ -21,8 +21,8 @@ namespace gp_atlas_rrt
 
         //only way to construct a Chart! (also prevents implicit conversions)
         explicit Chart(const Eigen::Vector3d &c, const std::size_t i, const Eigen::Vector3d &g
-                ,const double r):
-            id(i), C(c), G(g), R(r)
+                ,const double r, const double v):
+            id(i), C(c), G(g), R(r), V(v)
         {
             gp_regression::computeTangentBasis(G, N,Tx,Ty);
         }
@@ -77,7 +77,19 @@ namespace gp_atlas_rrt
             return Ty;
         }
 
+        inline double getVariance() const
+        {
+            return V;
+        }
+
+        inline void resetSamples()
+        {
+            samples.resize(0,0);
+        }
+
+        //these can be public, they dont affect the disc functionalites
         Eigen::MatrixXd samples; //collection of uniform disc samples (nx3)
+
         private:
         std::size_t id;       // unique identifier
         Eigen::Vector3d C;     // origin point
@@ -86,6 +98,7 @@ namespace gp_atlas_rrt
         Eigen::Vector3d Tx;    // tangent basis 1
         Eigen::Vector3d Ty;    // tangent basis 2
         double R;              // chart radius
+        double V;              // variance of chart (of its origin)
     };
 /**
  * \brief Base Atlas class
@@ -102,6 +115,14 @@ class AtlasBase
     ///Initial state initialization  is left to implement on  child classes with
     ///no strictly required signature
 
+    /**
+     * \brief
+     * count how many nodes the atlas currently have
+     */
+    virtual inline std::size_t countNodes() const
+    {
+        return nodes.size();
+    }
     /**
      * \brief get a copy of a node
      */
@@ -138,11 +159,11 @@ class AtlasBase
     /**
      * \brief Tell if passed node is global solution
      */
-    virtual bool isSolution(const Chart&)=0;
-    virtual inline bool isSolution(const std::size_t& id)
+    virtual inline bool isSolution(const Chart& c) const
     {
-        return isSolution(getNode(id));
+        return isSolution(c.getId());
     }
+    virtual inline bool isSolution(const std::size_t&) const =0;
 
     /**
      * \brief Contruct a Node from the given center and stores it
@@ -241,8 +262,9 @@ class AtlasVariance : public AtlasBase
 
     AtlasVariance()=delete;
     AtlasVariance(const gp_regression::Model::Ptr &gp, const gp_regression::ThinPlateRegressor::Ptr &reg):
-        AtlasBase(gp,reg), var_factor(1.96), disc_samples(200)
+        AtlasBase(gp,reg), var_factor(1.96), disc_samples_factor(2000)
     {
+        var_tol = 0.8; //TODO with proportional to samples max_var
     }
 
     /// recieve a starting point
@@ -265,7 +287,7 @@ class AtlasVariance : public AtlasBase
         Eigen::Vector3d g = gg.row(0);
         if (std::abs(f.at(0)) > 1e-2)
             std::cout<<"[Atlas::createNode] Chart center is not on GP surface!"<<std::endl;
-        Chart node (center, nodes.size(), g, std::sqrt(v.at(0))*var_factor);
+        Chart node (center, nodes.size(), g, std::sqrt(v.at(0))*var_factor, v.at(0));
         nodes.push_back(node);
         return node.getId();
     }
@@ -284,7 +306,8 @@ class AtlasVariance : public AtlasBase
         const Eigen::Vector3d G = nodes.at(id).getGradient();
         const double R = nodes.at(id).getRadius();
         //prepare the samples storage
-        nodes.at(id).samples.resize(disc_samples, 3);
+        const std::size_t tot_samples = std::round(disc_samples_factor * R);
+        nodes.at(id).samples.resize(tot_samples, 3);
         std::vector<double> f,v;
         //transformation into the kinect frame from local
         Eigen::Matrix4d Tkl;
@@ -296,10 +319,10 @@ class AtlasVariance : public AtlasBase
         double max_v(0.0);
         //and which sample it was
         std::size_t s_idx(0);
-        //uniform disc sampling
-        for (std::size_t i=0; i<disc_samples; ++i)
+        //uniform annulus sampling from R/5 to R
+        for (std::size_t i=0; i<tot_samples; ++i)
         {
-            const double r = getRandIn(0.0, R, true);
+            const double r = getRandIn(R/5, R, true);
             const double th = getRandIn(0.0, 2*M_PI);
             //point in local frame, uniformely sampled
             Eigen::Vector4d pL;
@@ -333,16 +356,19 @@ class AtlasVariance : public AtlasBase
         return nextState;
     }
 
-    virtual bool isSolution(const Chart&)
+    virtual inline bool isSolution(const std::size_t &id) const
     {
-        //TODO
+        return (getNode(id).getVariance() > var_tol);
     }
 
     protected:
     //radius is proportional to sqrt variance of its center times 95% confidence
     double var_factor;
-    //how many disc samples to try
-    std::size_t disc_samples;
+    //how many disc samples multiplier (total samples are proportional to radius)
+    //which in turn is proportional to variance
+    std::size_t disc_samples_factor;
+    //variance threshold for solution
+    double var_tol;
 };
 }
 
