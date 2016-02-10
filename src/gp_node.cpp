@@ -44,8 +44,8 @@ bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& 
         }
         int N = req.n_selections.data;
         gp_regression::GPProjector<gp_regression::ThinPlate> proj;
-        gp_regression::ThinPlate my_kernel(R_);
-        reg_.setCovFunction(my_kernel);
+        // gp_regression::ThinPlate my_kernel(R_);
+        // reg_.setCovFunction(my_kernel);
         for (int i=0; i < N; ++i)
         {
             int r_id;
@@ -55,7 +55,7 @@ bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& 
             Eigen::Vector3d c (markers->markers[0].points[r_id].x,
                                markers->markers[0].points[r_id].y,
                                markers->markers[0].points[r_id].z);
-            proj.generateChart(reg_, obj_gp, c, gp_chart);
+            proj.generateChart(*reg_, obj_gp, c, gp_chart);
             gp_chart->id = i;
             atlas_.addChart(gp_chart, i);
         }
@@ -305,9 +305,10 @@ bool GaussianProcessNode::computeGP()
     R_ = out_sphere_rad * 2 ;
     obj_gp = std::make_shared<gp_regression::Model>();
     gp_regression::ThinPlate my_kernel(R_);
-    reg_.setCovFunction(my_kernel);
+    reg_ = std::make_shared<gp_regression::ThinPlateRegressor>();
+    reg_->setCovFunction(my_kernel);
     const bool withNormals = false;
-    reg_.create<withNormals>(cloud_gp, obj_gp);
+    reg_->create<withNormals>(cloud_gp, obj_gp);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created using %ld training points. Total time consumed: %ld nanoseconds.", __func__, cloud_gp->label.size(), elapsed );
@@ -338,8 +339,8 @@ bool GaussianProcessNode::computeAtlas()
         int num_points = markers->markers[0].points.size();
 
         // ToCheck: I think this is only needed once, at computeGP() for instance
-        gp_regression::ThinPlate my_kernel(R_);
-        reg_.setCovFunction(my_kernel);
+        // gp_regression::ThinPlate my_kernel(R_);
+        // reg_->setCovFunction(my_kernel);
 
         gp_regression::GPProjector<gp_regression::ThinPlate> proj;
         for (int i=0; i < N; ++i)
@@ -352,14 +353,14 @@ bool GaussianProcessNode::computeAtlas()
                     markers->markers[0].points[r_id].y,
                     markers->markers[0].points[r_id].z);
             // the size of the chart is equal to the variance at the center
-            proj.generateChart(reg_, obj_gp, c, gp_chart);
+            proj.generateChart(*reg_, obj_gp, c, gp_chart);
             gp_chart->id = i;
             atlas_.addChart(gp_chart, i);
         }
     }
     else{
-        gp_regression::ThinPlate my_kernel(R_);
-        reg_.setCovFunction(my_kernel);
+        // gp_regression::ThinPlate my_kernel(R_);
+        // reg_->setCovFunction(my_kernel);
 
         gp_regression::GPProjector<gp_regression::ThinPlate> proj;
         for (int i=0; i < N; ++i)
@@ -372,7 +373,7 @@ bool GaussianProcessNode::computeAtlas()
                     object_ptr->points[r_id].y,
                     object_ptr->points[r_id].z);
             // the size of the chart is equal to the variance at the center
-            proj.generateChart(reg_, obj_gp, c, gp_chart);
+            proj.generateChart(*reg_, obj_gp, c, gp_chart);
             gp_chart->id = i;
             atlas_.addChart(gp_chart, i);
         }
@@ -476,8 +477,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
 
     gp_regression::Data::Ptr ss = std::make_shared<gp_regression::Data>();
     std::vector<double> ssvv;
-    gp_regression::ThinPlate my_kernel(R_);
-    reg_.setCovFunction(my_kernel);
+    // gp_regression::ThinPlate my_kernel(R_);
+    // reg_->setCovFunction(my_kernel);
 
     double min_v (100.0);
     double max_v (0.0);
@@ -493,10 +494,10 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
                 qq->coord_y.push_back(y);
                 qq->coord_z.push_back(z);
                 std::vector<double> ff;
-                reg_.evaluate(obj_gp, qq, ff);
+                reg_->evaluate(obj_gp, qq, ff);
                 if (ff.at(0) <= 0.01 && ff.at(0) >= -0.01) {
                     std::vector<double> vv;
-                    reg_.evaluate(obj_gp, qq, ff,vv);
+                    reg_->evaluate(obj_gp, qq, ff,vv);
                     if (vv.at(0) <= min_v)
                         min_v = vv.at(0);
                     if (vv.at(0) >= max_v)

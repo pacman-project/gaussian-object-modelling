@@ -116,14 +116,14 @@ public:
          */
         bool project(Model::ConstPtr gp, GPRegressor<CovType> &regressor, Chart::ConstPtr chart, const Eigen::Vector3d &in,
                     Eigen::Vector3d &out, double step_size = 1.0,
-                    double eps_f_eval = 1e-10, int max_iter = 5000, double eps_x = 1e-15)
+                    double eps_f_eval = 1e-2, int max_iter = 5000, double eps_x = 1e-15)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
                 if (!chart)
                         throw GPRegressionException("Empty Chart pointer");
                 Eigen::Vector3d current = in;
-                std::vector<double> current_f, current_v;
+                std::vector<double> current_f;
                 Data::Ptr currentP = std::make_shared<Data>();
                 int iter = 0;
                 int impr_counter = 0;
@@ -134,7 +134,6 @@ public:
                         currentP->coord_y.clear();
                         currentP->coord_z.clear();
                         current_f.clear();
-                        current_v.clear();
 
                         // and fill with current values
                         currentP->coord_x.push_back( current(0) );
@@ -142,7 +141,7 @@ public:
                         currentP->coord_z.push_back( current(2) );
 
                         // evaluate the current result
-                        regressor.evaluate(gp, currentP, current_f, current_v);
+                        regressor.evaluate(gp, currentP, current_f);
 
                         // print stats at current
                         // std::cout << "iter: " << iter << std::endl;

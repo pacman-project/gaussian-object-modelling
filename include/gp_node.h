@@ -95,7 +95,7 @@ class GaussianProcessNode
         // ThinPlateRegressor::Ptr gp;
         // SampleSet::Ptr data;
 
-        gp_regression::ThinPlateRegressor reg_;
+        gp_regression::ThinPlateRegressor::Ptr reg_;
         gp_regression::Model::Ptr obj_gp;
         double R_; // current larger distance in object points (set to 2*out_sphere_rad)
         const double out_sphere_rad;
