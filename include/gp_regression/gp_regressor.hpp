@@ -242,13 +242,8 @@ public:
                 Kpq = Kqp.transpose();
                 buildEuclideanDistanceMatrix(Q, Q, Kqq);
 
-                for(int i = 0; i < Kqq.rows(); ++i)
-                {
-                        for(int j = 0; j < Kqq.cols(); ++j)
-                        {
-                                Kqq(i,j) = kernel_->compute(Kqq(i,j));
-                        }
-                }
+                for(int i = 0; i < Kqq.array().size(); ++i)
+                        Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
                 V = Kqq - Kqp*gp->InvKpp*Kpq;
                 V_diagonal = V.diagonal();
@@ -285,26 +280,17 @@ public:
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
 
-                for(int i = 0; i < Kqp.rows(); ++i)
-                {
-                        for(int j = 0; j < Kqp.cols(); ++j)
-                        {
-                                Kqp(i,j) = kernel_->compute(Kqp(i,j));
-                        }
-                }
+                for(int i = 0; i < Kqp.array().size(); ++i)
+                        Kqp.array()(i) = kernel_->compute(Kqp.array()(i));
+
                 F = Kqp*gp->InvKppY;
 
                 // needed for the variance
                 Kpq = Kqp.transpose();
                 buildEuclideanDistanceMatrix(Q, Q, Kqq);
 
-                for(int i = 0; i < Kqq.rows(); ++i)
-                {
-                        for(int j = 0; j < Kqq.cols(); ++j)
-                        {
-                                Kqq(i,j) = kernel_->compute(Kqq(i,j));
-                        }
-                }
+                for(int i = 0; i < Kqq.array().size(); ++i)
+                        Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
                 V = Kqq - Kqp*gp->InvKpp*Kpq;
                 V_diagonal = V.diagonal();
@@ -338,13 +324,9 @@ public:
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
 
-                for(int i = 0; i < Kqp.rows(); ++i)
-                {
-                        for(int j = 0; j < Kqp.cols(); ++j)
-                        {
-                                Kqp(i,j) = kernel_->compute(Kqp(i,j));
-                        }
-                }
+                for(int i = 0; i < Kqp.array().size(); ++i)
+                        Kqp.array()(i) = kernel_->compute(Kqp.array()(i));
+
                 F = Kqp*gp->InvKppY;
 
                 // conversions

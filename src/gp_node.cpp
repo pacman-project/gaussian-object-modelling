@@ -210,6 +210,7 @@ bool GaussianProcessNode::computeGP()
 
     /*****  Prepare the training data  *********************************************/
     gp_regression::Data::Ptr cloud_gp = std::make_shared<gp_regression::Data>();
+    double sigma2 = 1e-1;
 
     //      Surface Points
     // add object points with label 0
@@ -218,7 +219,7 @@ bool GaussianProcessNode::computeGP()
         cloud_gp->coord_y.push_back(pt.y);
         cloud_gp->coord_z.push_back(pt.z);
         cloud_gp->label.push_back(0);
-        cloud_gp->sigma2.push_back(1e-4);
+        cloud_gp->sigma2.push_back(sigma2);
     }
     // add object points to rviz in blue
     *model_ptr += *object_ptr;
@@ -230,7 +231,7 @@ bool GaussianProcessNode::computeGP()
     cloud_gp->coord_y.push_back(0);
     cloud_gp->coord_z.push_back(0);
     cloud_gp->label.push_back(-1.0);
-    cloud_gp->sigma2.push_back(1e-4);
+    cloud_gp->sigma2.push_back(sigma2);
     // add internal point to rviz in cyan
     pcl::PointXYZRGB cen;
     cen.x = 0;
@@ -260,7 +261,7 @@ bool GaussianProcessNode::computeGP()
             cloud_gp->coord_y.push_back(y);
             cloud_gp->coord_z.push_back(z);
             cloud_gp->label.push_back(1.0);
-            cloud_gp->sigma2.push_back(1e-4);
+            cloud_gp->sigma2.push_back(sigma2);
 
             // add sphere points to rviz in purple
             pcl::PointXYZRGB sp;
