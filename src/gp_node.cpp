@@ -10,7 +10,8 @@ using namespace gp_regression;
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()),
-    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), isAtlas(false), cb_rnd_choose_counter(0)
+    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), isAtlas(false), cb_rnd_choose_counter(0),
+    out_sphere_rad(1.8)
 {
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
     srv_rnd_tests_ = nh.advertiseService("other_rnd_samples", &GaussianProcessNode::cb_rnd_choose, this);
@@ -243,20 +244,17 @@ bool GaussianProcessNode::computeGP()
     // add points in a sphere around centroid with label 1
     // sphere bounds computation
     const int ang_div = 8; //divide 360° in 8 pieces, i.e. steps of 45°
-    const int lin_div = 6; //divide diameter into 6 pieces
+    const int lin_div = 4; //divide diameter into 4 pieces
     // This makes 8*6 = 48 points.
     const double ang_step = M_PI * 2 / ang_div; //steps of 45°
-    double radius = 2.0;
-    const double lin_step = 2 * radius / lin_div;
+    const double lin_step = 2 * out_sphere_rad / lin_div;
     // 8 steps for diameter times 6 for angle, make  points on the sphere surface
-    int j(0);
-    for (double lin=-radius+lin_step/2; lin< radius; lin+=lin_step)
+    for (double lin=-out_sphere_rad+lin_step/2; lin< out_sphere_rad; lin+=lin_step)
     {
-        for (double ang=0; ang < 2*M_PI; ang+=ang_step, ++j)
+        for (double ang=0; ang < 2*M_PI; ang+=ang_step)
         {
-            // add the centroid everytime as an offset
-            double x = sqrt(radius*radius - lin*lin) * cos(ang);
-            double y = sqrt(radius*radius - lin*lin) * sin(ang);
+            double x = sqrt(std::pow(out_sphere_rad, 2) - lin*lin) * cos(ang);
+            double y = sqrt(std::pow(out_sphere_rad, 2) - lin*lin) * sin(ang);
             double z = lin;
 
             cloud_gp->coord_x.push_back(x);
@@ -304,7 +302,7 @@ bool GaussianProcessNode::computeGP()
         return false;
     }
 
-    R_ = 4.1;
+    R_ = out_sphere_rad * 2 ;
     obj_gp = std::make_shared<gp_regression::Model>();
     gp_regression::ThinPlate my_kernel(R_);
     reg_.setCovFunction(my_kernel);
@@ -335,7 +333,7 @@ bool GaussianProcessNode::computeAtlas()
     int N = 20;
 
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    fakeDeterministicSampling(1.5, 0.05);
+    fakeDeterministicSampling(2e4);
     if (fake_sampling){
         int num_points = markers->markers[0].points.size();
 
@@ -458,7 +456,7 @@ void GaussianProcessNode::publishCloudModel () const
 }
 
 // for visualization purposes
-void GaussianProcessNode::fakeDeterministicSampling(const double scale, const double pass)
+void GaussianProcessNode::fakeDeterministicSampling(const size_t total)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
     if(!markers || !fake_sampling)
@@ -483,20 +481,48 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
 
     double min_v (100.0);
     double max_v (0.0);
-    const auto total = std::lround( std::pow((2*scale+1)/pass, 3) );
-    size_t count(0);
-    ROS_INFO("[GaussianProcessNode::%s]\tSampling %ld grid points on GP ...",__func__, total);
-    for (double x = -scale; x<= scale; x += pass)
-        for (double y = -scale; y<= scale; y += pass)
-            for (double z = -scale; z<= scale; z += pass)
+    ROS_INFO("[GaussianProcessNode::%s]\tSampling %d grid points on GP ...",__func__, total);
+    double x,y,z;
+    for (size_t count = 0; count < total; ++count)
+    {
+        const double U = getRandIn(0,1, true);
+        const double xi = getRandIn(-1,1, true);
+        const double yi = getRandIn(-1,1, true);
+        const double zi = getRandIn(-1,1, true);
+        const double mod = std::sqrt(xi*xi + yi*yi + zi*zi);
+
+        x = out_sphere_rad * std::cbrt(U)/mod * xi;
+        y = out_sphere_rad * std::cbrt(U)/mod * yi;
+        z = out_sphere_rad * std::cbrt(U)/mod * zi;
+
+        gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+        qq->coord_x.push_back(x);
+        qq->coord_y.push_back(y);
+        qq->coord_z.push_back(z);
+        std::vector<double> ff;
+        reg_.evaluate(obj_gp, qq, ff);
+        if (ff.at(0) <= 0.005 && ff.at(0) >= -0.005) {
+            for (size_t i=0; i<3e2; ++i)
             {
-                gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+                const double U = getRandIn(0,1, true);
+                const double xi = getRandIn(-1,1, true);
+                const double yi = getRandIn(-1,1, true);
+                const double zi = getRandIn(-1,1, true);
+                const double mod = std::sqrt(xi*xi + yi*yi + zi*zi);
+
+                x += 0.1 * std::cbrt(U)/mod * xi;
+                y += 0.1 * std::cbrt(U)/mod * yi;
+                z += 0.1 * std::cbrt(U)/mod * zi;
+                qq->coord_x.clear();
+                qq->coord_y.clear();
+                qq->coord_z.clear();
                 qq->coord_x.push_back(x);
                 qq->coord_y.push_back(y);
                 qq->coord_z.push_back(z);
-                std::vector<double> ff,vv;
-                reg_.evaluate(obj_gp, qq, ff, vv);
-                if (ff.at(0) <= 0.01 && ff.at(0) >= -0.01) {
+                reg_.evaluate(obj_gp, qq, ff);
+                if (ff.at(0) <= 0.001 && ff.at(0) >= -0.001) {
+                    std::vector<double> vv;
+                    reg_.evaluate(obj_gp, qq, ff,vv);
                     if (vv.at(0) <= min_v)
                         min_v = vv.at(0);
                     if (vv.at(0) >= max_v)
@@ -506,15 +532,16 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
                     ss->coord_z.push_back(z);
                     ssvv.push_back(vv.at(0));
                 }
-                ++count;
-                std::cout<<" -> "<<count<<"/"<<total<<"\r";
             }
+        }
+        std::cout<<" -> "<<count<<"/"<<total<<"\r";
+    }
     std::cout<<std::endl;
 
-    ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface, plotting them.",__func__,
+    ROS_INFO("[GaussianProcessNode::%s]\tFound %d points approximately on GP surface, plotting them.",__func__,
             ssvv.size());
     const double mid_v = ( min_v + max_v ) * 0.5;
-    std::cout<<"min "<<min_v<<" mid "<<mid_v<<" max "<<max_v<<std::endl;
+    std::cout<<"min "<<min_v<<" mid "<<mid_v<<" max "<<max_v<<std::endl; //tmp debug
     for (size_t i=0; i< ssvv.size(); ++i)
     {
         geometry_msgs::Point pt;
