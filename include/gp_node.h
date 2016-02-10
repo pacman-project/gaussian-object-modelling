@@ -90,7 +90,7 @@ class GaussianProcessNode
         ros::ServiceServer srv_rnd_tests_;
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_model,  pub_markers; //, pub_point_marker, pub_direction_marker;
-        ros::Subscriber sub_points;
+        ros::Subscriber sub_update_;
         //GP regressor and dataset
         // ThinPlateRegressor::Ptr gp;
         // SampleSet::Ptr data;
@@ -143,7 +143,10 @@ class GaussianProcessNode
         //callback for sub point subscriber
         // TODO: Convert this callback if  needed to accept probe points and not
         // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
-        // void cb_point(const geometry_msgs::PointStamped::ConstPtr &msg);
+        // I don't think it is bad to have geometry_msgs::PointStamped, we'll see
+        // later how we deal with the information streaming, or may to pass back from the exploration
+        // a vector of geometry_msgs::PointStamped that can be a trajectory or one single poke
+        void cb_update(const geometry_msgs::PointStamped::ConstPtr &msg);
         void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
 
         /** \brief Compute a Gaussian Process from object and store it */

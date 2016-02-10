@@ -17,7 +17,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     srv_rnd_tests_ = nh.advertiseService("other_rnd_samples", &GaussianProcessNode::cb_rnd_choose, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
-    // sub_points = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_point, this);
+    sub_update_ = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_update, this);
     // pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 0, true);
     // pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
     // pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
@@ -170,25 +170,36 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 // TODO: Convert this callback, if  needed, to accept probe points and not
 // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
 // Callback for rviz clicked point to simulate probe
-/* void GaussianProcessNode::cb_point(const geometry_msgs::PointStamped::ConstPtr &msg)
+// The only different is the topic name, that can be easily changed with remapping
+// Though I think to be general perhaps we need to create our msg of an array of
+// PointStamped, that is, a point trajectory
+void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr &msg)
 {
     pcl::PointXYZRGB pt;
-    //get the clicked point
     pt.x = msg->point.x;
     pt.y = msg->point.y;
     pt.z = msg->point.z;
-    //color it blue
     colorIt(0,0,255, pt);
     model_ptr->push_back(pt);
     object_ptr->push_back(pt);
-    Vec3 p(pt.x, pt.y, pt.z);
-    //Predispone the sequence to host multiple points, not just one, for the future.
-    Vec3Seq points;
-    points.push_back(p);
-    //update the model
-    this->update(points);
+
+    gp_regression::Data::Ptr fresh_data = std::make_shared<gp_regression::Data>();
+    fresh_data->coord_x.push_back((double)msg->point.x);
+    fresh_data->coord_y.push_back((double)msg->point.y);
+    fresh_data->coord_z.push_back((double)msg->point.z);
+    fresh_data->label.push_back(0.0);
+    // this is a more precise measurement than points from the camera
+    fresh_data->sigma2.push_back(5e-2);
+
+    //update the model, do not compute normals in the model points
+    auto begin_time = std::chrono::high_resolution_clock::now();
+    reg_.update<false>(fresh_data, obj_gp);
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
+    ROS_INFO("[GaussianProcessNode::%s]\t Model updated in: %ld nanoseconds.", __func__, elapsed );
+
+    computeAtlas();
 }
-*/
 
 bool GaussianProcessNode::computeGP()
 {
@@ -430,20 +441,6 @@ bool GaussianProcessNode::computeAtlas()
     return true;
 }
 
-//update gaussian model with new points from probe
-/*
-void GaussianProcessNode::update(Vec3Seq &points)
-{
-    Vec t;
-    t.resize(points.size());
-    for (auto &x : t)
-        x=0;
-    gp->add_patterns(points,t);
-    //TODO temp we dont have an updated atlas, just recreate it from scratch
-    computeAtlas();
-}
-*/
-
 // Publish cloud method
 void GaussianProcessNode::publishCloudModel () const
 {
@@ -462,6 +459,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     if(!markers || !fake_sampling)
         return;
 
+    markers->markers.clear();
     visualization_msgs::Marker samples;
     samples.header.frame_id = object_ptr->header.frame_id;
     samples.header.stamp = ros::Time::now();
@@ -483,7 +481,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     double max_v (0.0);
     size_t count(0);
     const auto total = std::lround( std::pow((2*scale+1)/pass, 3) );
-    ROS_INFO("[GaussianProcessNode::%s]\tSampling %d grid points on GP ...",__func__, total);
+    ROS_INFO("[GaussianProcessNode::%s]\tSampling %ld grid points on GP ...",__func__, total);
     for (double x = -scale; x<= scale; x += pass)
         for (double y = -scale; y<= scale; y += pass)
             for (double z = -scale; z<= scale; z += pass)
@@ -511,7 +509,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
             }
     std::cout<<std::endl;
 
-    ROS_INFO("[GaussianProcessNode::%s]\tFound %d points approximately on GP surface, plotting them.",__func__,
+    ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface, plotting them.",__func__,
             ssvv.size());
     const double mid_v = ( min_v + max_v ) * 0.5;
     std::cout<<"min "<<min_v<<" mid "<<mid_v<<" max "<<max_v<<std::endl; //tmp debug
