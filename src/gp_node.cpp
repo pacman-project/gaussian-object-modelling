@@ -9,7 +9,7 @@ using namespace gp_regression;
 /* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
-    object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()),
+    object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), fake_sampling(true), isAtlas(false), cb_rnd_choose_counter(0),
     out_sphere_rad(1.8)
 {
@@ -65,6 +65,39 @@ bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& 
         // this value is added to the ids of the marker so we won't delete the previous ones
         cb_rnd_choose_counter++;
         return true;
+}
+
+// simple preparation of data before computing the gp
+void GaussianProcessNode::deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out)
+{
+    // demean and normalize points on cloud(s)...
+
+    // first demean
+    Eigen::Vector4f centroid;
+    if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*data_ptr, centroid) == 0){
+        ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
+        return;
+    }
+    data_ptr_->clear();
+    PtC::Ptr tmp (new PtC);
+    pcl::demeanPointCloud(*data_ptr, centroid, *tmp);
+
+    // then normalize points to be in box = [-1, 1] x [-1, 1] x [-1, 1]
+    double max_norm (0.0);
+    for (const auto& pt: tmp->points)
+    {
+        double norm = std::sqrt( pt.x * pt.x + pt.y * pt.y + pt.z* pt.z);
+        if (norm >= max_norm)
+            max_norm = norm;
+    }
+    Eigen::Matrix4f sc;
+    sc    << 1/max_norm, 0, 0, 0,
+             0, 1/max_norm, 0, 0,
+             0, 0, 1/max_norm, 0,
+             0, 0, 0,          1;
+    // note that this writes to class member
+    pcl::transformPointCloud(*tmp, *out, sc);
+    return;
 }
 
 //callback to start process service, executes when service is called
@@ -135,32 +168,9 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             hand_ptr->header.frame_id="/camera_rgb_optical_frame";
             model_ptr->header.frame_id="/camera_rgb_optical_frame";
         }
-        //normalize points on cloud(s)...
-        //
-        //first get centroid
-        if(pcl::compute3DCentroid<pcl::PointXYZRGB>(*object_ptr, object_centroid) == 0){
-            ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
-            return false;
-        }
-        PtC::Ptr tmp (new PtC);
-        //demean the point cloud
-        pcl::demeanPointCloud(*object_ptr, object_centroid, *tmp);
-        //normalize points in -1, 1
-        double max_norm (0.0);
-        for (const auto& pt: tmp->points)
-        {
-            double norm = std::sqrt( pt.x * pt.x + pt.y * pt.y + pt.z* pt.z);
-            if (norm >= max_norm)
-                max_norm = norm;
-        }
-        //Scale the cloud to be contained in -1,1
-        Eigen::Matrix4f sc;
-        sc    << 1/max_norm, 0, 0, 0,
-                 0, 1/max_norm, 0, 0,
-                 0, 0, 1/max_norm, 0,
-                 0, 0, 0,          1;
-        pcl::transformPointCloud(*tmp, *object_ptr, sc);
     }
+
+    deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (computeGP())
         if (computeAtlas())
             return true;
@@ -179,10 +189,18 @@ void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr 
     pt.x = msg->point.x;
     pt.y = msg->point.y;
     pt.z = msg->point.z;
-    colorIt(0,0,255, pt);
+    // new data in cyan
+    colorIt(0,255,255, pt);
     model_ptr->push_back(pt);
     object_ptr->push_back(pt);
 
+    /* UPDATE METHOD IS NOT POSSIBLE
+     * CENTROID NEEDS TO BE RECOMPUTED EVERY TIME
+     * NEW DATA ARRIVES, LEAVING THIS PIECE
+     * OF CODE TO HAVE THE UPDATE ROUTINE SOMEWHERE
+     *
+     * END OF STORY
+     *
     gp_regression::Data::Ptr fresh_data = std::make_shared<gp_regression::Data>();
     fresh_data->coord_x.push_back((double)msg->point.x);
     fresh_data->coord_y.push_back((double)msg->point.y);
@@ -196,22 +214,25 @@ void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr 
     reg_->update<false>(fresh_data, obj_gp);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\t Model updated in: %ld nanoseconds.", __func__, elapsed );
+    ROS_INFO("[GaussianProcessNode::%s]\t Model updated in: %ld nanoseconds.", __func__, elapsed );*/
 
+    deMeanAndNormalizeData( object_ptr, data_ptr_ );
+    computeGP();
     computeAtlas();
+    return;
 }
 
 bool GaussianProcessNode::computeGP()
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
-    if(!object_ptr){
+    if(!data_ptr_){
         //This  should never  happen  if compute  is  called from  start_process
         //service callback, however it does not hurt to add this extra check!
         ROS_ERROR("[GaussianProcessNode::%s]\tObject cloud pointer is empty. Aborting...",__func__);
         start = false;
         return false;
     }
-    if (object_ptr->empty()){
+    if (data_ptr_->empty()){
         ROS_ERROR("[GaussianProcessNode::%s]\tObject point cloud is empty. Aborting...",__func__);
         start = false;
         return false;
@@ -225,7 +246,7 @@ bool GaussianProcessNode::computeGP()
 
     //      Surface Points
     // add object points with label 0
-    for(const auto& pt : object_ptr->points) {
+    for(const auto& pt : data_ptr_->points) {
         cloud_gp->coord_x.push_back(pt.x);
         cloud_gp->coord_y.push_back(pt.y);
         cloud_gp->coord_z.push_back(pt.z);
@@ -233,7 +254,7 @@ bool GaussianProcessNode::computeGP()
         cloud_gp->sigma2.push_back(sigma2);
     }
     // add object points to rviz in blue
-    *model_ptr += *object_ptr;
+    *model_ptr += *data_ptr_;
     colorThem(0,0,255, model_ptr);
 
     //      Internal Points
@@ -313,13 +334,12 @@ bool GaussianProcessNode::computeGP()
         return false;
     }
 
-    R_ = out_sphere_rad * 2 ;
     obj_gp = std::make_shared<gp_regression::Model>();
-    gp_regression::ThinPlate my_kernel(R_);
+    gp_regression::ThinPlate my_kernel(out_sphere_rad * 2);
     reg_ = std::make_shared<gp_regression::ThinPlateRegressor>();
     reg_->setCovFunction(my_kernel);
-    const bool withNormals = false;
-    reg_->create<withNormals>(cloud_gp, obj_gp);
+    const bool withoutNormals = false;
+    reg_->create<withoutNormals>(cloud_gp, obj_gp);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created using %ld training points. Total time consumed: %ld nanoseconds.", __func__, cloud_gp->label.size(), elapsed );
@@ -332,7 +352,7 @@ bool GaussianProcessNode::computeGP()
 bool GaussianProcessNode::computeAtlas()
 {
     //make sure we have a model and an object, we should have if start was called
-    if (!object_ptr || object_ptr->empty()){
+    if (!object_ptr || object_ptr->empty() || !data_ptr_ || data_ptr_->empty()){
         ROS_ERROR("[GaussianProcessNode::%s]\tNo object initialized, call start service.",__func__);
         return false;
     }
@@ -378,11 +398,11 @@ bool GaussianProcessNode::computeAtlas()
         {
             int r_id;
             //get a random index
-            r_id = getRandIn(0, object_ptr->points.size()-1 );
+            r_id = getRandIn(0, data_ptr_->points.size()-1 );
             gp_regression::Chart::Ptr gp_chart;
-            Eigen::Vector3d c (object_ptr->points[r_id].x,
-                    object_ptr->points[r_id].y,
-                    object_ptr->points[r_id].z);
+            Eigen::Vector3d c (data_ptr_->points[r_id].x,
+                    data_ptr_->points[r_id].y,
+                    data_ptr_->points[r_id].z);
             // the size of the chart is equal to the variance at the center
             proj.generateChart(*reg_, obj_gp, c, gp_chart);
             gp_chart->id = i;
@@ -394,19 +414,19 @@ bool GaussianProcessNode::computeAtlas()
         //pcl
         //compute a normal around the point neighborhood (2cm)
         // pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
-        // std::vector<int> idx(object_ptr->points.size());
-        // std::vector<float> dist(object_ptr->points.size());
-        // kdtree.setInputCloud(object_ptr);
+        // std::vector<int> idx(data_ptr_->points.size());
+        // std::vector<float> dist(data_ptr_->points.size());
+        // kdtree.setInputCloud(data_ptr_);
         // pcl::PointXYZRGB pt;
         // pt.x = points[i].x;
         // pt.y = points[i].y;
         // pt.z = points[i].z;
         // kdtree.radiusSearch(pt, 0.05, idx, dist);
         // pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne_point;
-        // ne_point.setInputCloud(object_ptr);
+        // ne_point.setInputCloud(data_ptr_);
         // ne_point.useSensorOriginAsViewPoint();
         // float curv,nx,ny,nz;
-        // ne_point.computePointNormal (*object_ptr, idx, nx,ny,nz, curv);
+        // ne_point.computePointNormal (*data_ptr_, idx, nx,ny,nz, curv);
         // Eigen::Vector3d pclN;
         // pclN[0] = nx;
         // pclN[1] = ny;
@@ -448,7 +468,7 @@ void GaussianProcessNode::publishCloudModel () const
     // These checks are  to make sure we are not publishing empty cloud,
     // we have a  gaussian process computed and there's actually someone
     // who listens to us
-    if (start && object_ptr)
+    if (start && data_ptr_)
         if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
             pub_model.publish(*model_ptr);
 }
