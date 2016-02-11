@@ -32,6 +32,7 @@ add_service_files(
     StartProcess.srv
     GetToExploreTrajectory.srv
     SelectNSamples.srv
+    StopExploration.srv
     )
 
 add_message_files(

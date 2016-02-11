@@ -16,18 +16,24 @@ class AtlasVariance : public AtlasBase
     AtlasVariance(const gp_regression::Model::Ptr &gp, const gp_regression::ThinPlateRegressor::Ptr &reg):
         AtlasBase(gp,reg), var_factor(1.96), disc_samples_factor(2000)
     {
-        var_tol = 0.8; //TODO with proportional to samples max_var
+        var_tol = 0.5; //this should be give by user
+                       //whoever uses this class will take care of it, by calling
+                       //setVarianceTolGoal()
+    }
+
+    ///Set the variance tolerance to surpass, for a node to be considered solution
+    virtual inline void setVarianceTolGoal(const double vt)
+    {
+        var_tol = vt;
     }
 
     ///reset Atlas with new parameters and then recieve a new starting point (root)
-    virtual void init(const Eigen::Vector3d &root, const double var_tolerance,
-            const gp_regression::Model::Ptr &gpm, const gp_regression::ThinPlateRegressor::Ptr &gpr)
+    virtual void init(const double var_tolerance, const gp_regression::Model::Ptr &gpm, const gp_regression::ThinPlateRegressor::Ptr &gpr)
     {
         clear();
         var_tol = var_tolerance;
         setGPModel(gpm);
         setGPRegressor(gpr);
-        createNode(root);
     }
 
     virtual std::size_t createNode(const Eigen::Vector3d& center)
