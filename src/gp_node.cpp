@@ -193,7 +193,7 @@ void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr 
 
     //update the model, do not compute normals in the model points
     auto begin_time = std::chrono::high_resolution_clock::now();
-    reg_.update<false>(fresh_data, obj_gp);
+    reg_->update<false>(fresh_data, obj_gp);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\t Model updated in: %ld nanoseconds.", __func__, elapsed );
