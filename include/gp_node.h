@@ -76,6 +76,11 @@ class GaussianProcessNode
          * sphere are purple,  internal points are cyan.
          */
         void Publish();
+
+        /**
+         * \brief Check exploration status and store the solution if successful
+         */
+        void checkExploration();
         typedef pcl::PointCloud<pcl::PointXYZRGB> PtC;
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -87,7 +92,7 @@ class GaussianProcessNode
          *
          */
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, fake_sampling, isAtlas;
+        bool start, fake_sampling, exploration_started;
         const double out_sphere_rad;
 
         /***************
@@ -110,6 +115,8 @@ class GaussianProcessNode
         //atlas and explorer
         gp_atlas_rrt::AtlasVariance::Ptr atlas;
         gp_atlas_rrt::ExplorerSinglePath::Ptr explorer;
+        //exploration solution
+        std::vector<std::size_t> solution;
 
         /***********
          * METHODS *
@@ -120,7 +127,7 @@ class GaussianProcessNode
         // Compute a Gaussian Process from object and store it
         bool computeGP();
         // start the RRT exploration
-        void startExploration();
+        bool startExploration();
 
         /***********
          * ROS API *
@@ -130,6 +137,8 @@ class GaussianProcessNode
          */
         // visualization of atlas and explorer
         visualization_msgs::MarkerArrayPtr markers;
+        // and its mutex
+        std::shared_ptr<std::mutex> mtx_marks;
 
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
@@ -163,7 +172,7 @@ class GaussianProcessNode
 
         //reconstructed model cloud to republish including centroid and sphere
         PtC::Ptr model_ptr;
-        ros::ServiceServer srv_rnd_tests_;
+        // ros::ServiceServer srv_rnd_tests_;
         ros::Publisher pub_model;
 
         // Publish object model

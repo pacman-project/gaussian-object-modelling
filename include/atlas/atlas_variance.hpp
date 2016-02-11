@@ -119,7 +119,7 @@ class AtlasVariance : public AtlasBase
         return nextState;
     }
 
-    virtual inline bool isSolution(const std::size_t &id) const
+    virtual inline bool isSolution(const std::size_t &id)
     {
         return (getNode(id).getVariance() > var_tol);
     }

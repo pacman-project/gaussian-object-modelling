@@ -9,6 +9,10 @@ namespace gp_atlas_rrt
 
 class ExplorerSinglePath : public ExplorerBase
 {
+    public:
+    typedef std::shared_ptr<ExplorerSinglePath> Ptr;
+    typedef std::shared_ptr<const ExplorerSinglePath> ConstPtr;
+
     ExplorerSinglePath()=delete;
     ExplorerSinglePath(const ros::NodeHandle n, const std::string ns):
         ExplorerBase(n,ns)
@@ -56,7 +60,7 @@ class ExplorerSinglePath : public ExplorerBase
                 ROS_INFO("[ExplorerSinglePath::%s]\tSolution Found!",__func__);
                 return;
             }
-            std::size_t child = atlas->createNode(atlas->AtlasBase::getNextState(parent));
+            std::size_t child = atlas->createNode(atlas->getNextState(parent));
             connect(child, parent);
             createNodeMarker(atlas->getNode(child));
             createBranchMarker(atlas->getNode(child), atlas->getNode(parent));
@@ -71,6 +75,21 @@ class ExplorerSinglePath : public ExplorerBase
             highlightSolution(solution);
         }
             is_running = false;
+    }
+
+    /**
+     * \brief check if we have a solution, this works if explorer was started
+     */
+    virtual inline bool hasSolution() const
+    {
+        return (!is_running);
+    }
+    /**
+     * \brief get the solution
+     */
+    virtual inline std::vector<std::size_t> getSolution() const
+    {
+        return solution;
     }
 
     protected:

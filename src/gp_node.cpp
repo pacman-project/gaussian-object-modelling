@@ -10,11 +10,12 @@ using namespace gp_regression;
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
-    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), isAtlas(false), cb_rnd_choose_counter(0),
+    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false), cb_rnd_choose_counter(0),
     out_sphere_rad(1.8)
 {
+    mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
-    srv_rnd_tests_ = nh.advertiseService("other_rnd_samples", &GaussianProcessNode::cb_rnd_choose, this);
+    // srv_rnd_tests_ = nh.advertiseService("other_rnd_samples", &GaussianProcessNode::cb_rnd_choose, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_update, this);
@@ -50,6 +51,7 @@ void GaussianProcessNode::publishAtlas () const
 {
     if (markers)
         if(pub_markers.getNumSubscribers() > 0){
+            std::lock_guard<std::mutex> lock (*mtx_marks);
             for (auto &mark : markers->markers)
             {
                 mark.header.frame_id = object_ptr->header.frame_id;
@@ -59,37 +61,6 @@ void GaussianProcessNode::publishAtlas () const
         }
 }
 
-// this is a debug callback
-bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& req, gp_regression::SelectNSamples::Response& res)
-{
-        if (!isAtlas){
-            ROS_WARN("[GaussianProcessNode::%s]\tNo Atlas created, selecting nothing",__func__);
-            return false;
-        }
-        int N = req.n_selections.data;
-        gp_regression::GPProjector<gp_regression::ThinPlate> proj;
-        // gp_regression::ThinPlate my_kernel(R_);
-        // reg_.setCovFunction(my_kernel);
-        for (int i=0; i < N; ++i)
-        {
-            int r_id;
-            //get a random index
-            r_id = getRandIn(0, markers->markers[0].points.size() -1);
-            gp_regression::Chart::Ptr gp_chart;
-            Eigen::Vector3d c (markers->markers[0].points[r_id].x,
-                               markers->markers[0].points[r_id].y,
-                               markers->markers[0].points[r_id].z);
-            proj.generateChart(*reg_, obj_gp, c, gp_chart);
-            gp_chart->id = i;
-            atlas_.addChart(gp_chart, i);
-        }
-
-        // this will create again the same
-        createAtlasMarkers();
-        // this value is added to the ids of the marker so we won't delete the previous ones
-        cb_rnd_choose_counter++;
-        return true;
-}
 
 // simple preparation of data before computing the gp
 void GaussianProcessNode::deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out)
@@ -196,7 +167,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (computeGP())
-        return true;
+        if(startExploration())
+            return true;
     return false;
 }
 
@@ -241,6 +213,7 @@ void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr 
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     computeGP();
+    startExploration();
     return;
 }
 
@@ -371,7 +344,7 @@ bool GaussianProcessNode::computeGP()
 }
 
 //
-void GaussianProcessNode::startExploration()
+bool GaussianProcessNode::startExploration()
 {
     //make sure we have a model and an object, we should have if start was called
     if (!object_ptr || object_ptr->empty() || !data_ptr_ || data_ptr_->empty()){
@@ -389,103 +362,39 @@ void GaussianProcessNode::startExploration()
     atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
 
     atlas->setVarianceTolGoal( 0.05 );
+    //atlas is ready
 
-    if (fake_sampling){
-        int num_points = markers->markers[0].points.size();
-
-        // ToCheck: I think this is only needed once, at computeGP() for instance
-        // gp_regression::ThinPlate my_kernel(R_);
-        // reg_->setCovFunction(my_kernel);
-
-        gp_regression::GPProjector<gp_regression::ThinPlate> proj;
-        for (int i=0; i < N; ++i)
-        {
-            int r_id;
-            //get a random index
-            r_id = getRandIn(0, num_points -1);
-            gp_regression::Chart::Ptr gp_chart;
-            Eigen::Vector3d c (markers->markers[0].points[r_id].x,
-                    markers->markers[0].points[r_id].y,
-                    markers->markers[0].points[r_id].z);
-            // the size of the chart is equal to the variance at the center
-            proj.generateChart(*reg_, obj_gp, c, gp_chart);
-            gp_chart->id = i;
-            atlas_.addChart(gp_chart, i);
-        }
-    }
-    else{
-        // gp_regression::ThinPlate my_kernel(R_);
-        // reg_->setCovFunction(my_kernel);
-
-        gp_regression::GPProjector<gp_regression::ThinPlate> proj;
-        for (int i=0; i < N; ++i)
-        {
-            int r_id;
-            //get a random index
-            r_id = getRandIn(0, data_ptr_->points.size()-1 );
-            gp_regression::Chart::Ptr gp_chart;
-            Eigen::Vector3d c (data_ptr_->points[r_id].x,
-                    data_ptr_->points[r_id].y,
-                    data_ptr_->points[r_id].z);
-            // the size of the chart is equal to the variance at the center
-            proj.generateChart(*reg_, obj_gp, c, gp_chart);
-            gp_chart->id = i;
-            atlas_.addChart(gp_chart, i);
-        }
-    }
-
-/*
-        //pcl
-        //compute a normal around the point neighborhood (2cm)
-        // pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
-        // std::vector<int> idx(data_ptr_->points.size());
-        // std::vector<float> dist(data_ptr_->points.size());
-        // kdtree.setInputCloud(data_ptr_);
-        // pcl::PointXYZRGB pt;
-        // pt.x = points[i].x;
-        // pt.y = points[i].y;
-        // pt.z = points[i].z;
-        // kdtree.radiusSearch(pt, 0.05, idx, dist);
-        // pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne_point;
-        // ne_point.setInputCloud(data_ptr_);
-        // ne_point.useSensorOriginAsViewPoint();
-        // float curv,nx,ny,nz;
-        // ne_point.computePointNormal (*data_ptr_, idx, nx,ny,nz, curv);
-        // Eigen::Vector3d pclN;
-        // pclN[0] = nx;
-        // pclN[1] = ny;
-        // pclN[2] = nz;
-        // pclN.normalize();
-        // //find a new x as close as possible to x kinect but orthonormal to N
-        // X = kinX - (pclN*(pclN.dot(kinX)));
-        // X.normalize();
-        // Y = pclN.cross(X);
-        // Y.normalize();
-        // chart.Tx = X;
-        // chart.Ty = Y;
-        // //define a radius of the chart just take 3cm for now
-        // chart.radius = 0.03f;
-        // chart.id = r_id; //lets have the id = pointcloud id
-        // chart.parent = 1; //doesnt have a parent since its root
-        // atlas->insert(std::pair<uint8_t, Chart>(1,chart));
-        // //
-        // std::cout<<"NormalError: ";
-        // double e;
-        // e = sqrt( (pclN[0] - chart.N[0])*(pclN[0]-chart.N[0]) +
-        //           (pclN[1] - chart.N[1])*(pclN[1]-chart.N[1]) +
-        //           (pclN[2] - chart.N[2])*(pclN[2]-chart.N[2]) );
-        // std::cout<<e<<std::endl;
-        // std::cout<<"Error from pcl normal old lib: ";
-        // e = sqrt( (chart.N[0]-gp_chart->N[0])*(chart.N[0]-gp_chart->N[0]) +
-        //           (chart.N[1]-gp_chart->N[1])*(chart.N[1]-gp_chart->N[1]) +
-        //           (chart.N[2]-gp_chart->N[2])*(chart.N[2]-gp_chart->N[2]) );
-        // std::cout<<e<<std::endl;
-*/
-    isAtlas = true;
-    createAtlasMarkers();
+    explorer = std::make_shared<gp_atlas_rrt::ExplorerSinglePath>(nh, "explorer");
+    explorer->setMarkers(markers, mtx_marks);
+    explorer->setAtlas(atlas);
+    explorer->setMaxNodes(100);
+    //get a starting point from data cloud
+    int r_id = getRandIn(0, data_ptr_->points.size()-1 );
+    Eigen::Vector3d root
+        (data_ptr_->points[r_id].x,
+         data_ptr_->points[r_id].y,
+         data_ptr_->points[r_id].z);
+    explorer->setStart(root);
+    //explorer is ready, start exploration (this spawns a thread)
+    explorer->startExploration();
+    exploration_started = true;
+    ROS_INFO("[GaussianProcessNode::%s]\tExploration started", __func__);
     return true;
 }
 
+void GaussianProcessNode::checkExploration()
+{
+    if (!exploration_started)
+        return;
+    if (explorer->hasSolution()){
+        solution = explorer->getSolution();
+        explorer->stopExploration();
+        exploration_started = false;
+        ROS_INFO("[GaussianProcessNode::%s]\tSolution Found", __func__);
+
+        //TODO actually do something with the solution !
+    }
+}
 
 // for visualization purposes
 void GaussianProcessNode::fakeDeterministicSampling(const double scale, const double pass)
@@ -569,52 +478,37 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
 }
 
-//Publish sample (remove for now, we are publishing atlas markers)
-
-// test for occlusion of samples (now unused)
-// return:
-//  0 -> not visible
-//  1 -> visible
-//  -1 -> error
-// int GaussianProcessNode::isSampleVisible(const pcl::PointXYZRGB sample, const float min_z) const
+// this is a debug callback
+// bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& req, gp_regression::SelectNSamples::Response& res)
 // {
-//     if(!viewpoint_tree){
-//         ROS_ERROR("[GaussianProcessNode::%s]\tObject Viewpoint KdTree is not initialized. Aborting...",__func__);
-//         //should never happen if called from sampleAndPublish
-//         return (-1);
-//     }
-//     Eigen::Vector3f camera(0,0,0);
-//     Eigen::Vector3f start_point(sample.x, sample.y, sample.z);
-//     Eigen::Vector3f direction = camera - start_point;
-//     const float norm = direction.norm();
-//     direction.normalize();
-//     const float step_size = 0.01f;
-//     const int nsteps = std::max(1, static_cast<int>(norm/step_size));
-//     std::vector<int> k_id;
-//     std::vector<float> k_dist;
-//     //move along direction
-//     Eigen::Vector3f p(start_point[0], start_point[1], start_point[2]);
-//     for (size_t i = 0; i<nsteps; ++i)
-//     {
-//         if (p[2] <= min_z)
-//             //don't reach  the sensor, if  we are  outside sample region  we can
-//             //stop testing.
-//             break;
-//         pcl::PointXYZRGB pt;
-//         pt.x = p[0];
-//         pt.y = p[1];
-//         pt.z = p[2];
-//         // TODO: This search radius is  hardcoded now, should be adapted somehow
-//         // on point density (tabjones on Friday 13/11/2015)
-//         if (viewpoint_tree->radiusSearch(pt, 0.005, k_id, k_dist, 1) > 0)
-//             //we intersected an object point, this sample cant reach the camera
-//             return(0);
-//         p += (direction * step_size);
-//     }
-//     //we didn't intersect anything, this sample is not occluded
-//     return(1);
+//         if (!isAtlas){
+//             ROS_WARN("[GaussianProcessNode::%s]\tNo Atlas created, selecting nothing",__func__);
+//             return false;
+//         }
+//         int N = req.n_selections.data;
+//         gp_regression::GPProjector<gp_regression::ThinPlate> proj;
+//         // gp_regression::ThinPlate my_kernel(R_);
+//         // reg_.setCovFunction(my_kernel);
+//         for (int i=0; i < N; ++i)
+//         {
+//             int r_id;
+//             //get a random index
+//             r_id = getRandIn(0, markers->markers[0].points.size() -1);
+//             gp_regression::Chart::Ptr gp_chart;
+//             Eigen::Vector3d c (markers->markers[0].points[r_id].x,
+//                                markers->markers[0].points[r_id].y,
+//                                markers->markers[0].points[r_id].z);
+//             proj.generateChart(*reg_, obj_gp, c, gp_chart);
+//             gp_chart->id = i;
+//             atlas_.addChart(gp_chart, i);
+//         }
+//
+//         // this will create again the same
+//         createAtlasMarkers();
+//         // this value is added to the ids of the marker so we won't delete the previous ones
+//         cb_rnd_choose_counter++;
+//         return true;
 // }
-
 
 ///// MAIN ////////////////////////////////////////////////////////////////////
 
@@ -628,6 +522,7 @@ int main (int argc, char *argv[])
         //gogogo!
         ros::spinOnce();
         node.Publish();
+        node.checkExploration();
         rate.sleep();
     }
     //someone killed us :(

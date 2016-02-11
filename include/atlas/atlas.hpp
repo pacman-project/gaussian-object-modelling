@@ -166,11 +166,7 @@ class AtlasBase
     /**
      * \brief Tell if passed node is global solution
      */
-    virtual inline bool isSolution(const Chart& c) const
-    {
-        return isSolution(c.getId());
-    }
-    virtual inline bool isSolution(const std::size_t&) const =0;
+    virtual inline bool isSolution(const std::size_t&)=0;
 
     /**
      * \brief Contruct a Node from the given center and stores it

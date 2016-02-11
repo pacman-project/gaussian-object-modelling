@@ -17,7 +17,7 @@
 #include <ros/callback_queue_interface.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
-#include <gp_regression/StopExploration.h>
+// #include <gp_regression/StopExploration.h>
 
 #include <atlas/atlas.hpp>
 
@@ -52,7 +52,7 @@ class ExplorerBase
         nh = std::make_shared<ros::NodeHandle>(*father_nh, name);
         cb_queue = std::make_shared<ros::CallbackQueue>();
         nh->setCallbackQueue(&(*cb_queue));
-        srv_stop = nh->advertiseService("stop", &ExplorerBase::cb_stop, this);
+        // srv_stop = nh->advertiseService("stop", &ExplorerBase::cb_stop, this);
         //start the worker thread
         is_running = true;
         worker = std::thread(&ExplorerBase::explore, this);
@@ -247,7 +247,7 @@ class ExplorerBase
     ///child custom callback queue
     std::shared_ptr<ros::CallbackQueue> cb_queue;
     ///stop service server
-    ros::ServiceServer srv_stop;
+    // ros::ServiceServer srv_stop;
     ///worker thread
     std::thread worker;
     ///marker array pointer to update during exploration
