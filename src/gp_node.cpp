@@ -35,6 +35,30 @@ void GaussianProcessNode::Publish ()
     publishAtlas();
 }
 
+// Publish cloud method
+void GaussianProcessNode::publishCloudModel () const
+{
+    // These checks are  to make sure we are not publishing empty cloud,
+    // we have a  gaussian process computed and there's actually someone
+    // who listens to us
+    if (start && data_ptr_)
+        if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
+            pub_model.publish(*model_ptr);
+}
+//publish atlas markers and other samples
+void GaussianProcessNode::publishAtlas () const
+{
+    if (markers)
+        if(pub_markers.getNumSubscribers() > 0){
+            for (auto &mark : markers->markers)
+            {
+                mark.header.frame_id = object_ptr->header.frame_id;
+                mark.header.stamp = ros::Time();
+            }
+            pub_markers.publish(*markers);
+        }
+}
+
 // this is a debug callback
 bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& req, gp_regression::SelectNSamples::Response& res)
 {
@@ -172,8 +196,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (computeGP())
-        if (computeAtlas())
-            return true;
+        return true;
     return false;
 }
 
@@ -218,7 +241,6 @@ void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr 
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     computeGP();
-    computeAtlas();
     return;
 }
 
@@ -349,7 +371,7 @@ bool GaussianProcessNode::computeGP()
 }
 
 //
-bool GaussianProcessNode::computeAtlas()
+void GaussianProcessNode::startExploration()
 {
     //make sure we have a model and an object, we should have if start was called
     if (!object_ptr || object_ptr->empty() || !data_ptr_ || data_ptr_->empty()){
@@ -360,12 +382,14 @@ bool GaussianProcessNode::computeAtlas()
         ROS_ERROR("[GaussianProcessNode::%s]\tNo GP model initialized, call start service.",__func__);
         return false;
     }
+    fakeDeterministicSampling(1.2, 0.06);
 
-    //right now just create N discs at random all depth 0.
-    int N = 20;
-
+    //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    fakeDeterministicSampling(1.3, 0.05);
+    atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
+
+    atlas->setVarianceTolGoal( 0.05 );
+
     if (fake_sampling){
         int num_points = markers->markers[0].points.size();
 
@@ -462,16 +486,6 @@ bool GaussianProcessNode::computeAtlas()
     return true;
 }
 
-// Publish cloud method
-void GaussianProcessNode::publishCloudModel () const
-{
-    // These checks are  to make sure we are not publishing empty cloud,
-    // we have a  gaussian process computed and there's actually someone
-    // who listens to us
-    if (start && data_ptr_)
-        if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
-            pub_model.publish(*model_ptr);
-}
 
 // for visualization purposes
 void GaussianProcessNode::fakeDeterministicSampling(const double scale, const double pass)
@@ -533,7 +547,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface, plotting them.",__func__,
             ssvv.size());
     const double mid_v = ( min_v + max_v ) * 0.5;
-    std::cout<<"min "<<min_v<<" mid "<<mid_v<<" max "<<max_v<<std::endl; //tmp debug
+    // std::cout<<"min "<<min_v<<" mid "<<mid_v<<" max "<<max_v<<std::endl; //tmp debug
     for (size_t i=0; i< ssvv.size(); ++i)
     {
         geometry_msgs::Point pt;
@@ -555,143 +569,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
 }
 
-void GaussianProcessNode::createAtlasMarkers()
-{
-    if (!isAtlas){
-        ROS_WARN("[GaussianProcessNode::%s]\tNo Atlas created, not computing any marker.",__func__);
-        return ;
-    }
-
-    // Now show the Atlas
-    // for each atlas (we have 1 now TODO loop)
-    // int a (0); //atlas index
-    // {
-        //for each chart
-        for(int i = 0; i < atlas_.charts_.size(); ++i)
-        {
-            visualization_msgs::Marker disc;
-            disc.header.frame_id = object_ptr->header.frame_id;
-            disc.header.stamp = ros::Time::now();
-            disc.lifetime = ros::Duration(0);
-            disc.frame_locked = true;
-            std::string ns("A" + std::to_string(0) + "_D" + std::to_string(i));
-            disc.ns = ns;
-            disc.id = atlas_.charts_.at(i).id + cb_rnd_choose_counter;
-            disc.type = visualization_msgs::Marker::CYLINDER;
-            disc.action = visualization_msgs::Marker::ADD;
-            //TODO these need to read the chart radius
-            disc.scale.x = atlas_.charts_.at(i).R;
-            disc.scale.y = atlas_.charts_.at(i).R;
-            disc.scale.z = 0.01;
-            disc.color.a = 0.9;
-            disc.color.r = 0.545;
-            disc.color.b = 0.843;
-            disc.color.g = 0.392;
-            Eigen::Matrix3d rot;
-            rot.col(0) =  atlas_.charts_.at(i).Tx;
-            rot.col(1) =  atlas_.charts_.at(i).Ty;
-            rot.col(2) =  atlas_.charts_.at(i).N;
-            Eigen::Quaterniond q(rot);
-            q.normalize();
-            disc.pose.orientation.x = q.x();
-            disc.pose.orientation.y = q.y();
-            disc.pose.orientation.z = q.z();
-            disc.pose.orientation.w = q.w();
-            disc.pose.position.x = atlas_.charts_.at(i).C(0);
-            disc.pose.position.y = atlas_.charts_.at(i).C(1);
-            disc.pose.position.z = atlas_.charts_.at(i).C(2);
-            markers->markers.push_back(disc);
-
-            geometry_msgs::Point end;
-            geometry_msgs::Point start;
-
-            visualization_msgs::Marker aZ;
-            aZ.header.frame_id = object_ptr->header.frame_id;
-            aZ.header.stamp = ros::Time::now();
-            aZ.lifetime = ros::Duration(0);
-            aZ.frame_locked = true;
-            std::string nsa("N" + std::to_string(atlas_.charts_.at(i).id));
-            aZ.ns = nsa;
-            aZ.id = 0 + cb_rnd_choose_counter;
-            aZ.type = visualization_msgs::Marker::ARROW;
-            aZ.action = visualization_msgs::Marker::ADD;
-            start.x = atlas_.charts_.at(i).C(0);
-            start.y = atlas_.charts_.at(i).C(1);
-            start.z = atlas_.charts_.at(i).C(2);
-            aZ.points.push_back(start);
-            end.x = start.x + atlas_.charts_.at(i).N[0]/2;
-            end.y = start.y + atlas_.charts_.at(i).N[1]/2;
-            end.z = start.z + atlas_.charts_.at(i).N[2]/2;
-            aZ.points.push_back(end);
-            aZ.scale.x = 0.02;
-            aZ.scale.y = 0.08;
-            aZ.scale.z = 0.08;
-            aZ.color.a = 0.5;
-            aZ.color.r = aZ.color.g = 0.0;
-            aZ.color.b = 1.0;
-            markers->markers.push_back(aZ);
-/*
-            visualization_msgs::Marker aX;
-            aX.header.frame_id = object_ptr->header.frame_id;
-            aX.header.stamp = ros::Time::now();
-            aX.lifetime = ros::Duration(0);
-            std::string nsx("Tx" + std::to_string(atlas_.charts_.at(i).id));
-            aX.ns = nsx;
-            aX.id = 0;
-            aX.type = visualization_msgs::Marker::ARROW;
-            aX.action = visualization_msgs::Marker::ADD;
-            start.x = atlas_.charts_.at(i).C(0);
-            start.y = atlas_.charts_.at(i).C(1);
-            start.z = atlas_.charts_.at(i).C(2);
-            aX.points.push_back(start);
-            end.x = start.x + atlas_.charts_.at(i).Tx[0]/10;
-            end.y = start.y + atlas_.charts_.at(i).Tx[1]/10;
-            end.z = start.z + atlas_.charts_.at(i).Tx[2]/10;
-            aX.points.push_back(end);
-            aX.scale.x = 0.002;
-            aX.scale.y = 0.008;
-            aX.scale.z = 0.008;
-            aX.color.a = 0.5;
-            aX.color.b = aX.color.g = 0.0;
-            aX.color.r = 1.0;
-            markers->markers.push_back(aX);
-
-            visualization_msgs::Marker aY;
-            aY.header.frame_id = object_ptr->header.frame_id;
-            aY.header.stamp = ros::Time::now();
-            aY.lifetime = ros::Duration(0);
-            std::string nsy("Ty" + std::to_string(atlas_.charts_.at(i).id));
-            aY.ns = nsy;
-            aY.id = 0;
-            aY.type = visualization_msgs::Marker::ARROW;
-            aY.action = visualization_msgs::Marker::ADD;
-            start.x = atlas_.charts_.at(i).C(0);
-            start.y = atlas_.charts_.at(i).C(1);
-            start.z = atlas_.charts_.at(i).C(2);
-            aY.points.push_back(start);
-            end.x = start.x + atlas_.charts_.at(i).Ty[0]/10;
-            end.y = start.y + atlas_.charts_.at(i).Ty[1]/10;
-            end.z = start.z + atlas_.charts_.at(i).Ty[2]/10;
-            aY.points.push_back(end);
-            aY.scale.x = 0.002;
-            aY.scale.y = 0.008;
-            aY.scale.z = 0.008;
-            aY.color.a = 0.5;
-            aY.color.b = aY.color.r = 0.0;
-            aY.color.g = 1.0;
-            markers->markers.push_back(aY);
-*/
-        }
-        ROS_INFO("[GaussianProcessNode::%s]\tAtlas Markers Generated",__func__);
-}
-
 //Publish sample (remove for now, we are publishing atlas markers)
-void GaussianProcessNode::publishAtlas () const
-{
-    if (markers)
-        if(pub_markers.getNumSubscribers() > 0)
-            pub_markers.publish(*markers);
-}
 
 // test for occlusion of samples (now unused)
 // return:

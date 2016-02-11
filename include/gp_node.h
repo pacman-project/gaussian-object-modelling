@@ -6,7 +6,7 @@
 #include <fstream>
 #include <string>
 #include <stdlib.h>
-#include <map>
+#include <mutex>
 
 // ROS headers
 #include <ros/ros.h>
@@ -45,6 +45,10 @@
 
 // Gaussian Process library
 #include <gp_regression/gp_modelling.h>
+
+//Atlas
+#include <atlas/atlas_variance.hpp>
+#include <atlas/exp_single_path.hpp>
 
 /* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
 missing or is improvable! */
@@ -103,10 +107,9 @@ class GaussianProcessNode
         gp_regression::ThinPlateRegressor::Ptr reg_;
         gp_regression::Model::Ptr obj_gp;
 
-        //
-        gp_regression::Atlas atlas_;
-        // collection of atlases missing, working with 1 for now
-        // std::vector<gp_regression::Atlas::Ptr> globe_;
+        //atlas and explorer
+        gp_atlas_rrt::AtlasVariance::Ptr atlas;
+        gp_atlas_rrt::ExplorerSinglePath::Ptr explorer;
 
         /***********
          * METHODS *
@@ -116,9 +119,8 @@ class GaussianProcessNode
         void deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out);
         // Compute a Gaussian Process from object and store it
         bool computeGP();
-        // Compute Atlas from a random starting point
-        bool computeAtlas();
-
+        // start the RRT exploration
+        void startExploration();
 
         /***********
          * ROS API *
@@ -136,8 +138,6 @@ class GaussianProcessNode
         ros::Publisher pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_update_;
 
-        // compute markers that compose an atlas
-        void createAtlasMarkers();
         // Publish last computed atlas
         void publishAtlas () const;
 

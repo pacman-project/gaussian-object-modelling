@@ -27,14 +27,14 @@ class AtlasVariance : public AtlasBase
         var_tol = vt;
     }
 
-    ///reset Atlas with new parameters and then recieve a new starting point (root)
-    virtual void init(const double var_tolerance, const gp_regression::Model::Ptr &gpm, const gp_regression::ThinPlateRegressor::Ptr &gpr)
-    {
-        clear();
-        var_tol = var_tolerance;
-        setGPModel(gpm);
-        setGPRegressor(gpr);
-    }
+    // ///reset Atlas with new parameters and then recieve a new starting point (root)
+    // virtual void init(const double var_tolerance, const gp_regression::Model::Ptr &gpm, const gp_regression::ThinPlateRegressor::Ptr &gpr)
+    // {
+    //     clear();
+    //     var_tol = var_tolerance;
+    //     setGPModel(gpm);
+    //     setGPRegressor(gpr);
+    // }
 
     virtual std::size_t createNode(const Eigen::Vector3d& center)
     {

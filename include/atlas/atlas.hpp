@@ -157,23 +157,6 @@ class AtlasBase
     {
         gp_reg = gpr;
     }
-    /**
-     * \brief get all node ids the given node is connected to
-     * TODO this should go to the planner
-     */
-    virtual std::vector<std::size_t> getConnections (const std::size_t &id) const
-    {
-        if (id < nodes.size())
-        {
-            auto branch = branches.find(id);
-            if (branch != branches.end())
-                return branch->second;
-            else
-                return std::vector<std::size_t>();
-        }
-        else
-            throw gp_regression::GPRegressionException("Out of Range node id");
-    }
 
     /**
      * \brief Get a new node center to explore from a given node id.
@@ -195,12 +178,6 @@ class AtlasBase
      */
     virtual std::size_t createNode(const Eigen::Vector3d&)=0;
 
-    /**
-     * \brief Connect two nodes
-     * TODO this should go to the planner
-     */
-    virtual void connect(const std::size_t, const std::size_t)=0;
-
     protected:
     ///Pointer to gp_model
     gp_regression::Model::Ptr gp_model;
@@ -208,9 +185,6 @@ class AtlasBase
     gp_regression::ThinPlateRegressor::Ptr gp_reg;
     ///Node storage
     std::vector<Chart> nodes;
-    ///Connection map
-    //TODO this should be moved to the planner
-    std::unordered_map<std::size_t, std::vector<std::size_t>> branches;
 
     /**
      * \brief project a point on gp surface
