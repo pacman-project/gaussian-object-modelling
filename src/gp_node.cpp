@@ -363,14 +363,14 @@ bool GaussianProcessNode::startExploration()
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
     //termination condition
-    atlas->setVarianceTolGoal( 0.05 );
+    atlas->setVarianceTolGoal( 0.5 );
     //atlas is ready
 
     //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerSinglePath>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(100);
+    explorer->setMaxNodes(20);
     //get a starting point from data cloud
     int r_id = getRandIn(0, data_ptr_->points.size()-1 );
     Eigen::Vector3d root;

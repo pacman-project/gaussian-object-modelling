@@ -156,7 +156,7 @@ class ExplorerBase
         e.y = parent.getCenter()[1];
         e.z = parent.getCenter()[2];
         branch.points.push_back(e);
-        branch.scale.x = 0.002;
+        branch.scale.x = 0.005;
         branch.color.a = 0.4;
         branch.color.r = 0.129;
         branch.color.g = 0.929;
@@ -184,7 +184,7 @@ class ExplorerBase
             if (markers->markers.at(i).ns.compare("Atlas Nodes")==0)
                 for (const auto& id: path)
                     if (markers->markers.at(i).id == id){
-                        markers->markers.at(i).color.a = 1.0;
+                        markers->markers.at(i).color.a = 0.65;
                         markers->markers.at(i).color.r = 0.9;
                         markers->markers.at(i).color.b = 0.3;
                         markers->markers.at(i).color.g = 0.0;
@@ -192,10 +192,10 @@ class ExplorerBase
             if (markers->markers.at(i).ns.compare("Atlas Branches")==0)
                 for (const auto& id: cons)
                     if (markers->markers.at(i).id == id){
-                        markers->markers.at(i).color.a = 1.0;
-                        markers->markers.at(i).color.r = 0.8;
+                        markers->markers.at(i).color.a = 0.8;
+                        markers->markers.at(i).color.r = 0.1;
                         markers->markers.at(i).color.b = 0.2;
-                        markers->markers.at(i).color.g = 0.0;
+                        markers->markers.at(i).color.g = 0.8;
                     }
         }
     }

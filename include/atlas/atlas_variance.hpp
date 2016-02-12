@@ -44,7 +44,6 @@ class AtlasVariance : public AtlasBase
         c->coord_x.push_back(center(0));
         c->coord_y.push_back(center(1));
         c->coord_z.push_back(center(2));
-        std::cout<<"c "<<c->coord_x.at(0)<<" "<<c->coord_y.at(0)<<" "<<c->coord_z.at(0)<<std::endl;
         std::vector<double> f,v;
         Eigen::MatrixXd gg;
         gp_reg->evaluate(gp_model, c, f, v, gg);
@@ -52,7 +51,6 @@ class AtlasVariance : public AtlasBase
         if (std::abs(f.at(0)) > 0.01)
             std::cout<<"[Atlas::createNode] Chart center is not on GP surface! f(x) = "<<f.at(0)<<std::endl;
         Chart node (center, nodes.size(), g, std::sqrt(v.at(0))*var_factor, v.at(0));
-        std::cout<<"var "<<v.at(0)<<std::endl;
         nodes.push_back(node);
         return node.getId();
     }
@@ -88,12 +86,12 @@ class AtlasVariance : public AtlasBase
         //uniform annulus sampling from R/5 to R
         for (std::size_t i=0; i<tot_samples; ++i)
         {
-            const double r = getRandIn(R/5, R, true);
+            const double r = getRandIn(0.8, 1.0, true);
             const double th = getRandIn(0.0, 2*M_PI);
             //point in local frame, uniformely sampled
             Eigen::Vector4d pL;
-            pL <<   std::sqrt(r) * std::cos(th),
-                    std::sqrt(r) * std::sin(th),
+            pL <<   0.5*R * std::cos(th),
+                    0.5*R * std::sin(th),
                     0,
                     1;
             //the same point in kinect frame

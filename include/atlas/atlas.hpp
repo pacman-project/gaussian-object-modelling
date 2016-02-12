@@ -194,18 +194,22 @@ class AtlasBase
      * \param[in] improve_tol tolerance on f(x) improvement. Thired convergence criteria.
      */
     virtual void project(const Eigen::Vector3d &in, Eigen::Vector3d &out, const Eigen::Vector3d &normal,
-            const double f_tol= 1e-2, const double improve_tol= 1e-6, const unsigned int max_iter=5000, const double step_mul = 1.0)
+            const double f_tol= 1e-2, const double improve_tol= 1e-6, const unsigned int max_iter=5000, const double step_mul = 0.001)
     {
         if (!gp_reg)
             throw gp_regression::GPRegressionException("Empty regressor pointer");
         Eigen::Vector3d current = in;
-        std::vector<double> current_f;
+        std::vector<double> current_f, v;
         gp_regression::Data::Ptr currentP = std::make_shared<gp_regression::Data>();
         unsigned int iter = 0;
+        Eigen::MatrixXd N;
+        Eigen::Vector3d g = normal;
         while(iter < max_iter)
         {
             // clear vectors of current values
             currentP->clear();
+            current_f.clear();
+            v.clear();
 
             // and fill with current values
             currentP->coord_x.push_back( current(0) );
@@ -214,6 +218,8 @@ class AtlasBase
 
             // evaluate the current result
             gp_reg->evaluate(gp_model, currentP, current_f);
+
+            // std::cout << "current f" << current_f.at(0) << std::endl;
 
             // check tolerances
             if( std::abs(current_f.at(0)) < f_tol )
@@ -225,7 +231,7 @@ class AtlasBase
 
             // perform the step using the gradient descent method
             // put minus in front, cause normals are all pointing outwards
-            current -= step_mul*current_f.at(0)*normal;
+            current -= step_mul*current_f.at(0)*g;
 
             // cehck improvment tolerance
             gp_regression::Data::Ptr outP = std::make_shared<gp_regression::Data>();
@@ -233,7 +239,8 @@ class AtlasBase
             outP->coord_y.push_back( current(1) );
             outP->coord_z.push_back( current(2) );
             std::vector<double> out_f;
-            gp_reg->evaluate(gp_model, outP, out_f);
+            gp_reg->evaluate(gp_model, outP, out_f, v, N);
+            g = N.row(0);
             if( std::abs(out_f.at(0) - current_f.at(0)) < improve_tol )
             {
                 std::cout << "[Atlas::project] CONVERGENCE: Function improvement reached tolerance." << std::endl;
