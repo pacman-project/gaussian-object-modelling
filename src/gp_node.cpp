@@ -42,7 +42,7 @@ void GaussianProcessNode::publishCloudModel () const
     // These checks are  to make sure we are not publishing empty cloud,
     // we have a  gaussian process computed and there's actually someone
     // who listens to us
-    if (start && data_ptr_)
+    if (start && model_ptr)
         if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
             pub_model.publish(*model_ptr);
 }
@@ -355,15 +355,18 @@ bool GaussianProcessNode::startExploration()
         ROS_ERROR("[GaussianProcessNode::%s]\tNo GP model initialized, call start service.",__func__);
         return false;
     }
-    fakeDeterministicSampling(1.2, 0.06);
 
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
+    //perform fake sampling
+    fakeDeterministicSampling(1.2, 0.06);
+    //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
-
+    //termination condition
     atlas->setVarianceTolGoal( 0.05 );
     //atlas is ready
 
+    //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerSinglePath>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);

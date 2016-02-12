@@ -48,9 +48,10 @@ class AtlasVariance : public AtlasBase
         Eigen::MatrixXd gg;
         gp_reg->evaluate(gp_model, c, f, v, gg);
         Eigen::Vector3d g = gg.row(0);
-        if (std::abs(f.at(0)) > 1e-2)
-            std::cout<<"[Atlas::createNode] Chart center is not on GP surface!"<<std::endl;
+        if (std::abs(f.at(0)) > 0.01)
+            std::cout<<"[Atlas::createNode] Chart center is not on GP surface! f(x) = "<<f.at(0)<<std::endl;
         Chart node (center, nodes.size(), g, std::sqrt(v.at(0))*var_factor, v.at(0));
+        std::cout<<"var "<<v.at(0)<<std::endl;
         nodes.push_back(node);
         return node.getId();
     }
@@ -70,6 +71,7 @@ class AtlasVariance : public AtlasBase
         const double R = nodes.at(id).getRadius();
         //prepare the samples storage
         const std::size_t tot_samples = std::round(disc_samples_factor * R);
+        std::cout<<"tot samp "<<tot_samples<<std::endl;
         nodes.at(id).samples.resize(tot_samples, 3);
         std::vector<double> f,v;
         //transformation into the kinect frame from local
