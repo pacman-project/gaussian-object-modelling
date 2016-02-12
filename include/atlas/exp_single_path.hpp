@@ -50,22 +50,30 @@ class ExplorerSinglePath : public ExplorerBase
         std::size_t parent = atlas->createNode(start_point);
         createNodeMarker(atlas->getNode(parent));
         ros::Rate rate(50);
-        while (atlas->countNodes() < max_nodes && is_running)
+        while (atlas->countNodes() < max_nodes && !hasSolution())
         {
             if (atlas->isSolution(parent))
             {
                 solution = getPathToRoot(parent);
                 highlightSolution(solution);
+                std::lock_guard<std::mutex> lock(*mtx_ptr);
                 is_running = false;
                 ROS_INFO("[ExplorerSinglePath::%s]\tSolution Found!",__func__);
                 return;
             }
+            std::cout<<"\t\t1 ";
             Eigen::Vector3d next_point = atlas->getNextState(parent);
+            std::cout<<"\t\t2 ";
             createSamplesMarker(atlas->getNode(parent), next_point);
+            std::cout<<"\t\t3 ";
             std::size_t child = atlas->createNode(next_point);
+            std::cout<<"\t\t4 ";
             connect(child, parent);
+            std::cout<<"\t\t5 ";
             createNodeMarker(atlas->getNode(child));
+            std::cout<<"\t\t6 ";
             createBranchMarker(atlas->getNode(child), atlas->getNode(parent));
+            std::cout<<"\t\t7\n";
             parent = child;
             //ros stuff
             rate.sleep();
@@ -76,6 +84,7 @@ class ExplorerSinglePath : public ExplorerBase
             solution = getPathToRoot(parent);
             highlightSolution(solution);
         }
+        std::lock_guard<std::mutex> lock(*mtx_ptr);
         is_running = false;
     }
 
@@ -84,6 +93,8 @@ class ExplorerSinglePath : public ExplorerBase
      */
     virtual inline bool hasSolution() const
     {
+        //this func should lock cause also main thread is checking it
+        std::lock_guard<std::mutex> lock (*mtx_ptr);
         return (!is_running);
     }
     /**
@@ -156,6 +167,7 @@ class ExplorerSinglePath : public ExplorerBase
         std::lock_guard<std::mutex> guard(*mtx_ptr);
         markers->markers.push_back(proj);
     }
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
     //starting point
     Eigen::Vector3d start_point;

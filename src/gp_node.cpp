@@ -98,6 +98,21 @@ void GaussianProcessNode::deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::
 //callback to start process service, executes when service is called
 bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res)
 {
+    //clean up everything
+    start = exploration_started = false;
+    mtx_marks = std::make_shared<std::mutex>();
+    object_ptr= boost::make_shared<PtC>();
+    hand_ptr= boost::make_shared<PtC>();
+    data_ptr_=boost::make_shared<PtC>();
+    model_ptr= boost::make_shared<PtC>();
+    reg_.reset();
+    obj_gp.reset();
+    my_kernel.reset();
+    atlas.reset();
+    explorer.reset();
+    solution.clear();
+    markers.reset();
+    //////
     if(req.cloud_dir.empty()){
         //Request was empty, means we have to call pacman vision service to
         //get a cloud.
@@ -517,7 +532,7 @@ int main (int argc, char *argv[])
 {
     ros::init(argc, argv, "gaussian_process");
     GaussianProcessNode node;
-    ros::Rate rate(50); //try to go at 50hz
+    ros::Rate rate(10); //try to go at 10hz
     while (node.nh.ok())
     {
         //gogogo!
