@@ -98,13 +98,13 @@ class ExplorerBase
         visualization_msgs::Marker disc;
         disc.header.frame_id = "update_me_before_publishing!";
         disc.header.stamp = ros::Time::now();
-        disc.lifetime = ros::Duration(0);
+        disc.lifetime = ros::Duration(0.5);
         disc.ns = "Atlas Nodes";
         disc.id = c.getId();
         disc.type = visualization_msgs::Marker::CYLINDER;
         disc.action = visualization_msgs::Marker::ADD;
-        disc.scale.x = c.getRadius();
-        disc.scale.y = c.getRadius();
+        disc.scale.x = c.getRadius()*2;
+        disc.scale.y = c.getRadius()*2;
         disc.scale.z = 0.001;
         disc.color.a = 0.4;
         disc.color.r = 0.545;
@@ -141,7 +141,7 @@ class ExplorerBase
         visualization_msgs::Marker branch;
         branch.header.frame_id = "update_me_before_publishing!";
         branch.header.stamp = ros::Time();
-        branch.lifetime = ros::Duration(0);
+        branch.lifetime = ros::Duration(0.5);
         branch.ns = "Atlas Branches";
         //need to know the branch id, too bad branches don't have it.
         //Lets use Cantor pairing function: 0.5(a+b)(a+b+1)+b
@@ -234,6 +234,8 @@ class ExplorerBase
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
+    //atlas pointer
+    std::shared_ptr<AtlasBase> atlas;
     ///Connection map  key=childNodes, value=oneOfItsParents,
     //multiple equivalent keys can be present, thus givin a child more than one parent
     //this is not yet supported

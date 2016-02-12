@@ -61,7 +61,7 @@ class ExplorerSinglePath : public ExplorerBase
                 return;
             }
             Eigen::Vector3d next_point = atlas->getNextState(parent);
-            std::cout<<"nextstate\n";
+            createSamplesMarker(atlas->getNode(parent), next_point);
             std::size_t child = atlas->createNode(next_point);
             connect(child, parent);
             createNodeMarker(atlas->getNode(child));
@@ -76,7 +76,7 @@ class ExplorerSinglePath : public ExplorerBase
             solution = getPathToRoot(parent);
             highlightSolution(solution);
         }
-            is_running = false;
+        is_running = false;
     }
 
     /**
@@ -94,8 +94,69 @@ class ExplorerSinglePath : public ExplorerBase
         return solution;
     }
 
+    virtual void createSamplesMarker(const Chart &c, const Eigen::Vector3d &projected)
+    {
+        for (size_t i=0; i<c.samples.rows(); ++i)
+        {
+            visualization_msgs::Marker samp;
+            samp.header.frame_id = "update_me_before_publishing!";
+            samp.header.stamp = ros::Time::now();
+            samp.lifetime = ros::Duration(0.5);
+            samp.ns = "Atlas Node(" + std::to_string(c.getId()) + ") Samples";
+            samp.id = i;
+            samp.type = visualization_msgs::Marker::SPHERE;
+            samp.action = visualization_msgs::Marker::ADD;
+            samp.scale.x = 0.01;
+            samp.scale.y = 0.01;
+            samp.scale.z = 0.01;
+            samp.color.a = 0.5;
+            if (i==0){
+                //is winner
+                samp.color.r = 0.9;
+                samp.color.b = 0.0;
+                samp.color.g = 0.9;
+            }
+            else{
+                samp.color.r = 0.0;
+                samp.color.b = 0.8;
+                samp.color.g = 0.9;
+            }
+            samp.pose.position.x = c.samples(i,0);
+            samp.pose.position.y = c.samples(i,1);
+            samp.pose.position.z = c.samples(i,2);
+            std::lock_guard<std::mutex> guard(*mtx_ptr);
+            markers->markers.push_back(samp);
+        }
+        geometry_msgs::Point e;
+        geometry_msgs::Point s;
+
+        visualization_msgs::Marker proj;
+        proj.header.frame_id = "update_me_before_publishing!";
+        proj.header.stamp = ros::Time();
+        proj.lifetime = ros::Duration(0.5);
+        proj.ns = "Atlas Node(" + std::to_string(c.getId()) + ") Samples";
+        proj.id = c.samples.rows();
+        proj.type = visualization_msgs::Marker::ARROW;
+        proj.action = visualization_msgs::Marker::ADD;
+        s.x = c.samples(0,0);
+        s.y = c.samples(0,1);
+        s.z = c.samples(0,2);
+        proj.points.push_back(s);
+        e.x = projected[0];
+        e.y = projected[1];
+        e.z = projected[2];
+        proj.points.push_back(e);
+        proj.scale.x = 0.001;
+        proj.scale.y = 0.01;
+        proj.scale.z = 0.01;
+        proj.color.a = 0.4;
+        proj.color.r = 0.0;
+        proj.color.g = 0.2;
+        proj.color.b = 0.8;
+        std::lock_guard<std::mutex> guard(*mtx_ptr);
+        markers->markers.push_back(proj);
+    }
     protected:
-    AtlasVariance::Ptr atlas;
     //starting point
     Eigen::Vector3d start_point;
     //termination on max num nodes

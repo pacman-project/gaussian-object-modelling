@@ -21,8 +21,8 @@ namespace gp_atlas_rrt
 
         //only way to construct a Chart! (also prevents implicit conversions)
         explicit Chart(const Eigen::Vector3d &c, const std::size_t i, const Eigen::Vector3d &g
-                ,const double r, const double v):
-            id(i), C(c), G(g), R(r), V(v)
+                ,const double v):
+            id(i), C(c), G(g), V(v)
         {
             gp_regression::computeTangentBasis(G, N,Tx,Ty);
         }
@@ -90,7 +90,7 @@ namespace gp_atlas_rrt
         //these can be public, they dont affect the disc functionalites
         Eigen::MatrixXd samples; //collection of uniform disc samples (nx3)
 
-        private:
+        protected:
         std::size_t id;       // unique identifier
         Eigen::Vector3d C;     // origin point
         Eigen::Vector3d G;     // Gradient
@@ -194,7 +194,7 @@ class AtlasBase
      * \param[in] improve_tol tolerance on f(x) improvement. Thired convergence criteria.
      */
     virtual void project(const Eigen::Vector3d &in, Eigen::Vector3d &out, const Eigen::Vector3d &normal,
-            const double f_tol= 1e-2, const double improve_tol= 1e-6, const unsigned int max_iter=5000, const double step_mul = 0.001)
+            const double f_tol= 1e-2, const double improve_tol= 1e-7, const unsigned int max_iter=500, const double step_mul = 0.0001)
     {
         if (!gp_reg)
             throw gp_regression::GPRegressionException("Empty regressor pointer");
@@ -204,6 +204,7 @@ class AtlasBase
         unsigned int iter = 0;
         Eigen::MatrixXd N;
         Eigen::Vector3d g = normal;
+        bool fail(false);
         while(iter < max_iter)
         {
             // clear vectors of current values
@@ -218,6 +219,16 @@ class AtlasBase
 
             // evaluate the current result
             gp_reg->evaluate(gp_model, currentP, current_f);
+
+            if (std::isnan(current_f.at(0))){
+                std::cout << "[Atlas::project] Found NAN function evaluation. Resetting states" << std::endl;
+                current = in;
+                current += Eigen::Vector3d(getRandIn(0.0,1e-3), getRandIn(0.0,1e-3), getRandIn(0.0,1e-3));
+                g=normal;
+                ++iter;
+                fail = true;
+                continue;
+            }
 
             // std::cout << "current f" << current_f.at(0) << std::endl;
 
@@ -248,8 +259,14 @@ class AtlasBase
                 return;
             }
             ++iter;
+            fail = false;
         }
-        std::cout << "[Atlas::project] CONVERGENCE: Reached maximum number of iterations." << std::endl;
+        if (fail){
+            std::cout << "[Atlas::project] FAIL: Cannot project "<< std::endl;
+            out = in;
+            return;
+        }
+        std::cout << "[Atlas::project] CONVERGENCE: Reached maximum number of iterations. F: "<<current_f.at(0)<<" Var:"<<v.at(0)<< std::endl;
         out = current;
     }
 

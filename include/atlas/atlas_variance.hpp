@@ -14,7 +14,7 @@ class AtlasVariance : public AtlasBase
 
     AtlasVariance()=delete;
     AtlasVariance(const gp_regression::Model::Ptr &gp, const gp_regression::ThinPlateRegressor::Ptr &reg):
-        AtlasBase(gp,reg), var_factor(1.96), disc_samples_factor(2000)
+        AtlasBase(gp,reg), var_factor(0.65), disc_samples_factor(500)
     {
         var_tol = 0.5; //this should be give by user
                        //whoever uses this class will take care of it, by calling
@@ -36,6 +36,23 @@ class AtlasVariance : public AtlasBase
     //     setGPRegressor(gpr);
     // }
 
+    virtual double computeRadiusFromVariance(const double v) const
+    {
+        if (v > 0.5){
+            std::cout<<"Variance is too big "<<v<<std::endl;
+            return 0.01;
+        }
+        if (v < 0){
+            std::cout<<"Variance is negative "<<v<<std::endl;
+            return 0.3;
+        }
+        if (std::isnan(v) || std::isinf(v)){
+            std::cout<<"Variance is NAN / Inf "<<v<<std::endl;
+            return 0.05;
+        }
+        return ( -var_factor*v + 0.3);
+    }
+
     virtual std::size_t createNode(const Eigen::Vector3d& center)
     {
         if (!gp_reg)
@@ -48,9 +65,10 @@ class AtlasVariance : public AtlasBase
         Eigen::MatrixXd gg;
         gp_reg->evaluate(gp_model, c, f, v, gg);
         Eigen::Vector3d g = gg.row(0);
-        if (std::abs(f.at(0)) > 0.01)
+        if (std::abs(f.at(0)) > 0.01 || std::isnan(f.at(0)) || std::isinf(f.at(0)))
             std::cout<<"[Atlas::createNode] Chart center is not on GP surface! f(x) = "<<f.at(0)<<std::endl;
-        Chart node (center, nodes.size(), g, std::sqrt(v.at(0))*var_factor, v.at(0));
+        Chart node (center, nodes.size(), g, v.at(0));
+        node.setRadius(computeRadiusFromVariance(v.at(0)));
         nodes.push_back(node);
         return node.getId();
     }
@@ -70,7 +88,7 @@ class AtlasVariance : public AtlasBase
         const double R = nodes.at(id).getRadius();
         //prepare the samples storage
         const std::size_t tot_samples = std::round(disc_samples_factor * R);
-        std::cout<<"tot samp "<<tot_samples<<std::endl;
+        std::cout<<"total samples "<<tot_samples<<std::endl;
         nodes.at(id).samples.resize(tot_samples, 3);
         std::vector<double> f,v;
         //transformation into the kinect frame from local
@@ -90,8 +108,8 @@ class AtlasVariance : public AtlasBase
             const double th = getRandIn(0.0, 2*M_PI);
             //point in local frame, uniformely sampled
             Eigen::Vector4d pL;
-            pL <<   0.5*R * std::cos(th),
-                    0.5*R * std::sin(th),
+            pL <<   R * std::sqrt(r) * std::cos(th),
+                    R * std::sqrt(r) * std::sin(th),
                     0,
                     1;
             //the same point in kinect frame
@@ -113,6 +131,8 @@ class AtlasVariance : public AtlasBase
         }
         //the winner is:
         Eigen::Vector3d chosen = nodes.at(id).samples.row(s_idx);
+        //put winner on top (for visualization)
+        nodes.at(id).samples.row(0).swap(nodes.at(id).samples.row(s_idx));
         Eigen::Vector3d nextState;
         //project the chosen
         project(chosen, nextState, G);
@@ -126,8 +146,7 @@ class AtlasVariance : public AtlasBase
     }
 
     protected:
-    //radius is proportional to sqrt variance of its center times 95% confidence
-    //this factor is hardcoded to 1.96
+    //radius is inversely proportional to variance
     double var_factor;
     //how many disc samples multiplier (total samples are proportional to radius)
     //which in turn is proportional to variance

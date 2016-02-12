@@ -9,17 +9,17 @@ namespace gp_regression
 class ThinPlate
 {
 public:
-        inline double compute(double &value)
+        inline double compute(double value)
         {
                 return 2*value*value*value - 3*R_*value*value + R3_;
         }
 
-        inline double computediff(double &value)
+        inline double computediff(double value)
         {
                 return -6*(R_ - value);
         }
 
-        inline double computediffdiff(double &value)
+        inline double computediffdiff(double value)
         {
                 // not implemented
                 return 0;

@@ -363,7 +363,7 @@ bool GaussianProcessNode::startExploration()
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
     //termination condition
-    atlas->setVarianceTolGoal( 0.5 );
+    atlas->setVarianceTolGoal( 0.4 );
     //atlas is ready
 
     //setup explorer

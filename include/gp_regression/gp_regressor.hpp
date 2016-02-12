@@ -4,6 +4,7 @@
 #include <vector>
 #include <functional>
 #include <memory>
+#include <iostream>
 
 #include <Eigen/Core>
 #include <Eigen/LU>
@@ -258,6 +259,8 @@ public:
 
                 // conversions
                 convertToSTD(F, f);
+                if (std::isnan(f.at(0))|| std::isinf(f.at(0)))
+                    std::cout<<"Kqp "<<Kqp<<std::endl;
                 convertToSTD(V_diagonal, v);
         }
 
