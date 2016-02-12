@@ -44,6 +44,7 @@ class AtlasVariance : public AtlasBase
         c->coord_x.push_back(center(0));
         c->coord_y.push_back(center(1));
         c->coord_z.push_back(center(2));
+        std::cout<<"c "<<c->coord_x.at(0)<<" "<<c->coord_y.at(0)<<" "<<c->coord_z.at(0)<<std::endl;
         std::vector<double> f,v;
         Eigen::MatrixXd gg;
         gp_reg->evaluate(gp_model, c, f, v, gg);

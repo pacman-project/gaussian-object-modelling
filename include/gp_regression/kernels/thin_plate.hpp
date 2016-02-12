@@ -9,8 +9,6 @@ namespace gp_regression
 class ThinPlate
 {
 public:
-        const double R_;
-
         inline double compute(double &value)
         {
                 return 2*value*value*value - 3*R_*value*value + R3_;
@@ -30,7 +28,7 @@ public:
         ThinPlate(double R) :
                 R_(R)
         {
-                R3_ = R_*R_*R_;
+                R3_ = R*R*R;
         }
 
         ThinPlate() :
@@ -41,6 +39,7 @@ public:
 
 private:
         double R3_;
+        double R_;
 };
 
 }

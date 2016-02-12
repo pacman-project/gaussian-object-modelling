@@ -82,10 +82,10 @@ target_link_libraries(gaussian_process
 
 ## Tests
 
-add_executable(test_gaussian
-  tests/test_gaussian.cpp
-  ${gp_INCLUDES}
-)
+# add_executable(test_gaussian
+#   tests/test_gaussian.cpp
+#   ${gp_INCLUDES}
+# )
 
 # add_executable(test_gp
 #   tests/test_gp.cpp
@@ -93,9 +93,9 @@ add_executable(test_gaussian
 #   # ${gp_INCLUDES}
 # )
 
-add_executable(test_eigen
-  tests/test_eigen.cpp
-)
+# add_executable(test_eigen
+#   tests/test_eigen.cpp
+# )
 
 # add a target to generate API documentation with Doxygen
 find_package(Doxygen)

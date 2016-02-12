@@ -111,6 +111,7 @@ class GaussianProcessNode
         // regressor and model
         gp_regression::ThinPlateRegressor::Ptr reg_;
         gp_regression::Model::Ptr obj_gp;
+        std::shared_ptr<gp_regression::ThinPlate> my_kernel;
 
         //atlas and explorer
         gp_atlas_rrt::AtlasVariance::Ptr atlas;

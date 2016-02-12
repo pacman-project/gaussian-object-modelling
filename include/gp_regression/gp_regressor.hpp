@@ -85,7 +85,7 @@ class GPRegressor
 {
 public:
         // pointer to the covariance function type
-        CovType* kernel_;
+        std::shared_ptr<CovType> kernel_;
 
         virtual ~GPRegressor() {}
 
@@ -474,9 +474,9 @@ public:
          * if you want to change the default parameters the regressor/cov. function
          * are created with.
          */
-        void setCovFunction(CovType &kernel)
+        void setCovFunction(const std::shared_ptr<CovType> &kernel)
         {
-                kernel_ = &kernel;
+                kernel_ = kernel;
         }
 
         /**
@@ -485,7 +485,7 @@ public:
          */
         GPRegressor()
         {
-                kernel_ = new CovType();
+                kernel_ = std::make_shared<CovType>();
         }
 
 private:

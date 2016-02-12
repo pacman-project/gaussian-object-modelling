@@ -330,8 +330,8 @@ bool GaussianProcessNode::computeGP()
     }
 
     obj_gp = std::make_shared<gp_regression::Model>();
-    gp_regression::ThinPlate my_kernel(out_sphere_rad * 2);
     reg_ = std::make_shared<gp_regression::ThinPlateRegressor>();
+    my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad * 2);
     reg_->setCovFunction(my_kernel);
     const bool withoutNormals = false;
     reg_->create<withoutNormals>(cloud_gp, obj_gp);
@@ -359,7 +359,7 @@ bool GaussianProcessNode::startExploration()
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    fakeDeterministicSampling(1.2, 0.06);
+    fakeDeterministicSampling(1.1, 0.1);
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
     //termination condition
@@ -373,10 +373,10 @@ bool GaussianProcessNode::startExploration()
     explorer->setMaxNodes(100);
     //get a starting point from data cloud
     int r_id = getRandIn(0, data_ptr_->points.size()-1 );
-    Eigen::Vector3d root
-        (data_ptr_->points[r_id].x,
-         data_ptr_->points[r_id].y,
-         data_ptr_->points[r_id].z);
+    Eigen::Vector3d root;
+    root << data_ptr_->points[r_id].x,
+            data_ptr_->points[r_id].y,
+            data_ptr_->points[r_id].z;
     explorer->setStart(root);
     //explorer is ready, start exploration (this spawns a thread)
     explorer->startExploration();
@@ -421,8 +421,6 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
 
     gp_regression::Data::Ptr ss = std::make_shared<gp_regression::Data>();
     std::vector<double> ssvv;
-    // gp_regression::ThinPlate my_kernel(R_);
-    // reg_->setCovFunction(my_kernel);
 
     double min_v (100.0);
     double max_v (0.0);

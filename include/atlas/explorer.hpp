@@ -232,6 +232,7 @@ class ExplorerBase
         branches.emplace(std::make_pair(child,parent));
     }
 
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
     ///Connection map  key=childNodes, value=oneOfItsParents,
     //multiple equivalent keys can be present, thus givin a child more than one parent
