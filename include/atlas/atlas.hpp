@@ -194,21 +194,20 @@ class AtlasBase
      * \param[in] improve_tol tolerance on f(x) improvement. Thired convergence criteria.
      */
     virtual void project(const Eigen::Vector3d &in, Eigen::Vector3d &out, const Eigen::Vector3d &normal,
-            const double f_tol= 1e-2, const double improve_tol= 1e-7, const unsigned int max_iter=500, const double step_mul = 0.0001)
+            const double f_tol= 1e-2, const double improve_tol= 1e-7, const unsigned int max_iter=500, const double step_mul = 0.001)
     {
         if (!gp_reg)
             throw gp_regression::GPRegressionException("Empty regressor pointer");
         Eigen::Vector3d current = in;
         std::vector<double> current_f, v;
-        gp_regression::Data::Ptr currentP = std::make_shared<gp_regression::Data>();
         unsigned int iter = 0;
         Eigen::MatrixXd N;
         Eigen::Vector3d g = normal;
         bool fail(false);
         while(iter < max_iter)
         {
+            gp_regression::Data::Ptr currentP = std::make_shared<gp_regression::Data>();
             // clear vectors of current values
-            currentP->clear();
             current_f.clear();
             v.clear();
 
@@ -220,13 +219,15 @@ class AtlasBase
             // evaluate the current result
             gp_reg->evaluate(gp_model, currentP, current_f);
 
-            if (std::isnan(current_f.at(0))){
+            if (std::isnan(current_f.at(0)) || std::isinf(current_f.at(0))){
                 std::cout << "[Atlas::project] Found NAN function evaluation. Resetting states" << std::endl;
+                std::cout<<"current "<<current<<std::endl;
                 current = in;
                 current += Eigen::Vector3d(getRandIn(0.0,1e-3), getRandIn(0.0,1e-3), getRandIn(0.0,1e-3));
                 g=normal;
                 ++iter;
                 fail = true;
+                throw gp_regression::GPRegressionException("f is nan or inf");
                 continue;
             }
 

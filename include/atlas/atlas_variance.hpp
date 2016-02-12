@@ -65,9 +65,20 @@ class AtlasVariance : public AtlasBase
         Eigen::MatrixXd gg;
         gp_reg->evaluate(gp_model, c, f, v, gg);
         Eigen::Vector3d g = gg.row(0);
+        if (g.isZero(1e-3)){
+            std::cout<<"[Atlas::createNode] Chart gradient is zero. g = "<<g<<std::endl;
+            c->clear();
+            c->coord_x.push_back(center(0) + getRandIn(1e-5, 1e-3));
+            c->coord_y.push_back(center(1) + getRandIn(1e-5, 1e-3));
+            c->coord_z.push_back(center(2) + getRandIn(1e-5, 1e-3));
+            gp_reg->evaluate(gp_model, c, f, v, gg);
+            g=gg.row(0);
+            throw gp_regression::GPRegressionException("Gradient is zero");
+        }
         if (std::abs(f.at(0)) > 0.01 || std::isnan(f.at(0)) || std::isinf(f.at(0)))
             std::cout<<"[Atlas::createNode] Chart center is not on GP surface! f(x) = "<<f.at(0)<<std::endl;
         Chart node (center, nodes.size(), g, v.at(0));
+        std::cout<<"[Atlas::createNode] Created node. Center is c = "<<center<<std::endl;
         node.setRadius(computeRadiusFromVariance(v.at(0)));
         nodes.push_back(node);
         return node.getId();
@@ -87,7 +98,7 @@ class AtlasVariance : public AtlasBase
         const Eigen::Vector3d G = nodes.at(id).getGradient();
         const double R = nodes.at(id).getRadius();
         //prepare the samples storage
-        const std::size_t tot_samples = std::round(disc_samples_factor * R);
+        const std::size_t tot_samples = std::ceil(disc_samples_factor * R);
         std::cout<<"total samples "<<tot_samples<<std::endl;
         nodes.at(id).samples.resize(tot_samples, 3);
         std::vector<double> f,v;
@@ -97,6 +108,7 @@ class AtlasVariance : public AtlasBase
                 Tx(1), Ty(1), N(1), C(1),
                 Tx(2), Ty(2), N(2), C(2),
                 0,     0,     0,    1;
+        std::cout<<"Tkl "<<Tkl<<std::endl;
         //keep the max variance found
         double max_v(0.0);
         //and which sample it was
@@ -122,6 +134,7 @@ class AtlasVariance : public AtlasBase
             nodes.at(id).samples(i,0) = pK(0);
             nodes.at(id).samples(i,1) = pK(1);
             nodes.at(id).samples(i,2) = pK(2);
+            std::cout<<"pK "<<pK<<std::endl;
             //evaluate the sample
             gp_reg->evaluate(gp_model, query, f, v);
             if (v.at(0) > max_v){
