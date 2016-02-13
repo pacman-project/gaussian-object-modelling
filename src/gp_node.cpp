@@ -74,26 +74,35 @@ void GaussianProcessNode::deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::
         ROS_ERROR("[GaussianProcessNode::%s]\tFailed to compute object centroid. Aborting...",__func__);
         return;
     }
+    current_offset_ = centroid.cast<double>();
+
     data_ptr_->clear();
     PtC::Ptr tmp (new PtC);
     pcl::demeanPointCloud(*data_ptr, centroid, *tmp);
 
     // then normalize points to be in box = [-1, 1] x [-1, 1] x [-1, 1]
-    double max_norm (0.0);
+    current_scale_ = 0.0;
     for (const auto& pt: tmp->points)
     {
         double norm = std::sqrt( pt.x * pt.x + pt.y * pt.y + pt.z* pt.z);
-        if (norm >= max_norm)
-            max_norm = norm;
+        if (norm >= current_scale_)
+            current_scale_ = norm;
     }
     Eigen::Matrix4f sc;
-    sc    << 1/max_norm, 0, 0, 0,
-             0, 1/max_norm, 0, 0,
-             0, 0, 1/max_norm, 0,
+    sc    << 1/current_scale_, 0, 0, 0,
+             0, 1/current_scale_, 0, 0,
+             0, 0, 1/current_scale_, 0,
              0, 0, 0,          1;
     // note that this writes to class member
     pcl::transformPointCloud(*tmp, *out, sc);
     return;
+}
+
+// void GaussianProcessNode::reMeanAndDenormalizeData(const std::vector<Eigen::Vector3d> &in, std::vector<Eigen::Vector3d> &out)
+void GaussianProcessNode::reMeanAndDenormalizeData(Eigen::Vector3d &data)
+{
+    data = current_scale_*data;
+    data = data + current_offset_.block(0,0,3,1);
 }
 
 //callback to start process service, executes when service is called
@@ -107,15 +116,17 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
          std_msgs::Header solution_header;
          solution_header.stamp = ros::Time::now();
          solution_header.frame_id = object_ptr->header.frame_id;
+         std::cout << "solution_header.frame_id: " << solution_header.frame_id << std::endl;
 
          gp_regression::Path next_best_path;
-         next_best_path.header = solution_header;
 
          // ToDO: solutionToPath(solution, path) function
          gp_atlas_rrt::Chart solution_chart = atlas->getNode(solution.front());
-
          Eigen::Vector3d point_eigen = solution_chart.getCenter();
          Eigen::Vector3d normal_eigen = solution_chart.getNormal();
+         // modifies the point
+         reMeanAndDenormalizeData(point_eigen);
+         // normal does not need to be reMeanAndRenormalized for now
 
          geometry_msgs::PointStamped point_msg;
          geometry_msgs::Vector3Stamped normal_msg;
@@ -130,6 +141,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
 
          next_best_path.points.push_back( point_msg );
          next_best_path.directions.push_back( normal_msg );
+         next_best_path.header = solution_header;
 
          res.next_best_path = next_best_path;
          return true;

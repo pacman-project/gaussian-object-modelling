@@ -110,6 +110,8 @@ class GaussianProcessNode
         PtC::Ptr data_ptr_;
         // input hand point cloud
         PtC::Ptr hand_ptr;
+        Eigen::Vector4d current_offset_;
+        double current_scale_;
 
         // regressor and model
         gp_regression::ThinPlateRegressor::Ptr reg_;
@@ -129,7 +131,9 @@ class GaussianProcessNode
          ***********
          *
          */
+        // Helpers
         void deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out);
+        void reMeanAndDenormalizeData(Eigen::Vector3d &data);
         // Compute a Gaussian Process from object and store it
         bool computeGP();
         // start the RRT exploration
