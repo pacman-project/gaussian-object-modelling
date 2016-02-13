@@ -182,9 +182,5 @@ class GaussianProcessNode
         // the grid plotting
         void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
 
-        // this is a debug callback
-        bool cb_rnd_choose(gp_regression::SelectNSamples::Request& req, gp_regression::SelectNSamples::Response& res);
-        int cb_rnd_choose_counter;
-
 };
 #endif

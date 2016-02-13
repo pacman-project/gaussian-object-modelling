@@ -10,12 +10,11 @@ using namespace gp_regression;
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
-    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false), cb_rnd_choose_counter(0),
+    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false),
     out_sphere_rad(1.8)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
-    // srv_rnd_tests_ = nh.advertiseService("other_rnd_samples", &GaussianProcessNode::cb_rnd_choose, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_update, this);
@@ -493,38 +492,6 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
 }
-
-// this is a debug callback
-// bool GaussianProcessNode::cb_rnd_choose(gp_regression::SelectNSamples::Request& req, gp_regression::SelectNSamples::Response& res)
-// {
-//         if (!isAtlas){
-//             ROS_WARN("[GaussianProcessNode::%s]\tNo Atlas created, selecting nothing",__func__);
-//             return false;
-//         }
-//         int N = req.n_selections.data;
-//         gp_regression::GPProjector<gp_regression::ThinPlate> proj;
-//         // gp_regression::ThinPlate my_kernel(R_);
-//         // reg_.setCovFunction(my_kernel);
-//         for (int i=0; i < N; ++i)
-//         {
-//             int r_id;
-//             //get a random index
-//             r_id = getRandIn(0, markers->markers[0].points.size() -1);
-//             gp_regression::Chart::Ptr gp_chart;
-//             Eigen::Vector3d c (markers->markers[0].points[r_id].x,
-//                                markers->markers[0].points[r_id].y,
-//                                markers->markers[0].points[r_id].z);
-//             proj.generateChart(*reg_, obj_gp, c, gp_chart);
-//             gp_chart->id = i;
-//             atlas_.addChart(gp_chart, i);
-//         }
-//
-//         // this will create again the same
-//         createAtlasMarkers();
-//         // this value is added to the ids of the marker so we won't delete the previous ones
-//         cb_rnd_choose_counter++;
-//         return true;
-// }
 
 ///// MAIN ////////////////////////////////////////////////////////////////////
 
