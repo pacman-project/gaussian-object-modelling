@@ -207,6 +207,7 @@ class AtlasBase
         Eigen::Vector3d g = normal;
         while(iter < max_iter)
         {
+            // std::cout<<"iter "<<iter<<std::endl;
             gp_regression::Data::Ptr currentP = std::make_shared<gp_regression::Data>();
             // clear vectors of current values
             current_f.clear();
@@ -238,7 +239,13 @@ class AtlasBase
 
             // perform the step using the gradient descent method
             // put minus in front, cause normals are all pointing outwards
-            current -= step_mul*current_f.at(0)*g;
+            Eigen::Vector3d cur_step = step_mul*current_f.at(0)*g;
+            if (!cur_step.isMuchSmallerThan(1e3, 1e-1) || cur_step.isZero(1e-6)){
+                std::cout<<"[Atlas::project] Current step is wrong! Ignoring\n";
+                std::cout<<"[Atlas::project] It was\n"<<cur_step<<std::endl;
+            }
+            else
+                current -= cur_step;
 
             // check improvment tolerance
             gp_regression::Data::Ptr outP = std::make_shared<gp_regression::Data>();
@@ -247,7 +254,12 @@ class AtlasBase
             outP->coord_z.push_back( current(2) );
             std::vector<double> out_f;
             gp_reg->evaluate(gp_model, outP, out_f, v, N);
-            g = N.row(0);
+            if (!N.row(0).isMuchSmallerThan(1e3, 1e-1) || N.row(0).isZero(1e-5)){
+                std::cout<<"[Atlas::project] Gradient is wrong! Resetting to previous\n";
+                std::cout<<"[Atlas::project] Gradient was\n"<<N.row(0)<<std::endl;
+            }
+            else
+                g = N.row(0);
             if( std::abs(out_f.at(0) - current_f.at(0)) < improve_tol )
             {
                 std::cout << "[Atlas::project] CONVERGENCE: Function improvement reached tolerance." << std::endl;

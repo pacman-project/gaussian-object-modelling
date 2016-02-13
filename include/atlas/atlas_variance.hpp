@@ -65,23 +65,29 @@ class AtlasVariance : public AtlasBase
         Eigen::MatrixXd gg;
         gp_reg->evaluate(gp_model, c, f, v, gg);
         Eigen::Vector3d g = gg.row(0);
-        if (g.isZero(1e-3)){
-            std::cout<<"[Atlas::createNode] Chart gradient is zero. g = "<<g<<std::endl;
-            std::cout<<"[Atlas::createNode] Chart center is c = "<<center<<std::endl;
+        if (g.isZero(1e-3) || !g.isMuchSmallerThan(1e3,1e-1)){
+            std::cout<<"[Atlas::createNode] Chart gradient is wrong, trying to perturbate test point.\n";
+            std::cout<<"[Atlas::createNode] Gradient is\n"<<g<<std::endl;
+            std::cout<<"[Atlas::createNode] Chart center is\n"<<center<<std::endl;
             c->clear();
-            c->coord_x.push_back(center(0) + getRandIn(1e-5, 1e-3));
-            c->coord_y.push_back(center(1) + getRandIn(1e-5, 1e-3));
-            c->coord_z.push_back(center(2) + getRandIn(1e-5, 1e-3));
+            c->coord_x.push_back(center(0) + getRandIn(1e-3, 1e-2));
+            c->coord_y.push_back(center(1) + getRandIn(1e-3, 1e-2));
+            c->coord_z.push_back(center(2) + getRandIn(1e-3, 1e-2));
             gp_reg->evaluate(gp_model, c, f, v, gg);
             g=gg.row(0);
             // throw gp_regression::GPRegressionException("Gradient is zero");
         }
         if (std::abs(f.at(0)) > 0.01 || std::isnan(f.at(0)) || std::isinf(f.at(0)))
             std::cout<<"[Atlas::createNode] Chart center is not on GP surface! f(x) = "<<f.at(0)<<std::endl;
+        if (g.isZero(1e-3) || !g.isMuchSmallerThan(1e3, 1e-1)){
+            std::cout<<"[Atlas::createNode] Gradient is still Zero Or too big! Resetting to Xaxis\n";
+            std::cout<<"[Atlas::createNode] Gradient was\n"<<g<<std::endl;
+            g = Eigen::Vector3d::UnitX();
+        }
         Chart node (center, nodes.size(), g, v.at(0));
-        std::cout<<"[Atlas::createNode] Created node. Center is c = "<<center<<std::endl;
         node.setRadius(computeRadiusFromVariance(v.at(0)));
         nodes.push_back(node);
+        std::cout<<"[Atlas::createNode] Created node "<<node.getId()<<std::endl;
         return node.getId();
     }
 
@@ -98,6 +104,12 @@ class AtlasVariance : public AtlasBase
         const Eigen::Vector3d C = nodes.at(id).getCenter();
         const Eigen::Vector3d G = nodes.at(id).getGradient();
         const double R = nodes.at(id).getRadius();
+        // std::cout<<"N\n"<<N <<std::endl;
+        // std::cout<<"Tx\n"<<Tx <<std::endl;
+        // std::cout<<"Ty\n"<<Ty <<std::endl;
+        // std::cout<<"C\n"<<C <<std::endl;
+        // std::cout<<"G\n"<<G <<std::endl;
+        // std::cout<<"R "<<R <<std::endl;
         //prepare the samples storage
         const std::size_t tot_samples = std::ceil(disc_samples_factor * R);
         // std::cout<<"total samples "<<tot_samples<<std::endl;
@@ -117,8 +129,13 @@ class AtlasVariance : public AtlasBase
         //uniform annulus sampling
         for (std::size_t i=0; i<tot_samples; ++i)
         {
-            const double r = getRandIn(0.8, 1.0, true);
-            const double th = getRandIn(0.0, 2*M_PI);
+            double r = getRandIn(0.8, 1.0, true);
+            double th = getRandIn(0.0, 2*M_PI);
+            if (std::isnan(r) || std::isinf(r) || std::isnan(th) || std::isinf(th)){
+                std::cout<<"r: "<<r <<"th: "<<th <<std::endl;
+                r = getRandIn(0.8, 1.0, true);
+                th = getRandIn(0.0, 2*M_PI);
+            }
             //point in local frame, uniformely sampled
             Eigen::Vector4d pL;
             pL <<   R * std::sqrt(r) * std::cos(th),
@@ -137,10 +154,13 @@ class AtlasVariance : public AtlasBase
             nodes.at(id).samples(i,2) = pK(2);
             //evaluate the sample
             gp_reg->evaluate(gp_model, query, f, v);
-            if (std::isnan(v.at(0) || std::isinf(v.at(0)))){
-                std::cout << "[Atlas::getNextState] Found NAN variance. Fatal. v=" <<v.at(0)<<std::endl;
+            if (std::isnan(v.at(0)) || std::isinf(v.at(0)) ||
+                    std::isnan(f.at(0)) || std::isinf(f.at(0))){
+                std::cout << "[Atlas::getNextState] Found NAN. Fatal. f=" <<f.at(0)<<" v=" <<v.at(0)<<std::endl;
                 std::cout<<"point: "<<pK <<std::endl;
+                std::cout<<"point Local: "<<pL <<std::endl;
                 std::cout<<"r: "<<r <<"th: "<<th <<std::endl;
+                std::cout<<"Tkl:\n"<<Tkl <<std::endl;
                 throw gp_regression::GPRegressionException("v is nan or inf");
             }
             if (v.at(0) > max_v){
@@ -150,9 +170,9 @@ class AtlasVariance : public AtlasBase
         }
         //the winner is:
         Eigen::Vector3d chosen = nodes.at(id).samples.row(s_idx);
-        std::cout<<"chosen "<<chosen<<" s_idx "<<s_idx<<std::endl;
-        std::cout<<"samples dim: "<<nodes.at(id).samples.rows()<<" x "<<nodes.at(id).samples.cols()<<std::endl;
-        std::cout<<"samples "<<nodes.at(id).samples<<std::endl;
+        // std::cout<<"chosen "<<chosen<<" s_idx "<<s_idx<<std::endl;
+        // std::cout<<"samples dim: "<<nodes.at(id).samples.rows()<<" x "<<nodes.at(id).samples.cols()<<std::endl;
+        // std::cout<<"samples "<<nodes.at(id).samples<<std::endl;
         //put winner on top (for visualization)
         nodes.at(id).samples.row(0).swap(nodes.at(id).samples.row(s_idx));
         Eigen::Vector3d nextState;

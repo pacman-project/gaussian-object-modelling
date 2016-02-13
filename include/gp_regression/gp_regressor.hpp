@@ -29,10 +29,18 @@ namespace gp_regression
 void computeTangentBasis(const Eigen::Vector3d &grad, Eigen::Vector3d &N, Eigen::Vector3d &Tx, Eigen::Vector3d &Ty)
 {
     N = grad.normalized();
-    Tx = Eigen::Vector3d::UnitX() - (N*(N.dot(Eigen::Vector3d::UnitX())));
-    Tx.normalize();
-    Ty = N.cross(Tx);
-    Ty.normalize();
+    if ( !N.isApprox(Eigen::Vector3d::UnitX(), 1e-3)){
+        Tx = Eigen::Vector3d::UnitX() - (N*(N.dot(Eigen::Vector3d::UnitX())));
+        Tx.normalize();
+        Ty = N.cross(Tx);
+        Ty.normalize();
+    }
+    else{
+        Tx = Eigen::Vector3d::UnitY() - (N*(N.dot(Eigen::Vector3d::UnitY())));
+        Tx.normalize();
+        Ty = N.cross(Tx);
+        Ty.normalize();
+    }
 }
 
 /**

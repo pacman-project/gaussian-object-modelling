@@ -61,19 +61,12 @@ class ExplorerSinglePath : public ExplorerBase
                 ROS_INFO("[ExplorerSinglePath::%s]\tSolution Found!",__func__);
                 return;
             }
-            std::cout<<"\t\t1 ";
             Eigen::Vector3d next_point = atlas->getNextState(parent);
-            std::cout<<"\t\t2 ";
             createSamplesMarker(atlas->getNode(parent), next_point);
-            std::cout<<"\t\t3 ";
             std::size_t child = atlas->createNode(next_point);
-            std::cout<<"\t\t4 ";
             connect(child, parent);
-            std::cout<<"\t\t5 ";
             createNodeMarker(atlas->getNode(child));
-            std::cout<<"\t\t6 ";
             createBranchMarker(atlas->getNode(child), atlas->getNode(parent));
-            std::cout<<"\t\t7\n";
             parent = child;
             //ros stuff
             rate.sleep();
