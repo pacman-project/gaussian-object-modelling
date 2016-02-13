@@ -90,6 +90,7 @@ namespace gp_atlas_rrt
         //these can be public, they dont affect the disc functionalites
         Eigen::MatrixXd samples; //collection of uniform disc samples (nx3)
 
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         protected:
         std::size_t id;       // unique identifier
         Eigen::Vector3d C;     // origin point
@@ -174,6 +175,7 @@ class AtlasBase
      */
     virtual std::size_t createNode(const Eigen::Vector3d&)=0;
 
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
     ///Pointer to gp_model
     gp_regression::Model::Ptr gp_model;
@@ -203,9 +205,9 @@ class AtlasBase
         unsigned int iter = 0;
         Eigen::MatrixXd N;
         Eigen::Vector3d g = normal;
-        bool fail(false);
         while(iter < max_iter)
         {
+            // std::cout<<"iter "<<iter<<std::endl;
             gp_regression::Data::Ptr currentP = std::make_shared<gp_regression::Data>();
             // clear vectors of current values
             current_f.clear();
@@ -220,15 +222,9 @@ class AtlasBase
             gp_reg->evaluate(gp_model, currentP, current_f);
 
             if (std::isnan(current_f.at(0)) || std::isinf(current_f.at(0))){
-                std::cout << "[Atlas::project] Found NAN function evaluation. Resetting states" << std::endl;
+                std::cout << "[Atlas::project] Found NAN function evaluation. Fatal" << std::endl;
                 std::cout<<"current "<<current<<std::endl;
-                current = in;
-                current += Eigen::Vector3d(getRandIn(0.0,1e-3), getRandIn(0.0,1e-3), getRandIn(0.0,1e-3));
-                g=normal;
-                ++iter;
-                fail = true;
                 throw gp_regression::GPRegressionException("f is nan or inf");
-                continue;
             }
 
             // std::cout << "current f" << current_f.at(0) << std::endl;
@@ -243,16 +239,27 @@ class AtlasBase
 
             // perform the step using the gradient descent method
             // put minus in front, cause normals are all pointing outwards
-            current -= step_mul*current_f.at(0)*g;
+            Eigen::Vector3d cur_step = step_mul*current_f.at(0)*g;
+            if (!cur_step.isMuchSmallerThan(1e3, 1e-1) || cur_step.isZero(1e-6)){
+                std::cout<<"[Atlas::project] Current step is wrong! Ignoring\n";
+                std::cout<<"[Atlas::project] It was\n"<<cur_step<<std::endl;
+            }
+            else
+                current -= cur_step;
 
-            // cehck improvment tolerance
+            // check improvment tolerance
             gp_regression::Data::Ptr outP = std::make_shared<gp_regression::Data>();
             outP->coord_x.push_back( current(0) );
             outP->coord_y.push_back( current(1) );
             outP->coord_z.push_back( current(2) );
             std::vector<double> out_f;
             gp_reg->evaluate(gp_model, outP, out_f, v, N);
-            g = N.row(0);
+            if (!N.row(0).isMuchSmallerThan(1e3, 1e-1) || N.row(0).isZero(1e-5)){
+                std::cout<<"[Atlas::project] Gradient is wrong! Resetting to previous\n";
+                std::cout<<"[Atlas::project] Gradient was\n"<<N.row(0)<<std::endl;
+            }
+            else
+                g = N.row(0);
             if( std::abs(out_f.at(0) - current_f.at(0)) < improve_tol )
             {
                 std::cout << "[Atlas::project] CONVERGENCE: Function improvement reached tolerance." << std::endl;
@@ -260,12 +267,6 @@ class AtlasBase
                 return;
             }
             ++iter;
-            fail = false;
-        }
-        if (fail){
-            std::cout << "[Atlas::project] FAIL: Cannot project "<< std::endl;
-            out = in;
-            return;
         }
         std::cout << "[Atlas::project] CONVERGENCE: Reached maximum number of iterations. F: "<<current_f.at(0)<<" Var:"<<v.at(0)<< std::endl;
         out = current;
