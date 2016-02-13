@@ -302,8 +302,6 @@ class ExplorerBase
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
-    //atlas pointer
-    std::shared_ptr<AtlasBase> atlas;
     ///Connection map  key=childNodes, value=oneOfItsParents,
     //multiple equivalent keys can be present, thus givin a child more than one parent
     //this is not yet supported

@@ -34,7 +34,7 @@ class AtlasCollision : public AtlasVariance
             std::size_t s_id = nodes.at(id).vars_ids[i].second;
             if (nodes.at(id).samp_chosen == s_id)
                 continue;
-            if (!isInCollision(nodes.at(id).samples.row(s_id))){
+            if (!isInCollision(nodes.at(id).samples.row(s_id), id)){
                 nodes.at(id).samp_chosen = s_id;
                 chosen = nodes.at(id).samples.row(s_id);
                 break;
@@ -42,7 +42,7 @@ class AtlasCollision : public AtlasVariance
         }
         if (chosen.isZero()){
             std::cout<<"[Atlas::createNode] No viable extending direction found, cannot extend the node"<<std::endl;
-            throw gp_regression::GPRegressionException("Cannot extend node");
+            return Eigen::Vector3d::Zero();
         }
         Eigen::Vector3d nextState;
         const Eigen::Vector3d G = nodes.at(id).getGradient();
@@ -55,10 +55,12 @@ class AtlasCollision : public AtlasVariance
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
     //true if collision found
-    virtual bool isInCollision(const Eigen::Vector3d &pt)
+    virtual bool isInCollision(const Eigen::Vector3d &pt, const std::size_t &self)
     {
         for (std::size_t i=0; i<nodes.size(); ++i)
         {
+            if (i == self)
+                continue;
             const double dist = (pt[0] - nodes[i].getCenter()[0])*(pt[0] - nodes[i].getCenter()[0]) +
                                 (pt[1] - nodes[i].getCenter()[1])*(pt[1] - nodes[i].getCenter()[1]) +
                                 (pt[2] - nodes[i].getCenter()[2])*(pt[2] - nodes[i].getCenter()[2]);

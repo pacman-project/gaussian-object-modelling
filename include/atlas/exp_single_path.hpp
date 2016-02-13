@@ -22,7 +22,7 @@ class ExplorerSinglePath : public ExplorerBase
     /*
      * \brief set Atlas model
      */
-    virtual void setAtlas(const std::shared_ptr<AtlasBase> &a)
+    virtual void setAtlas(const std::shared_ptr<AtlasVariance> &a)
     {
         atlas = a;
     }
@@ -109,6 +109,8 @@ class ExplorerSinglePath : public ExplorerBase
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
+    //atlas pointer
+    std::shared_ptr<AtlasVariance> atlas;
     //starting point
     Eigen::Vector3d start_point;
     //termination on max num nodes

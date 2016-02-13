@@ -47,8 +47,12 @@
 #include <gp_regression/gp_modelling.h>
 
 //Atlas
+#include <atlas/atlas.hpp>
+#include <atlas/explorer.hpp>
 #include <atlas/atlas_variance.hpp>
+#include <atlas/atlas_collision.hpp>
 #include <atlas/exp_single_path.hpp>
+#include <atlas/exp_multibranch.hpp>
 
 /* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
 missing or is improvable! */
@@ -114,8 +118,10 @@ class GaussianProcessNode
         std::shared_ptr<gp_regression::ThinPlate> my_kernel;
 
         //atlas and explorer
-        gp_atlas_rrt::AtlasVariance::Ptr atlas;
-        gp_atlas_rrt::ExplorerSinglePath::Ptr explorer;
+        gp_atlas_rrt::AtlasCollision::Ptr atlas;
+        gp_atlas_rrt::ExplorerMultiBranch::Ptr explorer;
+        // gp_atlas_rrt::AtlasVariance::Ptr atlas;
+        // gp_atlas_rrt::ExplorerSinglePath::Ptr explorer;
         //exploration solution
         std::vector<std::size_t> solution;
 

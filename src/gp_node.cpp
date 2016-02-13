@@ -375,14 +375,17 @@ bool GaussianProcessNode::startExploration()
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
     fakeDeterministicSampling(1.1, 0.1);
+
     //create the atlas
-    atlas = std::make_shared<gp_atlas_rrt::AtlasVariance>(obj_gp, reg_);
+    atlas = std::make_shared<gp_atlas_rrt::AtlasCollision>(obj_gp, reg_);
     //termination condition
     atlas->setVarianceTolGoal( 0.4 );
+    //factor to control disc radius
+    atlas->setVarRadiusFactor( 0.7 );
     //atlas is ready
 
     //setup explorer
-    explorer = std::make_shared<gp_atlas_rrt::ExplorerSinglePath>(nh, "explorer");
+    explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
     explorer->setMaxNodes(20);

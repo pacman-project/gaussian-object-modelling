@@ -19,6 +19,11 @@ class ExplorerMultiBranch : public ExplorerSinglePath
     }
     virtual ~ExplorerMultiBranch(){}
 
+    virtual void setAtlas(const std::shared_ptr<AtlasCollision> &a)
+    {
+        atlas = a;
+    }
+
     virtual inline void setBias(double b)
     {
         if (b>=0.0 && b<=1.0)
@@ -52,11 +57,12 @@ class ExplorerMultiBranch : public ExplorerSinglePath
             if (dice < bias){
                 //we extend from a random node which is not the current
                 int id(parent);
-                while (id == parent)
-                    id = getRandIn(0, atlas->countNodes()-1);
+                if (atlas->countNodes() > 1)
+                    while (id == parent)
+                        id = getRandIn(0, atlas->countNodes()-1);
                 parent = id;
             }
-            ExplorerSinglePath::exp_step(parent);
+            exp_step(parent);
             //ros stuff
             rate.sleep();
             cb_queue->callAvailable();
@@ -69,9 +75,24 @@ class ExplorerMultiBranch : public ExplorerSinglePath
         std::lock_guard<std::mutex> lock(*mtx_ptr);
         is_running = false;
     }
+    virtual void exp_step(std::size_t &node)
+    {
+        Eigen::Vector3d next_point = atlas->getNextState(node);
+        if (next_point.isZero())
+            return;
+        createSamplesMarker(atlas->getNode(node), next_point);
+        std::size_t child = atlas->createNode(next_point);
+        connect(child, node);
+        createNodeMarker(atlas->getNode(child));
+        createBranchMarker(atlas->getNode(child), atlas->getNode(node));
+        node = child;
+    }
+
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
+    //atlas pointer
+    std::shared_ptr<AtlasCollision> atlas;
     double bias; //probability to chose a random node
                  //to extend instead of last one. (should be in [0,1])
 };
