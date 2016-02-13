@@ -15,9 +15,11 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
+    srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
-    sub_update_ = nh.subscribe(nh.resolveName("/clicked_point"),1, &GaussianProcessNode::cb_update, this);
+    sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
+
     // pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 0, true);
     // pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
     // pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
@@ -92,6 +94,46 @@ void GaussianProcessNode::deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::
     // note that this writes to class member
     pcl::transformPointCloud(*tmp, *out, sc);
     return;
+}
+
+//callback to start process service, executes when service is called
+bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res)
+{
+     if(solution.empty() || exploration_started) {
+        ROS_WARN("[GaussianProcessNode::%s]\tSorry, the exploration is WIP",__func__);
+        return false;
+     }
+     else {
+         std_msgs::Header solution_header;
+         solution_header.stamp = ros::Time::now();
+         solution_header.frame_id = object_ptr->header.frame_id;
+
+         gp_regression::Path next_best_path;
+         next_best_path.header = solution_header;
+
+         // ToDO: solutionToPath(solution, path) function
+         gp_atlas_rrt::Chart solution_chart = atlas->getNode(solution.front());
+
+         Eigen::Vector3d point_eigen = solution_chart.getCenter();
+         Eigen::Vector3d normal_eigen = solution_chart.getNormal();
+
+         geometry_msgs::PointStamped point_msg;
+         geometry_msgs::Vector3Stamped normal_msg;
+         point_msg.point.x = point_eigen(0);
+         point_msg.point.y = point_eigen(1);
+         point_msg.point.z = point_eigen(2);
+         point_msg.header = solution_header;
+         normal_msg.vector.x = normal_eigen(0);
+         normal_msg.vector.y = normal_eigen(1);
+         normal_msg.vector.z = normal_eigen(2);
+         normal_msg.header = solution_header;
+
+         next_best_path.points.push_back( point_msg );
+         next_best_path.directions.push_back( normal_msg );
+
+         res.next_best_path = next_best_path;
+         return true;
+     }
 }
 
 //callback to start process service, executes when service is called
@@ -413,6 +455,8 @@ void GaussianProcessNode::checkExploration()
         ROS_INFO("[GaussianProcessNode::%s]\tSolution Found", __func__);
 
         //TODO actually do something with the solution !
+        // new service in tha house for that
+        // remember everything should have a ROS API to be called from the state machine
     }
 }
 

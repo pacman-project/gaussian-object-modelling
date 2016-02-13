@@ -40,8 +40,7 @@
 
 // This node services (includes custom messages)
 #include <gp_regression/StartProcess.h>
-#include <gp_regression/GetToExploreTrajectory.h>
-#include <gp_regression/SelectNSamples.h>
+#include <gp_regression/GetNextBestPath.h>
 
 // Gaussian Process library
 #include <gp_regression/gp_regressors.h>
@@ -149,6 +148,7 @@ class GaussianProcessNode
 
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
+        ros::ServiceServer srv_get_next_best_path_;
 
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_markers; //, pub_point_marker, pub_direction_marker;
@@ -161,7 +161,7 @@ class GaussianProcessNode
         bool cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res);
 
         //callback to sample process service, executes when service is called
-        // bool cb_sample(gp_regression::GetToExploreTrajectory::Request& req, gp_regression::GetToExploreTrajectory::Response& res);
+        bool cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res);
 
         // callback for sub point subscriber
         // TODO: Convert this callback if  needed to accept probe points and not

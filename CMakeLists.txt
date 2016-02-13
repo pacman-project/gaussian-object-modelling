@@ -30,14 +30,13 @@ find_package(Eigen REQUIRED)
 add_service_files(
     FILES
     StartProcess.srv
-    GetToExploreTrajectory.srv
-    SelectNSamples.srv
+    GetNextBestPath.srv
     # StopExploration.srv
     )
 
 add_message_files(
     FILES
-    SampleToExplore.msg
+    Path.msg
     Chart.msg
     Atlas.msg
     MapCollection.msg
