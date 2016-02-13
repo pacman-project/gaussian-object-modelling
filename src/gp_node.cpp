@@ -233,10 +233,16 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         }
     }
 
+    ros::Duration waiter(1.0);
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (computeGP())
-        if(startExploration())
+        if(startExploration()){
+                while(exploration_started){
+                    ROS_INFO("Waiting for a solution");
+                    waiter.sleep();
+                }
             return true;
+        }
     return false;
 }
 
