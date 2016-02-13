@@ -20,11 +20,17 @@ class AtlasVariance : public AtlasBase
                        //whoever uses this class will take care of it, by calling
                        //setVarianceTolGoal()
     }
+    virtual ~AtlasVariance(){}
 
     ///Set the variance tolerance to surpass, for a node to be considered solution
     virtual inline void setVarianceTolGoal(const double vt)
     {
         var_tol = vt;
+    }
+
+    virtual inline void setDiscSampleFactor(const double dsf)
+    {
+        disc_samples_factor = dsf;
     }
 
     // ///reset Atlas with new parameters and then recieve a new starting point (root)
@@ -91,19 +97,53 @@ class AtlasVariance : public AtlasBase
         return node.getId();
     }
 
+
     virtual Eigen::Vector3d getNextState(const std::size_t& id)
     {
         if (!gp_reg)
             throw gp_regression::GPRegressionException("Empty Regressor pointer");
         if (id >= nodes.size())
             throw gp_regression::GPRegressionException("Out of Range node id");
-        //get some useful constants from the disc
-        const Eigen::Vector3d N = nodes.at(id).getNormal();
-        const Eigen::Vector3d Tx = nodes.at(id).getTanBasisOne();
-        const Eigen::Vector3d Ty = nodes.at(id).getTanBasisTwo();
-        const Eigen::Vector3d C = nodes.at(id).getCenter();
+        //the winner is:
+        sampleOnChart(nodes.at(id));
+        nodes.at(id).samp_chosen = nodes.at(id).vars_ids.at(0).second;
+        Eigen::Vector3d chosen = nodes.at(id).samples.row(nodes.at(id).samp_chosen);
+        // std::cout<<"chosen "<<chosen<<" s_idx "<<s_idx<<std::endl;
+        // std::cout<<"samples dim: "<<nodes.at(id).samples.rows()<<" x "<<nodes.at(id).samples.cols()<<std::endl;
+        // std::cout<<"samples "<<nodes.at(id).samples<<std::endl;
+        Eigen::Vector3d nextState;
         const Eigen::Vector3d G = nodes.at(id).getGradient();
-        const double R = nodes.at(id).getRadius();
+        //project the chosen
+        project(chosen, nextState, G);
+        //and done
+        return nextState;
+    }
+
+    virtual inline bool isSolution(const std::size_t &id)
+    {
+        if (id >= nodes.size())
+            throw gp_regression::GPRegressionException("Out of Range node id");
+        return (getNode(id).getVariance() > var_tol);
+    }
+
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    protected:
+    //radius is inversely proportional to variance
+    double var_factor;
+    //how many disc samples multiplier (total samples are proportional to radius)
+    //which in turn is proportional to variance
+    std::size_t disc_samples_factor;
+    //variance threshold for solution
+    double var_tol;
+
+    virtual void sampleOnChart(Chart& c)
+    {
+        //get some useful constants from the disc
+        const Eigen::Vector3d N = c.getNormal();
+        const Eigen::Vector3d Tx = c.getTanBasisOne();
+        const Eigen::Vector3d Ty = c.getTanBasisTwo();
+        const Eigen::Vector3d C = c.getCenter();
+        const double R = c.getRadius();
         // std::cout<<"N\n"<<N <<std::endl;
         // std::cout<<"Tx\n"<<Tx <<std::endl;
         // std::cout<<"Ty\n"<<Ty <<std::endl;
@@ -111,9 +151,9 @@ class AtlasVariance : public AtlasBase
         // std::cout<<"G\n"<<G <<std::endl;
         // std::cout<<"R "<<R <<std::endl;
         //prepare the samples storage
-        const std::size_t tot_samples = std::ceil(disc_samples_factor * R);
+        const std::size_t tot_samples = std::ceil(std::abs(disc_samples_factor) * R);
         // std::cout<<"total samples "<<tot_samples<<std::endl;
-        nodes.at(id).samples.resize(tot_samples, 3);
+        c.samples.resize(tot_samples, 3);
         std::vector<double> f,v;
         //transformation into the kinect frame from local
         Eigen::Matrix4d Tkl;
@@ -122,10 +162,6 @@ class AtlasVariance : public AtlasBase
                 Tx(2), Ty(2), N(2), C(2),
                 0,     0,     0,    1;
         // std::cout<<"Tkl "<<Tkl<<std::endl;
-        //keep the max variance found
-        double max_v(-10.0);
-        //and which sample it was
-        std::size_t s_idx;
         //uniform annulus sampling
         for (std::size_t i=0; i<tot_samples; ++i)
         {
@@ -149,9 +185,9 @@ class AtlasVariance : public AtlasBase
             query->coord_y.push_back(pK(1));
             query->coord_z.push_back(pK(2));
             //store the sample for future use (even plotting)
-            nodes.at(id).samples(i,0) = pK(0);
-            nodes.at(id).samples(i,1) = pK(1);
-            nodes.at(id).samples(i,2) = pK(2);
+            c.samples(i,0) = pK(0);
+            c.samples(i,1) = pK(1);
+            c.samples(i,2) = pK(2);
             //evaluate the sample
             gp_reg->evaluate(gp_model, query, f, v);
             if (std::isnan(v.at(0)) || std::isinf(v.at(0)) ||
@@ -163,41 +199,15 @@ class AtlasVariance : public AtlasBase
                 std::cout<<"Tkl:\n"<<Tkl <<std::endl;
                 throw gp_regression::GPRegressionException("v is nan or inf");
             }
-            if (v.at(0) > max_v){
-                max_v = v.at(0);
-                s_idx = i;
-            }
+            //keep variances and ids
+            c.vars_ids.push_back(std::make_pair(v.at(0), i));
         }
-        //the winner is:
-        Eigen::Vector3d chosen = nodes.at(id).samples.row(s_idx);
-        // std::cout<<"chosen "<<chosen<<" s_idx "<<s_idx<<std::endl;
-        // std::cout<<"samples dim: "<<nodes.at(id).samples.rows()<<" x "<<nodes.at(id).samples.cols()<<std::endl;
-        // std::cout<<"samples "<<nodes.at(id).samples<<std::endl;
-        //put winner on top (for visualization)
-        nodes.at(id).samples.row(0).swap(nodes.at(id).samples.row(s_idx));
-        Eigen::Vector3d nextState;
-        //project the chosen
-        project(chosen, nextState, G);
-        //and done
-        return nextState;
+        std::sort(c.vars_ids.begin(), c.vars_ids.end(),
+                [](const std::pair<double,std::size_t> &a, const std::pair<double,std::size_t> &b)
+                {
+                    return (a.first > b.first);
+                });
     }
-
-    virtual inline bool isSolution(const std::size_t &id)
-    {
-        if (id >= nodes.size())
-            throw gp_regression::GPRegressionException("Out of Range node id");
-        return (getNode(id).getVariance() > var_tol);
-    }
-
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    protected:
-    //radius is inversely proportional to variance
-    double var_factor;
-    //how many disc samples multiplier (total samples are proportional to radius)
-    //which in turn is proportional to variance
-    std::size_t disc_samples_factor;
-    //variance threshold for solution
-    double var_tol;
 };
 }
 

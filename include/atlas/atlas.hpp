@@ -22,11 +22,11 @@ namespace gp_atlas_rrt
         //only way to construct a Chart! (also prevents implicit conversions)
         explicit Chart(const Eigen::Vector3d &c, const std::size_t i, const Eigen::Vector3d &g
                 ,const double v):
-            id(i), C(c), G(g), V(v)
+            id(i), C(c), G(g), V(v), samp_chosen(-1)
         {
             gp_regression::computeTangentBasis(G, N,Tx,Ty);
         }
-        ~Chart() {}
+        virtual ~Chart() {}
 
         typedef std::shared_ptr<Chart> Ptr;
         typedef std::shared_ptr<const Chart> ConstPtr;
@@ -89,6 +89,8 @@ namespace gp_atlas_rrt
 
         //these can be public, they dont affect the disc functionalites
         Eigen::MatrixXd samples; //collection of uniform disc samples (nx3)
+        int samp_chosen; //the chosen sample id, if sampling was not done it is -1
+        std::vector<std::pair<double,std::size_t>> vars_ids; //vector of sample variances with their index
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         protected:
