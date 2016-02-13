@@ -44,7 +44,7 @@
 #include <gp_regression/SelectNSamples.h>
 
 // Gaussian Process library
-#include <gp_regression/gp_modelling.h>
+#include <gp_regression/gp_regressors.h>
 
 //Atlas
 #include <atlas/atlas_variance.hpp>

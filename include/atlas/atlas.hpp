@@ -6,7 +6,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <gp_regression/gp_regression_exception.h>
-#include <gp_regression/gp_modelling.h>
+#include <gp_regression/gp_regressors.h>
 #include <random_generation.hpp>
 
 namespace gp_atlas_rrt
