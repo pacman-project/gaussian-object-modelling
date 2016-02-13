@@ -380,7 +380,7 @@ bool GaussianProcessNode::startExploration()
     //termination condition
     atlas->setVarianceTolGoal( 0.4 );
     //factor to control disc radius
-    atlas->setVarRadiusFactor( 0.7 );
+    atlas->setVarRadiusFactor( 0.65 );
     //atlas is ready
 
     //setup explorer
