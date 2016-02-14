@@ -233,12 +233,18 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         }
     }
 
-    ros::Duration waiter(0.5);
+    ros::Rate rate(10); //try to go at 10hz, as in the node
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (computeGP())
         if(startExploration()){
                 while(exploration_started){
-                    waiter.sleep();
+                    // don't like it, cause we loose the actual velocity of the atlas
+                    // but for now, this is it, repeating the node while loop here
+                    //gogogo!
+                    ros::spinOnce();
+                    Publish();
+                    checkExploration();
+                    rate.sleep();
                 }
             return true;
         }
@@ -446,7 +452,7 @@ bool GaussianProcessNode::startExploration()
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(20);
+    explorer->setMaxNodes(50);
     //get a starting point from data cloud
     int r_id = getRandIn(0, data_ptr_->points.size()-1 );
     Eigen::Vector3d root;
