@@ -134,6 +134,7 @@ class GaussianProcessNode
         // Helpers
         void deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out);
         void reMeanAndDenormalizeData(Eigen::Vector3d &data);
+        void reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC &out) const;
         // Compute a Gaussian Process from object and store it
         bool computeGP();
         // start the RRT exploration
@@ -182,9 +183,12 @@ class GaussianProcessNode
          */
 
         //reconstructed model cloud to republish including centroid and sphere
+        // this is not true, model_ptr contains the trainint data in PCL format!
         PtC::Ptr model_ptr;
-        // ros::ServiceServer srv_rnd_tests_;
+        // internal explicit (or reconstructed) model in the real world
+        PtC::Ptr real_explicit_ptr;
         ros::Publisher pub_model;
+        ros::Publisher pub_real_explicit;
 
         // Publish object model
         void publishCloudModel() const;

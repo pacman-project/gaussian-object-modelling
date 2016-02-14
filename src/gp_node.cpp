@@ -10,13 +10,14 @@ using namespace gp_regression;
 missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
-    model_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false),
+    model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false),
     out_sphere_rad(1.8)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
     srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
-    pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("estimated_model", 1);
+    pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("training_data", 1);
+    pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("estimated_model", 1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
 
@@ -43,9 +44,23 @@ void GaussianProcessNode::publishCloudModel () const
     // These checks are  to make sure we are not publishing empty cloud,
     // we have a  gaussian process computed and there's actually someone
     // who listens to us
-    if (start && model_ptr)
-        if(!model_ptr->empty() && pub_model.getNumSubscribers()>0)
+    if (start && model_ptr){
+        // if(!model_ptr->empty() && pub_model.getNumSubscribers()>0){
+        // I don't care if there are subscribers or not... publish'em all!
+        if(!model_ptr->empty() && pub_model.getNumSubscribers()>0){
+            // publish both the internal [-1, 1] model and the ex
+
+            // this actually publishes the training data, not the model!
             pub_model.publish(*model_ptr);
+
+            // and the explicit estimated model back to the real world
+            PtC real_explicit;
+            real_explicit.header = real_explicit_ptr->header;
+            reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
+            pub_real_explicit.publish(real_explicit);
+
+        }
+    }
 }
 //publish atlas markers and other samples
 void GaussianProcessNode::publishAtlas () const
@@ -104,6 +119,17 @@ void GaussianProcessNode::reMeanAndDenormalizeData(Eigen::Vector3d &data)
     data = current_scale_*data;
     data = data + current_offset_.block(0,0,3,1);
 }
+void GaussianProcessNode::reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC &out) const
+{
+    // here it is safe to do it in one single transformation
+    Eigen::Matrix4f t;
+    t    << current_scale_, 0, 0, current_offset_(0),
+             0, current_scale_, 0, current_offset_(1),
+             0, 0, current_scale_, current_offset_(2),
+             0, 0, 0,          1;
+    // note that this writes to class member
+    pcl::transformPointCloud(*data_ptr, out, t);
+}
 
 //callback to start process service, executes when service is called
 bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res)
@@ -116,7 +142,6 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
          std_msgs::Header solution_header;
          solution_header.stamp = ros::Time::now();
          solution_header.frame_id = object_ptr->header.frame_id;
-         std::cout << "solution_header.frame_id: " << solution_header.frame_id << std::endl;
 
          gp_regression::Path next_best_path;
 
@@ -158,6 +183,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     hand_ptr= boost::make_shared<PtC>();
     data_ptr_=boost::make_shared<PtC>();
     model_ptr= boost::make_shared<PtC>();
+    real_explicit_ptr= boost::make_shared<PtC>();
     reg_.reset();
     obj_gp.reset();
     my_kernel.reset();
@@ -214,7 +240,6 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
                     object_ptr->push_back(sp);
                 }
             object_ptr->header.frame_id="/camera_rgb_optical_frame";
-            model_ptr->header.frame_id="/camera_rgb_optical_frame";
         }
         else{
             // User told us to load a clouds from a dir on disk instead.
@@ -229,9 +254,10 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             // I think it's just need the frame id
             object_ptr->header.frame_id="/camera_rgb_optical_frame";
             hand_ptr->header.frame_id="/camera_rgb_optical_frame";
-            model_ptr->header.frame_id="/camera_rgb_optical_frame";
         }
     }
+    model_ptr->header.frame_id=object_ptr->header.frame_id;
+    real_explicit_ptr->header.frame_id=object_ptr->header.frame_id;
 
     ros::Rate rate(10); //try to go at 10hz, as in the node
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
@@ -546,6 +572,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     {
         geometry_msgs::Point pt;
         std_msgs::ColorRGBA cl;
+        pcl::PointXYZRGB pt_pcl;
         pt.x = ss->coord_x.at(i);
         pt.y = ss->coord_y.at(i);
         pt.z = ss->coord_z.at(i);
@@ -555,6 +582,11 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
         cl.g = (ssvv.at(i)>mid_v) ? -1/(max_v - mid_v) * (ssvv.at(i) - mid_v) + 1 : 1.0;
         samples.points.push_back(pt);
         samples.colors.push_back(cl);
+        pt_pcl.x = static_cast<float>(ss->coord_x.at(i));
+        pt_pcl.y = static_cast<float>(ss->coord_y.at(i));;
+        pt_pcl.z = static_cast<float>(ss->coord_z.at(i));;
+        colorIt(cl.r,cl.g,cl.b, pt_pcl);
+        real_explicit_ptr->push_back(pt_pcl);
     }
     markers->markers.push_back(samples);
 
