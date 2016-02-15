@@ -14,7 +14,7 @@ class AtlasVariance : public AtlasBase
 
     AtlasVariance()=delete;
     AtlasVariance(const gp_regression::Model::Ptr &gp, const gp_regression::ThinPlateRegressor::Ptr &reg):
-        AtlasBase(gp,reg), var_factor(0.5), disc_samples_factor(300)
+        AtlasBase(gp,reg), var_factor(0.3), disc_samples_factor(200)
     {
         var_tol = 0.5; //this should be give by user
                        //whoever uses this class will take care of it, by calling

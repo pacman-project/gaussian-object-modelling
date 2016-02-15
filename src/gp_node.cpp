@@ -192,6 +192,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     explorer.reset();
     solution.clear();
     markers.reset();
+    cloud_labels.clear();
     //////
     if(req.cloud_dir.empty()){
         //Request was empty, means we have to call pacman vision service to
@@ -322,7 +323,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
         colorIt(0,255,255, pt);
         // model_ptr->push_back(pt);
         object_ptr->push_back(pt);
-        if (msg->touched[i].data)
+        if (msg->isOnSurface[i].data)
             cloud_labels.push_back(0);
         else
             cloud_labels.push_back(1);
@@ -520,14 +521,14 @@ bool GaussianProcessNode::startExploration()
     //termination condition
     atlas->setVarianceTolGoal( 0.4 );
     //factor to control disc radius
-    atlas->setVarRadiusFactor( 0.65 );
+    atlas->setVarRadiusFactor( 0.3 );
     //atlas is ready
 
     //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(50);
+    explorer->setMaxNodes(100);
     //get a starting point from data cloud
     int r_id = getRandIn(0, data_ptr_->points.size()-1 );
     Eigen::Vector3d root;
