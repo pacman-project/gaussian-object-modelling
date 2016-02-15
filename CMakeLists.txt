@@ -32,6 +32,7 @@ add_service_files(
     FILES
     StartProcess.srv
     GetNextBestPath.srv
+    Update.srv
     # StopExploration.srv
     )
 

@@ -15,6 +15,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
+    srv_update = nh.advertiseService("update_process", &GaussianProcessNode::cb_updateS, this);
     srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("training_data", 1);
     pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("estimated_model", 1);
@@ -135,43 +136,51 @@ void GaussianProcessNode::reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC
 //callback to start process service, executes when service is called
 bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res)
 {
-     if(solution.empty() || exploration_started) {
-        ROS_WARN("[GaussianProcessNode::%s]\tSorry, the exploration is WIP",__func__);
-        return false;
-     }
-     else {
-         std_msgs::Header solution_header;
-         solution_header.stamp = ros::Time::now();
-         solution_header.frame_id = object_ptr->header.frame_id;
+    ros::Rate rate(10); //try to go at 10hz, as in the node
+    if(startExploration()){
+        while(exploration_started){
+            // don't like it, cause we loose the actual velocity of the atlas
+            // but for now, this is it, repeating the node while loop here
+            //gogogo!
+            ros::spinOnce();
+            Publish();
+            checkExploration();
+            rate.sleep();
+        }
+        std_msgs::Header solution_header;
+        solution_header.stamp = ros::Time::now();
+        solution_header.frame_id = object_ptr->header.frame_id;
 
-         gp_regression::Path next_best_path;
+        gp_regression::Path next_best_path;
+        next_best_path.header = solution_header;
+        for (size_t i=0; i<solution.size(); ++i)
+        {
+            // ToDO: solutionToPath(solution, path) function
+            gp_atlas_rrt::Chart chart = atlas->getNode(solution[i]);
+            Eigen::Vector3d point_eigen = chart.getCenter();
+            Eigen::Vector3d normal_eigen = chart.getNormal();
+            // modifies the point
+            reMeanAndDenormalizeData(point_eigen);
+            // normal does not need to be reMeanAndRenormalized for now
 
-         // ToDO: solutionToPath(solution, path) function
-         gp_atlas_rrt::Chart solution_chart = atlas->getNode(solution.front());
-         Eigen::Vector3d point_eigen = solution_chart.getCenter();
-         Eigen::Vector3d normal_eigen = solution_chart.getNormal();
-         // modifies the point
-         reMeanAndDenormalizeData(point_eigen);
-         // normal does not need to be reMeanAndRenormalized for now
+            geometry_msgs::PointStamped point_msg;
+            geometry_msgs::Vector3Stamped normal_msg;
+            point_msg.point.x = point_eigen(0);
+            point_msg.point.y = point_eigen(1);
+            point_msg.point.z = point_eigen(2);
+            point_msg.header = solution_header;
+            normal_msg.vector.x = normal_eigen(0);
+            normal_msg.vector.y = normal_eigen(1);
+            normal_msg.vector.z = normal_eigen(2);
+            normal_msg.header = solution_header;
 
-         geometry_msgs::PointStamped point_msg;
-         geometry_msgs::Vector3Stamped normal_msg;
-         point_msg.point.x = point_eigen(0);
-         point_msg.point.y = point_eigen(1);
-         point_msg.point.z = point_eigen(2);
-         point_msg.header = solution_header;
-         normal_msg.vector.x = normal_eigen(0);
-         normal_msg.vector.y = normal_eigen(1);
-         normal_msg.vector.z = normal_eigen(2);
-         normal_msg.header = solution_header;
-
-         next_best_path.points.push_back( point_msg );
-         next_best_path.directions.push_back( normal_msg );
-         next_best_path.header = solution_header;
-
-         res.next_best_path = next_best_path;
-         return true;
-     }
+            next_best_path.points.push_back( point_msg );
+            next_best_path.directions.push_back( normal_msg );
+        }
+        res.next_best_path = next_best_path;
+        return true;
+    }
+    return false;
 }
 
 //callback to start process service, executes when service is called
@@ -212,34 +221,38 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             return (false);
         }
         //object and hand clouds are saved into class
-        PtC tmp;
-        pcl::fromROSMsg (service.response.obj, tmp);
+        sensor_msgs::PointCloud msg, msg_conv;
+        sensor_msgs::PointCloud2 msg2;
+        sensor_msgs::convertPointCloud2ToPointCloud(service.response.obj, msg);
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
         //transform object in processing frame
-        tf::StampedTransform trans;
-        listener.waitForTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), ros::Duration(2.0));
-        listener.lookupTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), trans);
-        Eigen::Quaterniond q(trans.getRotation().getW(), trans.getRotation().getX(),
-                trans.getRotation().getY(), trans.getRotation().getZ());
-        q.normalize();
-        Eigen::Vector3d t(trans.getOrigin().x(), trans.getOrigin().y(), trans.getOrigin().z());
-        Eigen::Matrix3d R(q.toRotationMatrix());
-        Tpk(0,0) = R(0,0);
-        Tpk(0,1) = R(0,1);
-        Tpk(0,2) = R(0,2);
-        Tpk(1,0) = R(1,0);
-        Tpk(1,1) = R(1,1);
-        Tpk(1,2) = R(1,2);
-        Tpk(2,0) = R(2,0);
-        Tpk(2,1) = R(2,1);
-        Tpk(2,2) = R(2,2);
-        Tpk(3,0) = Tpk(3,1) = Tpk(3,2) = 0;
-        Tpk(3,3) = 1;
-        Tpk(0,3) = t(0);
-        Tpk(1,3) = t(1);
-        Tpk(2,3) = t(2);
-        //transform object cloud into processing frame
-        pcl::transformPointCloud(tmp, *object_ptr, Tpk);
+        // tf::StampedTransform trans;
+        // listener.waitForTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), ros::Duration(2.0));
+        // listener.lookupTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), trans);
+        listener.transformPointCloud(proc_frame, msg, msg_conv);
+        sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
+        pcl::fromROSMsg (msg2, *object_ptr);
+        // Eigen::Quaterniond q(trans.getRotation().getW(), trans.getRotation().getX(),
+        //         trans.getRotation().getY(), trans.getRotation().getZ());
+        // q.normalize();
+        // Eigen::Vector3d t(trans.getOrigin().x(), trans.getOrigin().y(), trans.getOrigin().z());
+        // Eigen::Matrix3d R(q.toRotationMatrix());
+        // Tpk(0,0) = R(0,0);
+        // Tpk(0,1) = R(0,1);
+        // Tpk(0,2) = R(0,2);
+        // Tpk(1,0) = R(1,0);
+        // Tpk(1,1) = R(1,1);
+        // Tpk(1,2) = R(1,2);
+        // Tpk(2,0) = R(2,0);
+        // Tpk(2,1) = R(2,1);
+        // Tpk(2,2) = R(2,2);
+        // Tpk(3,0) = Tpk(3,1) = Tpk(3,2) = 0;
+        // Tpk(3,3) = 1;
+        // Tpk(0,3) = t(0);
+        // Tpk(1,3) = t(1);
+        // Tpk(2,3) = t(2);
+        // //transform object cloud into processing frame
+        // pcl::transformPointCloud(tmp, *object_ptr, Tpk);
 
     }
     else{
@@ -290,24 +303,23 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     for(const auto& pt: object_ptr->points)
         cloud_labels.push_back(0);
 
-    ros::Rate rate(10); //try to go at 10hz, as in the node
     prepareExtData();
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (prepareData())
-        if (computeGP())
-            if(startExploration()){
-                while(exploration_started){
-                    // don't like it, cause we loose the actual velocity of the atlas
-                    // but for now, this is it, repeating the node while loop here
-                    //gogogo!
-                    ros::spinOnce();
-                    Publish();
-                    checkExploration();
-                    rate.sleep();
-                }
-                return true;
-            }
+        if (computeGP()){
+            //initialize objects involved
+            markers = boost::make_shared<visualization_msgs::MarkerArray>();
+            //perform fake sampling
+            fakeDeterministicSampling(1.1, 0.1);
+            return true;
+        }
     return false;
+}
+bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res)
+{
+    const gp_regression::Path::ConstPtr &msg = boost::make_shared<gp_regression::Path>(req.updated_points);
+    cb_update(msg);
+    return true;
 }
 
 void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
@@ -348,7 +360,10 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     prepareData();
     computeGP();
-    startExploration();
+    //initialize objects involved
+    markers = boost::make_shared<visualization_msgs::MarkerArray>();
+    //perform fake sampling
+    fakeDeterministicSampling(1.1, 0.1);
     return;
 }
 
@@ -511,10 +526,6 @@ bool GaussianProcessNode::startExploration()
         return false;
     }
 
-    //initialize objects involved
-    markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    //perform fake sampling
-    fakeDeterministicSampling(1.1, 0.1);
 
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasCollision>(obj_gp, reg_);
@@ -552,10 +563,6 @@ void GaussianProcessNode::checkExploration()
         explorer->stopExploration();
         exploration_started = false;
         ROS_INFO("[GaussianProcessNode::%s]\tSolution Found", __func__);
-
-        //TODO actually do something with the solution !
-        // new service in tha house for that
-        // remember everything should have a ROS API to be called from the state machine
     }
 }
 
@@ -657,7 +664,7 @@ int main (int argc, char *argv[])
         //gogogo!
         ros::spinOnce();
         node.Publish();
-        node.checkExploration();
+        // node.checkExploration();
         rate.sleep();
     }
     //someone killed us :(

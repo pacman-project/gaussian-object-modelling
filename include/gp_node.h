@@ -42,6 +42,7 @@
 
 // This node services (includes custom messages)
 #include <gp_regression/StartProcess.h>
+#include <gp_regression/Update.h>
 #include <gp_regression/GetNextBestPath.h>
 #include <gp_regression/Path.h>
 
@@ -115,8 +116,8 @@ class GaussianProcessNode
         PtC::Ptr hand_ptr;
         Eigen::Vector4d current_offset_;
         double current_scale_;
-        //from kinect to processing frame
-        Eigen::Matrix4d Tpk;
+        // //from kinect to processing frame
+        // Eigen::Matrix4d Tpk;
 
         // regressor and model
         gp_regression::ThinPlateRegressor::Ptr reg_;
@@ -172,6 +173,7 @@ class GaussianProcessNode
 
         //Services, publishers and subscribers
         ros::ServiceServer srv_start;
+        ros::ServiceServer srv_update;
         ros::ServiceServer srv_get_next_best_path_;
 
         // ros::ServiceServer srv_sample;
@@ -199,6 +201,7 @@ class GaussianProcessNode
         // later how we deal with the information streaming, or may to pass back from the exploration
         // a vector of geometry_msgs::PointStamped that can be a trajectory or one single poke
         void cb_update(const gp_regression::Path::ConstPtr &msg);
+        bool cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res);
 
         /*****************
          * DEBUG MEMBERS *
