@@ -317,7 +317,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 }
 bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res)
 {
-    const gp_regression::Path::ConstPtr &msg = boost::make_shared<gp_regression::Path>(req.updated_points);
+    const gp_regression::Path::ConstPtr &msg = boost::make_shared<gp_regression::Path>(req.explored_points);
     cb_update(msg);
     return true;
 }
