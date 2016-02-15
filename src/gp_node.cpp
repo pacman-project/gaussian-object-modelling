@@ -216,8 +216,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
         //transform object in processing frame
         tf::StampedTransform trans;
-        listener.waitForTransform("/camera_rgb_optical_frame", proc_frame, ros::Time(0), ros::Duration(2.0));
-        listener.lookupTransform("/camera_rgb_optical_frame", proc_frame, ros::Time(0), trans);
+        listener.waitForTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), ros::Duration(2.0));
+        listener.lookupTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), trans);
         Eigen::Quaterniond q(trans.getRotation().getW(), trans.getRotation().getX(),
                 trans.getRotation().getY(), trans.getRotation().getZ());
         q.normalize();
