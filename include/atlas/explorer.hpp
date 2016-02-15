@@ -253,17 +253,17 @@ class ExplorerBase
                 for (const auto& id: path)
                     if (markers->markers.at(i).id == id){
                         markers->markers.at(i).color.a = 0.65;
-                        markers->markers.at(i).color.r = 0.9;
+                        markers->markers.at(i).color.r = 0.0;
                         markers->markers.at(i).color.b = 0.3;
-                        markers->markers.at(i).color.g = 0.0;
+                        markers->markers.at(i).color.g = 0.95;
                     }
             if (markers->markers.at(i).ns.compare("Atlas Branches")==0)
                 for (const auto& id: cons)
                     if (markers->markers.at(i).id == id){
                         markers->markers.at(i).color.a = 0.8;
-                        markers->markers.at(i).color.r = 0.1;
+                        markers->markers.at(i).color.r = 0.0;
                         markers->markers.at(i).color.b = 0.2;
-                        markers->markers.at(i).color.g = 0.8;
+                        markers->markers.at(i).color.g = 0.95;
                     }
         }
     }
