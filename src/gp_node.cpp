@@ -258,8 +258,11 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     }
     model_ptr->header.frame_id=object_ptr->header.frame_id;
     real_explicit_ptr->header.frame_id=object_ptr->header.frame_id;
+    for(const auto& pt: object_ptr->points)
+        cloud_labels.push_back(0);
 
     ros::Rate rate(10); //try to go at 10hz, as in the node
+    prepareExtData();
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (prepareData())
         if (computeGP())
@@ -278,15 +281,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     return false;
 }
 
-// TODO: Convert this callback, if  needed, to accept probe points and not
-// rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
-// Callback for rviz clicked point to simulate probe
-// The only different is the topic name, that can be easily changed with remapping
-// Though I think to be general perhaps we need to create our msg of an array of
-// PointStamped, that is, a point trajectory
 void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
 {
-    size_t last_size = data_ptr_->size();
     for (size_t i=0; i< msg->points.size(); ++i)
     {
         pcl::PointXYZRGB pt;
@@ -295,8 +291,12 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
         pt.z = msg->points[i].point.z;
         // new data in cyan
         colorIt(0,255,255, pt);
-        model_ptr->push_back(pt);
+        // model_ptr->push_back(pt);
         object_ptr->push_back(pt);
+        if (msg->touched[i].data)
+            cloud_labels.push_back(0);
+        else
+            cloud_labels.push_back(1);
     }
 
     /* UPDATE METHOD IS NOT POSSIBLE
@@ -313,74 +313,29 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     fresh_data->label.push_back(0.0);
     // this is a more precise measurement than points from the camera
     fresh_data->sigma2.push_back(5e-2);
-
-    //update the model, do not compute normals in the model points
-    auto begin_time = std::chrono::high_resolution_clock::now();
-    reg_->update<false>(fresh_data, obj_gp);
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\t Model updated in: %ld nanoseconds.", __func__, elapsed );*/
+    */
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
-    double sigma2 = 1e-1;
-    for (size_t i=last_size; i<last_size + msg->points.size(); ++i)
-    {
-        bool touched = msg->touched[i-last_size].data;
-        cloud_gp->coord_x.push_back(data_ptr_->points[i].x);
-        cloud_gp->coord_y.push_back(data_ptr_->points[i].y);
-        cloud_gp->coord_z.push_back(data_ptr_->points[i].z);
-        if (touched)
-            cloud_gp->label.push_back(0);
-        else
-            cloud_gp->label.push_back(1);
-        cloud_gp->sigma2.push_back(sigma2);
-    }
+    prepareData();
     computeGP();
     startExploration();
     return;
 }
 
-bool GaussianProcessNode::prepareData()
+void GaussianProcessNode::prepareExtData()
 {
-    if(!data_ptr_){
-        //This  should never  happen  if compute  is  called from  start_process
-        //service callback, however it does not hurt to add this extra check!
-        ROS_ERROR("[GaussianProcessNode::%s]\tObject cloud pointer is empty. Aborting...",__func__);
-        start = false;
-        return false;
-    }
-    if (data_ptr_->empty()){
-        ROS_ERROR("[GaussianProcessNode::%s]\tObject point cloud is empty. Aborting...",__func__);
-        start = false;
-        return false;
-    }
     if (!model_ptr->empty())
         model_ptr->clear();
 
-    /*****  Prepare the training data  *********************************************/
-    cloud_gp = std::make_shared<gp_regression::Data>();
-    double sigma2 = 1e-1;
+    ext_gp = std::make_shared<gp_regression::Data>();
 
-    //      Surface Points
-    // add object points with label 0
-    for(const auto& pt : data_ptr_->points) {
-        cloud_gp->coord_x.push_back(pt.x);
-        cloud_gp->coord_y.push_back(pt.y);
-        cloud_gp->coord_z.push_back(pt.z);
-        cloud_gp->label.push_back(0);
-        cloud_gp->sigma2.push_back(sigma2);
-    }
-    // add object points to rviz in blue
-    *model_ptr += *data_ptr_;
-    colorThem(0,0,255, model_ptr);
-
-    //      Internal Points
-    // Now add centroid as label -1
-    cloud_gp->coord_x.push_back(0);
-    cloud_gp->coord_y.push_back(0);
-    cloud_gp->coord_z.push_back(0);
-    cloud_gp->label.push_back(-1.0);
-    cloud_gp->sigma2.push_back(sigma2);
+    //      Internal Point
+    // add centroid as label -1
+    ext_gp->coord_x.push_back(0);
+    ext_gp->coord_y.push_back(0);
+    ext_gp->coord_z.push_back(0);
+    ext_gp->label.push_back(-1.0);
+    ext_gp->sigma2.push_back(sigma2);
     // add internal point to rviz in cyan
     pcl::PointXYZRGB cen;
     cen.x = 0;
@@ -406,11 +361,11 @@ bool GaussianProcessNode::prepareData()
             double y = sqrt(std::pow(out_sphere_rad, 2) - lin*lin) * sin(ang);
             double z = lin;
 
-            cloud_gp->coord_x.push_back(x);
-            cloud_gp->coord_y.push_back(y);
-            cloud_gp->coord_z.push_back(z);
-            cloud_gp->label.push_back(1.0);
-            cloud_gp->sigma2.push_back(sigma2);
+            ext_gp->coord_x.push_back(x);
+            ext_gp->coord_y.push_back(y);
+            ext_gp->coord_z.push_back(z);
+            ext_gp->label.push_back(1.0);
+            ext_gp->sigma2.push_back(sigma2);
 
             // add sphere points to rviz in purple
             pcl::PointXYZRGB sp;
@@ -421,42 +376,74 @@ bool GaussianProcessNode::prepareData()
             model_ptr->push_back(sp);
         }
     }
+}
+
+//prepareData in data_ptr_
+bool GaussianProcessNode::prepareData()
+{
+    if(!data_ptr_){
+        //This  should never  happen  if compute  is  called from  start_process
+        //service callback, however it does not hurt to add this extra check!
+        ROS_ERROR("[GaussianProcessNode::%s]\tObject cloud pointer is empty. Aborting...",__func__);
+        start = false;
+        return false;
+    }
+    if (data_ptr_->empty()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tObject point cloud is empty. Aborting...",__func__);
+        start = false;
+        return false;
+    }
+
+    //size sanity check
+    if (data_ptr_->size() != cloud_labels.size()){
+        ROS_ERROR("[GaussianProcessNode::%s]\tData labels mismatch. Aborting...",__func__);
+        start = false;
+        return false;
+    }
+    cloud_gp = std::make_shared<gp_regression::Data>();
+
+    /*****  Prepare the training data  *********************************************/
+    double sigma2 = 1e-1;
+
+    //      Surface Points
+    // add object points with label 0 or 1 (not touched)
+    for(size_t i=0; i< data_ptr_->points.size(); ++i) {
+        cloud_gp->coord_x.push_back(pt.x);
+        cloud_gp->coord_y.push_back(pt.y);
+        cloud_gp->coord_z.push_back(pt.z);
+        cloud_gp->label.push_back(cloud_labels.at(i));
+        cloud_gp->sigma2.push_back(sigma2);
+    }
+    // add object points to rviz in blue
+    *model_ptr += *data_ptr_;
+
     return true;
 }
 
 bool GaussianProcessNode::computeGP()
 {
-    if(!cloud_gp)
+    if(!cloud_gp || !ext_gp)
         return false;
     auto begin_time = std::chrono::high_resolution_clock::now();
 
-    // TODO: We would probablyy need to add  hand points to the GP in the future.
-    // Set them perhaps with target 1 or 0.5 (tabjones on Wednesday 16/12/2015)
-    // add hand points to model as slightly different red, if available
-    /*if(hand_ptr){
-        colorThem(255,125,0, hand_ptr);
-        *model_ptr += *hand_ptr;
-        for(const auto pt : hand_ptr->points) {
-             cloud_gp->coord_x.push_back(pt.x);
-             cloud_gp->coord_y.push_back(pt.y);
-             cloud_gp->coord_z.push_back(pt.z);
-             cloud_gp->label.push_back(0.1);
-         }
-    }*/
-    // I tried, but at least with the offline example it was
-    // giving an error. I don't have the force now with me, Luke,
-    // maybe another day, but very likely that they are far too many.
-    // Thus downsampling the hand cloud could be the answer.
-    // (carlosjoserg 7/02/2016)
-    //
-    // Ok! who cares about the hand! (tabjones 09/02/2016)
-
     /*****  Create the gp model  *********************************************/
     //create the model to be stored in class
-    if (cloud_gp->coord_x.size() != cloud_gp->label.size()){
-        ROS_ERROR("[GaussianProcessNode::%s]\tTargets Points size mismatch, something went wrong. Aborting...",__func__);
-        start = false;
-        return false;
+    gp_regression::Data::Ptr data_gp = std::make_shared<gp_regression::Data>();
+    for (size_t i =0; i<cloud_gp->coord_x.size(); ++i)
+    {
+        data_gp->coord_x.push_back(cloud_gp->coord_x[i]);
+        data_gp->coord_y.push_back(cloud_gp->coord_y[i]);
+        data_gp->coord_z.push_back(cloud_gp->coord_z[i]);
+        data_gp->label.push_back(cloud_gp->label[i]);
+        data_gp->sigma2.push_back(cloud_gp->sigma2[i]);
+    }
+    for (size_t i =0; i<ext_gp->coord_x.size(); ++i)
+    {
+        data_gp->coord_x.push_back(ext_gp->coord_x[i]);
+        data_gp->coord_y.push_back(ext_gp->coord_y[i]);
+        data_gp->coord_z.push_back(ext_gp->coord_z[i]);
+        data_gp->label.push_back(ext_gp->label[i]);
+        data_gp->sigma2.push_back(ext_gp->sigma2[i]);
     }
 
     obj_gp = std::make_shared<gp_regression::Model>();
@@ -464,7 +451,7 @@ bool GaussianProcessNode::computeGP()
     my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad * 2);
     reg_->setCovFunction(my_kernel);
     const bool withoutNormals = false;
-    reg_->create<withoutNormals>(cloud_gp, obj_gp);
+    reg_->create<withoutNormals>(data_gp, obj_gp);
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created using %ld training points. Total time consumed: %ld nanoseconds.", __func__, cloud_gp->label.size(), elapsed );

@@ -119,8 +119,13 @@ class GaussianProcessNode
         gp_regression::ThinPlateRegressor::Ptr reg_;
         gp_regression::Model::Ptr obj_gp;
         std::shared_ptr<gp_regression::ThinPlate> my_kernel;
-        //gp data and labels
+        //gp obj data
         gp_regression::Data::Ptr cloud_gp;
+        //gp external/internal data
+        gp_regression::Data::Ptr ext_gp;
+        //labels for data
+        std::vector<int> cloud_labels;
+
 
         //atlas and explorer
         gp_atlas_rrt::AtlasCollision::Ptr atlas;
@@ -140,6 +145,7 @@ class GaussianProcessNode
         void reMeanAndDenormalizeData(Eigen::Vector3d &data);
         void reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC &out) const;
         //prepare the data for gp computation
+        void prepareExtData();
         bool prepareData();
         // Compute a Gaussian Process from object and store it
         bool computeGP();
