@@ -5,4 +5,4 @@ geometry_msgs/PointStamped[] points
 #Contains the suggested direction of approach to the point
 geometry_msgs/Vector3Stamped[] directions
 #info on points touched or not
-std_msgs/Bool[] touched
+std_msgs/Bool[] isOnSurface
