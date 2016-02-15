@@ -21,6 +21,7 @@
 #include <geometry_msgs/WrenchStamped.h>
 #include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <tf/transform_listener.h>
 
 //PCL
 #include <pcl/point_cloud.h>
@@ -114,6 +115,8 @@ class GaussianProcessNode
         PtC::Ptr hand_ptr;
         Eigen::Vector4d current_offset_;
         double current_scale_;
+        //from kinect to processing frame
+        Eigen::Matrix4d Tpk;
 
         // regressor and model
         gp_regression::ThinPlateRegressor::Ptr reg_;
@@ -174,6 +177,11 @@ class GaussianProcessNode
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_update_;
+
+        //transform listener
+        tf::TransformListener listener;
+        //processing frame
+        std::string proc_frame;
 
         // Publish last computed atlas
         void publishAtlas () const;
