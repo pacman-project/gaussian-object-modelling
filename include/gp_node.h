@@ -13,6 +13,7 @@
 #include <ros/console.h>
 #include <ros/package.h>
 #include <pcl_ros/point_cloud.h>
+#include <std_msgs/Bool.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
@@ -41,6 +42,7 @@
 // This node services (includes custom messages)
 #include <gp_regression/StartProcess.h>
 #include <gp_regression/GetNextBestPath.h>
+#include <gp_regression/Path.h>
 
 // Gaussian Process library
 #include <gp_regression/gp_regressors.h>
@@ -117,6 +119,8 @@ class GaussianProcessNode
         gp_regression::ThinPlateRegressor::Ptr reg_;
         gp_regression::Model::Ptr obj_gp;
         std::shared_ptr<gp_regression::ThinPlate> my_kernel;
+        //gp data and labels
+        gp_regression::Data::Ptr cloud_gp;
 
         //atlas and explorer
         gp_atlas_rrt::AtlasCollision::Ptr atlas;
@@ -135,6 +139,8 @@ class GaussianProcessNode
         void deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out);
         void reMeanAndDenormalizeData(Eigen::Vector3d &data);
         void reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC &out) const;
+        //prepare the data for gp computation
+        bool prepareData();
         // Compute a Gaussian Process from object and store it
         bool computeGP();
         // start the RRT exploration
@@ -174,7 +180,7 @@ class GaussianProcessNode
         // I don't think it is bad to have geometry_msgs::PointStamped, we'll see
         // later how we deal with the information streaming, or may to pass back from the exploration
         // a vector of geometry_msgs::PointStamped that can be a trajectory or one single poke
-        void cb_update(const geometry_msgs::PointStamped::ConstPtr &msg);
+        void cb_update(const gp_regression::Path::ConstPtr &msg);
 
         /*****************
          * DEBUG MEMBERS *

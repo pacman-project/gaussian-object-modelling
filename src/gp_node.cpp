@@ -261,8 +261,9 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 
     ros::Rate rate(10); //try to go at 10hz, as in the node
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
-    if (computeGP())
-        if(startExploration()){
+    if (prepareData())
+        if (computeGP())
+            if(startExploration()){
                 while(exploration_started){
                     // don't like it, cause we loose the actual velocity of the atlas
                     // but for now, this is it, repeating the node while loop here
@@ -272,8 +273,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
                     checkExploration();
                     rate.sleep();
                 }
-            return true;
-        }
+                return true;
+            }
     return false;
 }
 
@@ -283,16 +284,20 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 // The only different is the topic name, that can be easily changed with remapping
 // Though I think to be general perhaps we need to create our msg of an array of
 // PointStamped, that is, a point trajectory
-void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr &msg)
+void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
 {
-    pcl::PointXYZRGB pt;
-    pt.x = msg->point.x;
-    pt.y = msg->point.y;
-    pt.z = msg->point.z;
-    // new data in cyan
-    colorIt(0,255,255, pt);
-    model_ptr->push_back(pt);
-    object_ptr->push_back(pt);
+    size_t last_size = data_ptr_->size();
+    for (size_t i=0; i< msg->points.size(); ++i)
+    {
+        pcl::PointXYZRGB pt;
+        pt.x = msg->points[i].point.x;
+        pt.y = msg->points[i].point.y;
+        pt.z = msg->points[i].point.z;
+        // new data in cyan
+        colorIt(0,255,255, pt);
+        model_ptr->push_back(pt);
+        object_ptr->push_back(pt);
+    }
 
     /* UPDATE METHOD IS NOT POSSIBLE
      * CENTROID NEEDS TO BE RECOMPUTED EVERY TIME
@@ -317,14 +322,26 @@ void GaussianProcessNode::cb_update(const geometry_msgs::PointStamped::ConstPtr 
     ROS_INFO("[GaussianProcessNode::%s]\t Model updated in: %ld nanoseconds.", __func__, elapsed );*/
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
+    double sigma2 = 1e-1;
+    for (size_t i=last_size; i<last_size + msg->points.size(); ++i)
+    {
+        bool touched = msg->touched[i-last_size].data;
+        cloud_gp->coord_x.push_back(data_ptr_->points[i].x);
+        cloud_gp->coord_y.push_back(data_ptr_->points[i].y);
+        cloud_gp->coord_z.push_back(data_ptr_->points[i].z);
+        if (touched)
+            cloud_gp->label.push_back(0);
+        else
+            cloud_gp->label.push_back(1);
+        cloud_gp->sigma2.push_back(sigma2);
+    }
     computeGP();
     startExploration();
     return;
 }
 
-bool GaussianProcessNode::computeGP()
+bool GaussianProcessNode::prepareData()
 {
-    auto begin_time = std::chrono::high_resolution_clock::now();
     if(!data_ptr_){
         //This  should never  happen  if compute  is  called from  start_process
         //service callback, however it does not hurt to add this extra check!
@@ -341,7 +358,7 @@ bool GaussianProcessNode::computeGP()
         model_ptr->clear();
 
     /*****  Prepare the training data  *********************************************/
-    gp_regression::Data::Ptr cloud_gp = std::make_shared<gp_regression::Data>();
+    cloud_gp = std::make_shared<gp_regression::Data>();
     double sigma2 = 1e-1;
 
     //      Surface Points
@@ -404,6 +421,14 @@ bool GaussianProcessNode::computeGP()
             model_ptr->push_back(sp);
         }
     }
+    return true;
+}
+
+bool GaussianProcessNode::computeGP()
+{
+    if(!cloud_gp)
+        return false;
+    auto begin_time = std::chrono::high_resolution_clock::now();
 
     // TODO: We would probablyy need to add  hand points to the GP in the future.
     // Set them perhaps with target 1 or 0.5 (tabjones on Wednesday 16/12/2015)
