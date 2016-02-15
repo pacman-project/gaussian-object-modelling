@@ -123,8 +123,12 @@ class GaussianProcessNode
         gp_regression::Data::Ptr cloud_gp;
         //gp external/internal data
         gp_regression::Data::Ptr ext_gp;
+        //external data size, for model resizing
+        size_t ext_size;
         //labels for data
         std::vector<int> cloud_labels;
+        //data noise parameter
+        double sigma2;
 
 
         //atlas and explorer

@@ -11,7 +11,7 @@ missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false),
-    out_sphere_rad(1.8)
+    out_sphere_rad(1.8), sigma2(1e-1)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -283,6 +283,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 
 void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
 {
+    //assuming points in processing_frame
     for (size_t i=0; i< msg->points.size(); ++i)
     {
         pcl::PointXYZRGB pt;
@@ -326,7 +327,7 @@ void GaussianProcessNode::prepareExtData()
 {
     if (!model_ptr->empty())
         model_ptr->clear();
-
+    ext_size = 1;
     ext_gp = std::make_shared<gp_regression::Data>();
 
     //      Internal Point
@@ -374,6 +375,7 @@ void GaussianProcessNode::prepareExtData()
             sp.z = z;
             colorIt(255,0,255, sp);
             model_ptr->push_back(sp);
+            ++ext_size;
         }
     }
 }
@@ -403,19 +405,26 @@ bool GaussianProcessNode::prepareData()
     cloud_gp = std::make_shared<gp_regression::Data>();
 
     /*****  Prepare the training data  *********************************************/
-    double sigma2 = 1e-1;
 
     //      Surface Points
     // add object points with label 0 or 1 (not touched)
     for(size_t i=0; i< data_ptr_->points.size(); ++i) {
-        cloud_gp->coord_x.push_back(pt.x);
-        cloud_gp->coord_y.push_back(pt.y);
-        cloud_gp->coord_z.push_back(pt.z);
+        cloud_gp->coord_x.push_back(data_ptr_->points[i].x);
+        cloud_gp->coord_y.push_back(data_ptr_->points[i].y);
+        cloud_gp->coord_z.push_back(data_ptr_->points[i].z);
         cloud_gp->label.push_back(cloud_labels.at(i));
         cloud_gp->sigma2.push_back(sigma2);
+        if (cloud_labels.at(i) == 0)
+            colorIt(0,0,255, data_ptr_->points[i]);
+        else
+            colorIt(255,0,255, data_ptr_->points[i]);
     }
     // add object points to rviz in blue
+    // resize to ext_size first, so you wont lose external data, but overwrite
+    // object data
+    model_ptr->resize(ext_size);
     *model_ptr += *data_ptr_;
+
 
     return true;
 }
