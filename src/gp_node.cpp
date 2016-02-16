@@ -49,7 +49,7 @@ void GaussianProcessNode::publishCloudModel () const
     if (start && model_ptr){
         // if(!model_ptr->empty() && pub_model.getNumSubscribers()>0){
         // I don't care if there are subscribers or not... publish'em all!
-        if(!model_ptr->empty() && pub_model.getNumSubscribers()>0){
+        if(!model_ptr->empty()){
             // publish both the internal [-1, 1] model and the ex
 
             // this actually publishes the training data, not the model!
@@ -225,35 +225,9 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         sensor_msgs::PointCloud2 msg2;
         sensor_msgs::convertPointCloud2ToPointCloud(service.response.obj, msg);
         pcl::fromROSMsg (service.response.hand, *hand_ptr);
-        //transform object in processing frame
-        // tf::StampedTransform trans;
-        // listener.waitForTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), ros::Duration(2.0));
-        // listener.lookupTransform(proc_frame, "/camera_rgb_optical_frame", ros::Time(0), trans);
         listener.transformPointCloud(proc_frame, msg, msg_conv);
         sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
         pcl::fromROSMsg (msg2, *object_ptr);
-        // Eigen::Quaterniond q(trans.getRotation().getW(), trans.getRotation().getX(),
-        //         trans.getRotation().getY(), trans.getRotation().getZ());
-        // q.normalize();
-        // Eigen::Vector3d t(trans.getOrigin().x(), trans.getOrigin().y(), trans.getOrigin().z());
-        // Eigen::Matrix3d R(q.toRotationMatrix());
-        // Tpk(0,0) = R(0,0);
-        // Tpk(0,1) = R(0,1);
-        // Tpk(0,2) = R(0,2);
-        // Tpk(1,0) = R(1,0);
-        // Tpk(1,1) = R(1,1);
-        // Tpk(1,2) = R(1,2);
-        // Tpk(2,0) = R(2,0);
-        // Tpk(2,1) = R(2,1);
-        // Tpk(2,2) = R(2,2);
-        // Tpk(3,0) = Tpk(3,1) = Tpk(3,2) = 0;
-        // Tpk(3,3) = 1;
-        // Tpk(0,3) = t(0);
-        // Tpk(1,3) = t(1);
-        // Tpk(2,3) = t(2);
-        // //transform object cloud into processing frame
-        // pcl::transformPointCloud(tmp, *object_ptr, Tpk);
-
     }
     else{
         if(req.cloud_dir.compare("sphere") == 0 || req.cloud_dir.compare("half_sphere") == 0){
@@ -525,7 +499,6 @@ bool GaussianProcessNode::startExploration()
         ROS_ERROR("[GaussianProcessNode::%s]\tNo GP model initialized, call start service.",__func__);
         return false;
     }
-
 
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasCollision>(obj_gp, reg_);
