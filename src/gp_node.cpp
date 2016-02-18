@@ -137,6 +137,12 @@ void GaussianProcessNode::reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC
 bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res)
 {
     ros::Rate rate(10); //try to go at 10hz, as in the node
+    {
+        std::lock_guard<std::mutex> lock(*mtx_marks);
+        markers = boost::make_shared<visualization_msgs::MarkerArray>();
+    }
+    //perform fake sampling
+    fakeDeterministicSampling(1.0, 0.08);
     if(startExploration()){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
@@ -284,7 +290,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
-            fakeDeterministicSampling(1.1, 0.1);
+            fakeDeterministicSampling(1.05, 0.03);
             return true;
         }
     return false;
@@ -337,7 +343,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    fakeDeterministicSampling(1.1, 0.1);
+    fakeDeterministicSampling(1.05, 0.1);
     return;
 }
 
@@ -555,9 +561,9 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     samples.id = 0;
     samples.type = visualization_msgs::Marker::POINTS;
     samples.action = visualization_msgs::Marker::ADD;
-    samples.scale.x = 0.005;
-    samples.scale.y = 0.005;
-    samples.scale.z = 0.005;
+    samples.scale.x = 0.01;
+    samples.scale.y = 0.01;
+    samples.scale.z = 0.01;
 
     gp_regression::Data::Ptr ss = std::make_shared<gp_regression::Data>();
     std::vector<double> ssvv;
@@ -565,8 +571,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     double min_v (100.0);
     double max_v (0.0);
     size_t count(0);
-    const auto total = std::lround( std::pow((2*scale+1)/pass, 3) );
-    ROS_INFO("[GaussianProcessNode::%s]\tSampling %ld grid points on GP ...",__func__, total);
+    const auto total = std::floor( std::pow((2*scale+1)/pass, 3) );
+    ROS_INFO("[GaussianProcessNode::%s]\tSampling %g grid points on GP ...",__func__, total);
     for (double x = -scale; x<= scale; x += pass)
         for (double y = -scale; y<= scale; y += pass)
             for (double z = -scale; z<= scale; z += pass)

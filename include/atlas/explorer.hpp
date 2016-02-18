@@ -109,10 +109,10 @@ class ExplorerBase
         disc.scale.x = c.getRadius()*2;
         disc.scale.y = c.getRadius()*2;
         disc.scale.z = 0.001;
-        disc.color.a = 0.4;
-        disc.color.r = 0.545;
-        disc.color.b = 0.843;
-        disc.color.g = 0.392;
+        disc.color.a = 0.75;
+        disc.color.r = 0.3;
+        disc.color.b = 0.35;
+        disc.color.g = 0.5;
         Eigen::Matrix3d rot;
         rot.col(0) =  c.getTanBasisOne();
         rot.col(1) =  c.getTanBasisTwo();
@@ -160,10 +160,10 @@ class ExplorerBase
         e.z = parent.getCenter()[2];
         branch.points.push_back(e);
         branch.scale.x = 0.005;
-        branch.color.a = 0.4;
-        branch.color.r = 0.129;
-        branch.color.g = 0.929;
-        branch.color.b = 0.6;
+        branch.color.a = 1.0;
+        branch.color.r = 0.0;
+        branch.color.g = 0.0;
+        branch.color.b = 0.9;
         std::lock_guard<std::mutex> guard(*mtx_ptr);
         markers->markers.push_back(branch);
     }
@@ -185,17 +185,17 @@ class ExplorerBase
             samp.scale.x = 0.01;
             samp.scale.y = 0.01;
             samp.scale.z = 0.01;
-            samp.color.a = 0.5;
+            samp.color.a = 0.8;
             if (i==c.samp_chosen){
                 //is winner
-                samp.color.r = 0.9;
+                samp.color.r = 0.6;
                 samp.color.b = 0.0;
-                samp.color.g = 0.9;
+                samp.color.g = 0.0;
             }
             else{
-                samp.color.r = 0.0;
-                samp.color.b = 0.8;
-                samp.color.g = 0.9;
+                samp.color.r = 0.6;
+                samp.color.b = 0.0;
+                samp.color.g = 0.6;
             }
             samp.pose.position.x = c.samples(i,0);
             samp.pose.position.y = c.samples(i,1);
@@ -252,18 +252,18 @@ class ExplorerBase
             if (markers->markers.at(i).ns.compare("Atlas Nodes")==0)
                 for (const auto& id: path)
                     if (markers->markers.at(i).id == id){
-                        markers->markers.at(i).color.a = 0.65;
+                        markers->markers.at(i).color.a = 0.75;
                         markers->markers.at(i).color.r = 0.0;
-                        markers->markers.at(i).color.b = 0.3;
+                        markers->markers.at(i).color.b = 0.05;
                         markers->markers.at(i).color.g = 0.95;
                     }
             if (markers->markers.at(i).ns.compare("Atlas Branches")==0)
                 for (const auto& id: cons)
                     if (markers->markers.at(i).id == id){
-                        markers->markers.at(i).color.a = 0.8;
-                        markers->markers.at(i).color.r = 0.0;
-                        markers->markers.at(i).color.b = 0.2;
-                        markers->markers.at(i).color.g = 0.95;
+                        markers->markers.at(i).color.a = 1.0;
+                        markers->markers.at(i).color.r = 1.0;
+                        markers->markers.at(i).color.b = 0.0;
+                        markers->markers.at(i).color.g = 0.0;
                     }
         }
     }
