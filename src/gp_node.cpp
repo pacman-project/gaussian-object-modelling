@@ -636,7 +636,16 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
 void
 GaussianProcessNode::computeOctomap()
 {
-    octomap = std::make_shared<octomap::OcTree>(0.005);
+    octomap = std::make_shared<octomap::OcTree>(0.01);
+    PtC::Ptr real_explicit = boost::make_shared<PtC>();
+    PtC real_ds;
+    reMeanAndDenormalizeData(real_explicit_ptr, *real_explicit);
+    pcl::VoxelGrid<pcl::PointXYZRGB> vg;
+    vg.setInputCloud(real_explicit);
+    vg.setLeafSize(0.005, 0.005, 0.005);
+    vg.filter(real_ds);
+    octomap::Pointcloud ocl;
+    octomap::pointCloudPCLToOctomap(real_ds, ocl);
     //TODO push points one by one? or pass a point cloud? what about free voxels, can they be
     //artificially generated ? or raycasted from pointcloud ?
 }
