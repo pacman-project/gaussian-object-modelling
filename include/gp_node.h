@@ -121,7 +121,9 @@ class GaussianProcessNode
         // this is not true, model_ptr contains the trainint data in PCL format!
         PtC::Ptr model_ptr;
         // internal explicit (or reconstructed) model in the real world
-        PtC::Ptr real_explicit_ptr;
+        // lets abuse the intensity channel to store hit probability (inv variance)
+        // it's a float so who cares!!
+        pcl::PointCloud<pcl::PointXYZI>::Ptr real_explicit_ptr;
         Eigen::Vector4d current_offset_;
         double current_scale_;
 
@@ -160,7 +162,8 @@ class GaussianProcessNode
         // Helpers
         void deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out);
         void reMeanAndDenormalizeData(Eigen::Vector3d &data);
-        void reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC &out) const;
+        template<typename PT>
+        void reMeanAndDenormalizeData(const typename pcl::PointCloud<PT>::Ptr &data_ptr, pcl::PointCloud<PT> &out) const;
         //prepare the data for gp computation
         void prepareExtData();
         bool prepareData();
@@ -194,6 +197,7 @@ class GaussianProcessNode
         ros::Subscriber sub_update_;
         ros::Publisher pub_model;
         ros::Publisher pub_real_explicit;
+        ros::Publisher pub_octomap;
 
         //transform listener
         tf::TransformListener listener;
@@ -209,19 +213,13 @@ class GaussianProcessNode
         //callback to sample process service, executes when service is called
         bool cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res);
 
-        // callback for sub point subscriber
-        // TODO: Convert this callback if  needed to accept probe points and not
-        // rviz clicked points, as it is now. (tabjones on Wednesday 18/11/2015)
-        // I don't think it is bad to have geometry_msgs::PointStamped, we'll see
-        // later how we deal with the information streaming, or may to pass back from the exploration
-        // a vector of geometry_msgs::PointStamped that can be a trajectory or one single poke
         void cb_update(const gp_regression::Path::ConstPtr &msg);
         bool cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res);
 
         // Publish object model
         void publishCloudModel() const;
 
-
-
+        // Publish octomap
+        void publishOctomap() const;
 };
 #endif

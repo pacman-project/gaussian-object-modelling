@@ -6,19 +6,18 @@
 
 using namespace gp_regression;
 
-/* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
-missing or is improvable! */
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
-    model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<PtC>()), fake_sampling(true), exploration_started(false),
-    out_sphere_rad(1.8), sigma2(1e-1)
+    model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
+    fake_sampling(true), exploration_started(false), out_sphere_rad(1.8), sigma2(1e-1)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
     srv_update = nh.advertiseService("update_process", &GaussianProcessNode::cb_updateS, this);
     srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("training_data", 1);
-    pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB> >("estimated_model", 1);
+    pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZI> >("estimated_model", 1);
+    pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1); //TODO fix correct topic name
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
@@ -36,6 +35,8 @@ void GaussianProcessNode::Publish ()
     }
     //publish the model
     publishCloudModel();
+    //publish octomap
+    publishOctomap();
     //publish markers
     publishAtlas();
 }
@@ -56,7 +57,7 @@ void GaussianProcessNode::publishCloudModel () const
             pub_model.publish(*model_ptr);
 
             // and the explicit estimated model back to the real world
-            PtC real_explicit;
+            pcl::PointCloud<pcl::PointXYZI> real_explicit;
             real_explicit.header = real_explicit_ptr->header;
             reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
             pub_real_explicit.publish(real_explicit);
@@ -121,7 +122,8 @@ void GaussianProcessNode::reMeanAndDenormalizeData(Eigen::Vector3d &data)
     data = current_scale_*data;
     data = data + current_offset_.block(0,0,3,1);
 }
-void GaussianProcessNode::reMeanAndDenormalizeData(const PtC::Ptr &data_ptr, PtC &out) const
+template<typename PT>
+void GaussianProcessNode::reMeanAndDenormalizeData(const typename pcl::PointCloud<PT>::Ptr &data_ptr, pcl::PointCloud<PT> &out) const
 {
     // here it is safe to do it in one single transformation
     Eigen::Matrix4f t;
@@ -199,7 +201,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     hand_ptr= boost::make_shared<PtC>();
     data_ptr_=boost::make_shared<PtC>();
     model_ptr= boost::make_shared<PtC>();
-    real_explicit_ptr= boost::make_shared<PtC>();
+    real_explicit_ptr= boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     reg_.reset();
     obj_gp.reset();
     my_kernel.reset();
@@ -610,7 +612,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     {
         geometry_msgs::Point pt;
         std_msgs::ColorRGBA cl;
-        pcl::PointXYZRGB pt_pcl;
+        pcl::PointXYZI pt_pcl;
         pt.x = ss->coord_x.at(i);
         pt.y = ss->coord_y.at(i);
         pt.z = ss->coord_z.at(i);
@@ -621,9 +623,11 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
         samples.points.push_back(pt);
         samples.colors.push_back(cl);
         pt_pcl.x = static_cast<float>(ss->coord_x.at(i));
-        pt_pcl.y = static_cast<float>(ss->coord_y.at(i));;
-        pt_pcl.z = static_cast<float>(ss->coord_z.at(i));;
-        colorIt(cl.r,cl.g,cl.b, pt_pcl);
+        pt_pcl.y = static_cast<float>(ss->coord_y.at(i));
+        pt_pcl.z = static_cast<float>(ss->coord_z.at(i));
+        //this goes linearly from 1 at min_v to 0.1 at max_v
+        float p_hit = ( -9*ssvv.at(i) + 9*min_v + 10*(max_v - min_v) ) / (10*(max_v - min_v));
+        pt_pcl.intensity = p_hit;
         real_explicit_ptr->push_back(pt_pcl);
     }
     markers->markers.push_back(samples);
@@ -637,17 +641,47 @@ void
 GaussianProcessNode::computeOctomap()
 {
     octomap = std::make_shared<octomap::OcTree>(0.01);
-    PtC::Ptr real_explicit = boost::make_shared<PtC>();
-    PtC real_ds;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr real_explicit =
+        boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    pcl::PointCloud<pcl::PointXYZI> real_ds;
     reMeanAndDenormalizeData(real_explicit_ptr, *real_explicit);
-    pcl::VoxelGrid<pcl::PointXYZRGB> vg;
+    pcl::VoxelGrid<pcl::PointXYZI> vg;
     vg.setInputCloud(real_explicit);
+    vg.setDownsampleAllData(true);
     vg.setLeafSize(0.005, 0.005, 0.005);
     vg.filter(real_ds);
-    octomap::Pointcloud ocl;
-    octomap::pointCloudPCLToOctomap(real_ds, ocl);
-    //TODO push points one by one? or pass a point cloud? what about free voxels, can they be
+    //store it in a Octomap pointcloud in case is needed in the future
+    // octomap::Pointcloud ocl;
+    // octomap::pointCloudPCLToOctomap(real_ds, ocl); //Too bad this does only exists in more recent version of octomap!
+    // ocl.reserve(real_ds.points.size());
+    // for (auto it = real_ds.begin(); it!= real_ds.end(); ++it)
+    // {
+    //     if (!std::isnan (it->x) && !std::isnan (it->y) && !std::isnan (it->z))
+    //         ocl.push_back(it->x, it->y, it->z);
+    // }
+    //fill the octomap
+    for (const auto& pt: real_ds.points)
+    {
+        octomap::point3d opt (pt.x, pt.y, pt.z);
+        octomap->updateNode(opt, std::log10(pt.intensity/(1-pt.intensity)), false);
+    }
+
+    //TODO what about free(unoccupied) voxels, can they be
     //artificially generated ? or raycasted from pointcloud ?
+}
+
+void
+GaussianProcessNode::publishOctomap() const
+{
+    if (!octomap)
+        return;
+    octomap_msgs::Octomap map;
+    map.header.frame_id = proc_frame;
+    map.header.stamp = ros::Time::now();
+    if (octomap_msgs::fullMapToMsg(*octomap,map))
+        pub_octomap.publish(map);
+    else
+        ROS_ERROR("[GaussianProcessNode::%s]\tError in serializing octomap to publish",__func__);
 }
 
 ///// MAIN ////////////////////////////////////////////////////////////////////
