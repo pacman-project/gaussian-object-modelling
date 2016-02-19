@@ -230,7 +230,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         sensor_msgs::PointCloud msg, msg_conv;
         sensor_msgs::PointCloud2 msg2;
         sensor_msgs::convertPointCloud2ToPointCloud(service.response.obj, msg);
-        pcl::fromROSMsg (service.response.hand, *hand_ptr);
+        // pcl::fromROSMsg (service.response.hand, *hand_ptr);
         listener.transformPointCloud(proc_frame, msg, msg_conv);
         sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
         pcl::fromROSMsg (msg2, *object_ptr);
@@ -269,13 +269,13 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
                 ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir+"obj.pcd").c_str());
                 return (false);
             }
-            if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0)
-                ROS_WARN("[GaussianProcessNode::%s]\tError loading cloud from %s, ignoring hand",__func__,(req.cloud_dir + "/hand.pcd").c_str());
+            // if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0)
+            //     ROS_WARN("[GaussianProcessNode::%s]\tError loading cloud from %s, ignoring hand",__func__,(req.cloud_dir + "/hand.pcd").c_str());
             // We  need  to  fill  point  cloud header  or  ROS  will  complain  when
             // republishing this cloud. Let's assume it was published by asus kinect.
             // I think it's just need the frame id
-            object_ptr->header.frame_id="/camera_rgb_optical_frame";
-            hand_ptr->header.frame_id="/camera_rgb_optical_frame";
+            object_ptr->header.frame_id=proc_frame;
+            // hand_ptr->header.frame_id=proc_frame;
         }
     }
     model_ptr->header.frame_id=object_ptr->header.frame_id;
@@ -291,6 +291,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
             fakeDeterministicSampling(1.05, 0.03);
+            computeOctomap();
             return true;
         }
     return false;
@@ -344,6 +345,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
     fakeDeterministicSampling(1.05, 0.1);
+    computeOctomap();
     return;
 }
 
@@ -629,6 +631,14 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
+}
+
+void
+GaussianProcessNode::computeOctomap()
+{
+    octomap = std::make_shared<octomap::OcTree>(0.005);
+    //TODO push points one by one? or pass a point cloud? what about free voxels, can they be
+    //artificially generated ? or raycasted from pointcloud ?
 }
 
 ///// MAIN ////////////////////////////////////////////////////////////////////

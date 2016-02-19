@@ -22,6 +22,8 @@ find_package(PCL REQUIRED)
 
 find_package(Eigen REQUIRED)
 
+find_package(octomap REQUIRED)
+
 # find_package(OpenMP)
 # if (OPENMP_FOUND)
 #     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -63,6 +65,7 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     ${Eigen_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
+    ${OCTOMAP_INCLUDE_DIRS}
 )
 
 # ROS node
@@ -79,6 +82,7 @@ add_dependencies(gaussian_process
 target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
 )
 
 ## Tests

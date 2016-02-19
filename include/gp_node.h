@@ -57,10 +57,12 @@
 #include <atlas/exp_single_path.hpp>
 #include <atlas/exp_multibranch.hpp>
 
-/* PLEASE LOOK at  TODOs by searching "TODO" to have an idea  of * what is still
-missing or is improvable! */
-
-// EVERYTHING IS IMPROVABLE UP TO ONES AND ZEROS
+//octomap
+#include <octomap/octomap.h>
+#include <octomap/OcTree.h>
+#include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
+#include <octomap_ros/conversions.h>
 
 /**\brief Class GaussianProcessNode
  * {Wraps Gaussian process into a ROS node}
@@ -113,13 +115,16 @@ class GaussianProcessNode
         // same as object data but normalized by R_ and deMean'ed by centroid everytime
         PtC::Ptr data_ptr_;
         // input hand point cloud
-        PtC::Ptr hand_ptr;
+        PtC::Ptr hand_ptr;  //actually unused
+        //reconstructed model cloud to republish including centroid and sphere
+        // this is not true, model_ptr contains the trainint data in PCL format!
+        PtC::Ptr model_ptr;
+        // internal explicit (or reconstructed) model in the real world
+        PtC::Ptr real_explicit_ptr;
         Eigen::Vector4d current_offset_;
         double current_scale_;
-        // //from kinect to processing frame
-        // Eigen::Matrix4d Tpk;
 
-        // regressor and model
+        // regressor, model and covariance
         gp_regression::ThinPlateRegressor::Ptr reg_;
         gp_regression::Model::Ptr obj_gp;
         std::shared_ptr<gp_regression::ThinPlate> my_kernel;
@@ -143,6 +148,9 @@ class GaussianProcessNode
         //exploration solution
         std::vector<std::size_t> solution;
 
+        //octomap
+        std::shared_ptr<octomap::OcTree> octomap;
+
         /***********
          * METHODS *
          ***********
@@ -159,11 +167,15 @@ class GaussianProcessNode
         bool computeGP();
         // start the RRT exploration
         bool startExploration();
+        // compute octomap from real explicit cloud
+        void computeOctomap();
+        // the grid plotting
+        void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
 
         /***********
          * ROS API *
          ***********
-         *
+         * members and methods
          *
          */
         // visualization of atlas and explorer
@@ -179,6 +191,8 @@ class GaussianProcessNode
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Subscriber sub_update_;
+        ros::Publisher pub_model;
+        ros::Publisher pub_real_explicit;
 
         //transform listener
         tf::TransformListener listener;
@@ -203,25 +217,10 @@ class GaussianProcessNode
         void cb_update(const gp_regression::Path::ConstPtr &msg);
         bool cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res);
 
-        /*****************
-         * DEBUG MEMBERS *
-         *****************
-         *
-         */
-
-        //reconstructed model cloud to republish including centroid and sphere
-        // this is not true, model_ptr contains the trainint data in PCL format!
-        PtC::Ptr model_ptr;
-        // internal explicit (or reconstructed) model in the real world
-        PtC::Ptr real_explicit_ptr;
-        ros::Publisher pub_model;
-        ros::Publisher pub_real_explicit;
-
         // Publish object model
         void publishCloudModel() const;
 
-        // the grid plotting
-        void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
+
 
 };
 #endif
