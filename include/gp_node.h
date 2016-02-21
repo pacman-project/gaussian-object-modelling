@@ -30,6 +30,7 @@
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/octree/octree_pointcloud.h>
 // #include <pcl/features/normal_3d_omp.h>
 // #include <pcl/filters/voxel_grid.h>
 // #include <pcl/filters/extract_indices.h>
@@ -154,6 +155,13 @@ class GaussianProcessNode
         //octomap
         std::shared_ptr<octomap::OcTree> octomap;
 
+        //marching sampling stuff
+        pcl::octree::OctreePointCloud<pcl::PointXYZ>::Ptr s_oct;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr oct_cent;
+        std::mutex mtx_samp;
+        //min max variance found on samples
+        double min_v, max_v;
+
         /***********
          * METHODS *
          ***********
@@ -175,6 +183,10 @@ class GaussianProcessNode
         void computeOctomap();
         // the grid plotting
         void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
+        // alternative hopefully faster sampling
+        void marchingSampling(const float leaf_size=0.15, const float leaf_pass=0.03);
+        // cube sampling for marchingSampling (nested therads)
+        void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass);
 
         /***********
          * ROS API *

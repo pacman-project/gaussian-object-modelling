@@ -9,7 +9,7 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    fake_sampling(true), exploration_started(false), out_sphere_rad(1.8), sigma2(1e-1)
+    fake_sampling(true), exploration_started(false), out_sphere_rad(1.8), sigma2(1e-1), min_v(100), max_v(0)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -144,7 +144,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         markers = boost::make_shared<visualization_msgs::MarkerArray>();
     }
     //perform fake sampling
-    fakeDeterministicSampling(1.0, 0.08);
+    marchingSampling();
     if(startExploration()){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
@@ -292,7 +292,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
-            fakeDeterministicSampling(1.05, 0.03);
+            marchingSampling();
             computeOctomap();
             return true;
         }
@@ -346,7 +346,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    fakeDeterministicSampling(1.05, 0.1);
+    marchingSampling();
     computeOctomap();
     return;
 }
@@ -638,6 +638,188 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
 }
 
 void
+GaussianProcessNode::marchingSampling(const float leaf_size, const float leaf_pass)
+{
+    auto begin_time = std::chrono::high_resolution_clock::now();
+    if(!markers)
+        return;
+
+    markers->markers.clear();
+    visualization_msgs::Marker samples;
+    samples.header.frame_id = object_ptr->header.frame_id;
+    samples.header.stamp = ros::Time::now();
+    samples.lifetime = ros::Duration(0);
+    samples.ns = "samples";
+    samples.id = 0;
+    samples.type = visualization_msgs::Marker::POINTS;
+    samples.action = visualization_msgs::Marker::ADD;
+    samples.scale.x = 0.01;
+    samples.scale.y = 0.01;
+    samples.scale.z = 0.01;
+
+    std::shared_ptr<pcl::PointXYZ> start;
+
+    ROS_INFO("[GaussianProcessNode::%s]\tMarching sampling on GP...",__func__);
+    for (double x = -1.1; x<= 1.1; x += 0.1)
+    {
+        for (double y = -1.1; y<= 1.1; y += 0.1)
+        {
+            for (double z = -1.1; z<= 1.1; z += 0.1)
+            {
+                gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+                qq->coord_x.push_back(x);
+                qq->coord_y.push_back(y);
+                qq->coord_z.push_back(z);
+                std::vector<double> ff;
+                reg_->evaluate(obj_gp, qq, ff);
+                if (std::abs(ff.at(0)) <= 0.01) {
+                    start = std::make_shared<pcl::PointXYZ>();
+                    start->x = x;
+                    start->y = y;
+                    start->z = z;
+                    break;
+                }
+            }
+            if (start)
+                break;
+        }
+        if (start)
+            break;
+    }
+    if (!start)
+    {
+        ROS_ERROR("[GaussianProcessNode::%s]\tNo starting point found. Relax grid pass.",__func__);
+        return;
+    }
+    s_oct = boost::make_shared<pcl::octree::OctreePointCloud<pcl::PointXYZ>>(leaf_size);
+    real_explicit_ptr = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    oct_cent = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    s_oct->setInputCloud(oct_cent);
+    marchingCubes(*start, leaf_size, leaf_pass); //process will block here until everything is done
+    //remove duplicate points
+    pcl::VoxelGrid<pcl::PointXYZI> vg;
+    vg.setInputCloud(real_explicit_ptr);
+    vg.setLeafSize(leaf_size/5, leaf_size/5, leaf_size/5);
+    pcl::PointCloud<pcl::PointXYZI> tmp;
+    vg.filter(tmp);
+    pcl::copyPointCloud(tmp, *real_explicit_ptr);
+    ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface...",__func__,
+            real_explicit_ptr->size());
+    //determine min e max variance
+    for (const auto& pt: real_explicit_ptr->points)
+    {
+        if (pt.intensity <= min_v)
+            min_v = pt.intensity;
+        if (pt.intensity >= max_v)
+            max_v = pt.intensity;
+    }
+    const double mid_v = ( min_v + max_v ) * 0.5;
+    //create the markers
+    for (size_t i=0; i< real_explicit_ptr->size(); ++i)
+    {
+        geometry_msgs::Point pt;
+        std_msgs::ColorRGBA cl;
+        pcl::PointXYZI pt_pcl = real_explicit_ptr->points[i];
+        pt.x = pt_pcl.x;
+        pt.y = pt_pcl.y;
+        pt.z = pt_pcl.z;
+        cl.a = 1.0;
+        cl.b = 0.0;
+        cl.r = (pt_pcl.intensity<mid_v) ? 1/(mid_v - min_v) * (pt_pcl.intensity - min_v) : 1.0;
+        cl.g = (pt_pcl.intensity>mid_v) ? -1/(max_v - mid_v) * (pt_pcl.intensity - mid_v) + 1 : 1.0;
+        samples.points.push_back(pt);
+        samples.colors.push_back(cl);
+    }
+    markers->markers.push_back(samples);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
+    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
+}
+
+void
+GaussianProcessNode::marchingCubes(pcl::PointXYZ start, const float leaf, const float pass)
+{
+    std::cout<<"T ";
+    {//protected section, mark this cube as already explored
+        std::lock_guard<std::mutex> lock (mtx_samp);
+        s_oct->addPointToCloud(start, oct_cent);
+    }//end of protected section
+    const size_t steps = std::round(leaf/pass);
+    //sample the cube
+    std::array<bool,6> where{{false,false,false,false,false,false}};
+    for (size_t i = 0; i<= steps; ++i)
+        for (size_t j = 0; j<= steps; ++j)
+            for (size_t k = 0; k<= steps; ++k)
+            {
+                gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+                double x (start.x -leaf/2 + i*pass );
+                double y (start.y -leaf/2 + j*pass );
+                double z (start.z -leaf/2 + k*pass );
+                qq->coord_x.push_back(x);
+                qq->coord_y.push_back(y);
+                qq->coord_z.push_back(z);
+                std::vector<double> ff,vv;
+                reg_->evaluate(obj_gp, qq, ff, vv);
+                if (std::abs(ff.at(0)) <= 0.01) {
+                    pcl::PointXYZI pt;
+                    pt.x = x;
+                    pt.y = y;
+                    pt.z = z;
+                    pt.intensity = vv.at(0);
+                    {//protected section
+                        std::lock_guard<std::mutex> lock (mtx_samp);
+                        real_explicit_ptr->push_back(pt);
+                    }//end of protected section
+                    //decide where to explore
+                    if (i == 0 && !where.at(0)) //-x
+                        where.at(0) = true;
+                    if (i == steps && !where.at(1)) //+x
+                        where.at(1) = true;
+                    if (j ==0 && !where.at(2)) //-y
+                        where.at(2) = true;
+                    if (j == steps && !where.at(3)) //+y
+                        where.at(3) = true;
+                    if (k == 0 && !where.at(4)) //-z
+                        where.at(4) = true;
+                    if (k == steps && !where.at(5)) //+z
+                        where.at(5) = true;
+                }
+            }
+
+    //Expand in all directions found before
+    std::vector<std::thread> threads;
+    pcl::PointXYZ pt;
+    bool exists;
+    for (size_t i=0; i<where.size(); ++i)
+    {
+        pt = start;
+        if (where[i]){
+            if (i==0) //-x
+                pt.x -= leaf;
+            if (i==1) //+x
+                pt.x += leaf;
+            if (i==2) //-y
+                pt.y -= leaf;
+            if (i==3) //+y
+                pt.y += leaf;
+            if (i==4) //-z
+                pt.z -= leaf;
+            if (i==5) //+z
+                pt.z += leaf;
+            { //check if we didn't already explore that cube
+                std::lock_guard<std::mutex> lock (mtx_samp);
+                exists = s_oct->isVoxelOccupiedAtPoint(pt);
+            }
+            if (!exists)
+                threads.emplace_back(&GaussianProcessNode::marchingCubes, this, pt, leaf, pass);
+        }
+    }
+    for (auto& t: threads)
+        t.join();
+}
+
+void
 GaussianProcessNode::computeOctomap()
 {
     octomap = std::make_shared<octomap::OcTree>(0.01);
@@ -647,7 +829,6 @@ GaussianProcessNode::computeOctomap()
     reMeanAndDenormalizeData(real_explicit_ptr, *real_explicit);
     pcl::VoxelGrid<pcl::PointXYZI> vg;
     vg.setInputCloud(real_explicit);
-    vg.setDownsampleAllData(true);
     vg.setLeafSize(0.005, 0.005, 0.005);
     vg.filter(real_ds);
     //store it in a Octomap pointcloud in case is needed in the future
@@ -662,8 +843,9 @@ GaussianProcessNode::computeOctomap()
     //fill the octomap
     for (const auto& pt: real_ds.points)
     {
+        float hit = -8/(10*(max_v-min_v))*(pt.intensity- min_v) + 9/10;
         octomap::point3d opt (pt.x, pt.y, pt.z);
-        octomap->updateNode(opt, std::log10(pt.intensity/(1-pt.intensity)), false);
+        octomap->updateNode(opt, std::log10(hit/(1-hit)), false);
     }
 
     //TODO what about free(unoccupied) voxels, can they be
