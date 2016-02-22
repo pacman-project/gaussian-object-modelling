@@ -15,11 +15,15 @@ void colorIt(uint8_t r, uint8_t g, uint8_t b, pcl::PointXYZRGB &pt)
     pt.rgb = *reinterpret_cast<float*>( &rgb );
 }
 
+void colorThem(uint8_t r, uint8_t g, uint8_t b, pcl::PointCloud<pcl::PointXYZRGB> &cloud)
+{
+    for (auto &pt : cloud.points)
+        colorIt(r,g,b, pt);
+}
 /** \brief Color point cloud with specified color */
 void colorThem(uint8_t r, uint8_t g, uint8_t b, pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud)
 {
-    for (auto &pt : cloud->points)
-        colorIt(r,g,b, pt);
+    colorThem(r,g,b,*cloud);
 }
 
 #endif

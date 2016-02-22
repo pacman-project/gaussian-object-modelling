@@ -61,7 +61,6 @@ void GaussianProcessNode::publishCloudModel () const
             real_explicit.header = real_explicit_ptr->header;
             reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
             pub_real_explicit.publish(real_explicit);
-
         }
     }
 }
@@ -144,7 +143,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         markers = boost::make_shared<visualization_msgs::MarkerArray>();
     }
     //perform fake sampling
-    marchingSampling();
+    marchingSampling(0.06, 0.03);
     if(startExploration()){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
@@ -292,7 +291,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
-            marchingSampling();
+            marchingSampling(0.06,0.02);
             computeOctomap();
             return true;
         }
@@ -346,7 +345,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    marchingSampling();
+    marchingSampling(0.06,0.03);
     computeOctomap();
     return;
 }
@@ -737,10 +736,11 @@ GaussianProcessNode::marchingSampling(const float leaf_size, const float leaf_pa
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
 }
 
+//Doesnt fully work!! looks like diagonal adjacency is also needed,
+//It does work however for small leaf sizes...
 void
 GaussianProcessNode::marchingCubes(pcl::PointXYZ start, const float leaf, const float pass)
 {
-    std::cout<<"T ";
     {//protected section, mark this cube as already explored
         std::lock_guard<std::mutex> lock (mtx_samp);
         s_oct->addPointToCloud(start, oct_cent);
