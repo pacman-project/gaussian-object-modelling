@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   visualization_msgs
   cmake_modules
   pacman_vision_comm
+  roslib
   tf
 )
 

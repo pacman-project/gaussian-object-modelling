@@ -4,12 +4,17 @@
 #include <node_utils.hpp>
 #include <gp_node.h>
 
+#include <ros/package.h>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/filesystem/path.hpp>
+
 using namespace gp_regression;
 
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    fake_sampling(true), exploration_started(false), out_sphere_rad(1.8), sigma2(1e-1), min_v(100), max_v(0)
+    fake_sampling(true), exploration_started(false), out_sphere_rad(1.8), sigma2(1e-1), min_v(100), max_v(0),
+    simulate_touch(true)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -143,7 +148,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         markers = boost::make_shared<visualization_msgs::MarkerArray>();
     }
     //perform fake sampling
-    marchingSampling(0.06, 0.03);
+    marchingSampling(0.06, 0.06);
     if(startExploration()){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
@@ -166,6 +171,11 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             gp_atlas_rrt::Chart chart = atlas->getNode(solution[i]);
             Eigen::Vector3d point_eigen = chart.getCenter();
             Eigen::Vector3d normal_eigen = chart.getNormal();
+            if (simulate_touch) //synthetic touch simulation
+            {
+                synthTouch(point_eigen, normal_eigen);
+                return true;
+            }
             // modifies the point
             reMeanAndDenormalizeData(point_eigen);
             // normal does not need to be reMeanAndRenormalized for now
@@ -210,7 +220,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     markers.reset();
     cloud_labels.clear();
     //////
-    if(req.cloud_dir.empty()){
+    pcl::PointCloud<pcl::PointXYZ> tmp;
+    if(req.obj_pcd.empty()){
         //Request was empty, means we have to call pacman vision service to
         //get a cloud.
         std::string service_name = nh.resolveName("/pacman_vision/listener/get_cloud_in_hand");
@@ -237,7 +248,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         pcl::fromROSMsg (msg2, *object_ptr);
     }
     else{
-        if(req.cloud_dir.compare("sphere") == 0 || req.cloud_dir.compare("half_sphere") == 0){
+        if(req.obj_pcd.compare("sphere") == 0 || req.obj_pcd.compare("half_sphere") == 0){
             object_ptr = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB> >();
             const int ang_div = 24;
             const int lin_div = 20;
@@ -245,7 +256,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             const double ang_step = M_PI * 2 / ang_div;
             const double lin_step = 2 * radius / lin_div;
             double end_lin = radius;
-            if (req.cloud_dir.compare("half_sphere")==0)
+            if (req.obj_pcd.compare("half_sphere")==0)
                 end_lin /= 2;
             int j(0);
             for (double lin=-radius+lin_step/2; lin<end_lin; lin+=lin_step)
@@ -262,13 +273,29 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
                     colorIt(0,0,255, sp);
                     object_ptr->push_back(sp);
                 }
-            object_ptr->header.frame_id="/camera_rgb_optical_frame";
+            object_ptr->header.frame_id=proc_frame;
         }
         else{
             // User told us to load a clouds from a dir on disk instead.
-            if (pcl::io::loadPCDFile((req.cloud_dir+"/obj.pcd"), *object_ptr) != 0){
-                ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,(req.cloud_dir+"obj.pcd").c_str());
+            if (pcl::io::loadPCDFile(req.obj_pcd, *object_ptr) != 0){
+                ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,req.obj_pcd.c_str());
                 return (false);
+            }
+            if (simulate_touch){
+                std::string obj_name;
+                std::vector<std::string> vst;
+                split(vst, req.obj_pcd, boost::is_any_of("/."), boost::token_compress_on);
+                obj_name = vst.at(vst.size()-2);
+                std::string models_path (ros::package::getPath("asus_scanner_models"));
+                boost::filesystem::path model_path (models_path + "/" + obj_name + "/" + obj_name + ".pcd");
+                full_object = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+                if (boost::filesystem::exists(model_path) && boost::filesystem::is_regular_file(model_path))
+                {
+                    if (pcl::io::loadPCDFile(model_path.c_str(), tmp))
+                        ROS_ERROR("[GaussianProcessNode::%s] Error loading model %s",__func__, model_path.c_str());
+                }
+                else
+                    ROS_ERROR("[GaussianProcessNode::%s] Requested model (%s) does not exists in asus_scanner_models package",__func__, model_path.stem().c_str());
             }
             // if (pcl::io::loadPCDFile((req.cloud_dir+"/hand.pcd"), *hand_ptr) != 0)
             //     ROS_WARN("[GaussianProcessNode::%s]\tError loading cloud from %s, ignoring hand",__func__,(req.cloud_dir + "/hand.pcd").c_str());
@@ -286,6 +313,15 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 
     prepareExtData();
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
+    if (simulate_touch){
+        Eigen::Matrix4f t;
+        t    << 1/current_scale_, 0, 0, -current_offset_(0),
+             0, 1/current_scale_, 0, -current_offset_(1),
+             0, 0, 1/current_scale_, -current_offset_(2),
+             0, 0, 0,          1;
+        pcl::transformPointCloud(tmp, *full_object, t);
+        kd_full.setInputCloud(full_object);
+    }
     if (prepareData())
         if (computeGP()){
             //initialize objects involved
@@ -345,7 +381,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    marchingSampling(0.06,0.03);
+    marchingSampling(0.06,0.06);
     computeOctomap();
     return;
 }
@@ -640,7 +676,7 @@ void
 GaussianProcessNode::marchingSampling(const float leaf_size, const float leaf_pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
-    if(!markers)
+    if(!markers || !fake_sampling)
         return;
 
     markers->markers.clear();
@@ -866,8 +902,34 @@ GaussianProcessNode::publishOctomap() const
         ROS_ERROR("[GaussianProcessNode::%s]\tError in serializing octomap to publish",__func__);
 }
 
-///// MAIN ////////////////////////////////////////////////////////////////////
+void
+GaussianProcessNode::synthTouch(const Eigen::Vector3d &point, const Eigen::Vector3d &normal)
+{
+    //normal is facing outside
+    Eigen::Vector3d p (point +normal*0.1);
+    std::vector<int> k_id;
+    std::vector<float> k_dist;
+    //move along direction
+    size_t max_steps(10);
+    for (size_t i=0; i<max_steps; ++i)
+    {
+        pcl::PointXYZ pt;
+        pt.x = p[0];
+        pt.y = p[1];
+        pt.z = p[2];
+        if (kd_full.radiusSearch(pt, 0.05, k_id, k_dist, 1) > 0){
+            //we intersected the object, aka touch
 
+            break;
+        }
+        else{ //no touch, external point
+
+        }
+        p -= (normal*0.05);
+    }
+}
+
+///// MAIN ////////////////////////////////////////////////////////////////////
 int main (int argc, char *argv[])
 {
     ros::init(argc, argv, "gaussian_process");

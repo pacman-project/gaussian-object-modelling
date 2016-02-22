@@ -1,5 +1,5 @@
 #Serviced by /gaussian_process/start_process
-#REQ cloud: full path  to dir containing hand.pcd and obj.pcd  to load, if empty
-#calls pacman_vision get cloud in hand to get point clouds from vision.
-string cloud_dir
+#REQ cloud: full path  to object pcd file to use, if empty
+#calls pacman_vision get_cloud_in_hand service to get point cloud from vision.
+string obj_pcd
 ---

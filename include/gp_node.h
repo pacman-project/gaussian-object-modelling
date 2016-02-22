@@ -37,7 +37,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl_conversions/pcl_conversions.h>
-// #include <pcl/search/kdtree.h>
+#include <pcl/search/kdtree.h>
 
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>
@@ -103,7 +103,7 @@ class GaussianProcessNode
          *
          */
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, fake_sampling, exploration_started;
+        bool start, fake_sampling, exploration_started, simulate_touch;
         const double out_sphere_rad;
 
         /***************
@@ -162,6 +162,11 @@ class GaussianProcessNode
         //min max variance found on samples
         double min_v, max_v;
 
+        //synthetic touch data needed
+        pcl::PointCloud<pcl::PointXYZ>::Ptr full_object;
+        pcl::search::KdTree<pcl::PointXYZ> kd_full;
+
+
         /***********
          * METHODS *
          ***********
@@ -183,10 +188,12 @@ class GaussianProcessNode
         void computeOctomap();
         // the grid plotting
         void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
-        // alternative hopefully faster sampling
-        void marchingSampling(const float leaf_size=0.15, const float leaf_pass=0.03);
+        // alternative hopefully faster sampling (dont make leaf_size bigger or it will skip parts of the object)
+        void marchingSampling(const float leaf_size=0.06, const float leaf_pass=0.03);
         // cube sampling for marchingSampling (nested therads)
         void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass);
+        // simulated synthetic touch
+        void synthTouch(const Eigen::Vector3d &point, const Eigen::Vector3d &normal);
 
         /***********
          * ROS API *
