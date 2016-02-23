@@ -177,7 +177,7 @@ class ExplorerBase
 
     virtual void createSamplesMarker(const Chart &c, const Eigen::Vector3d &projected)
     {
-        if (c.samp_chosen < 0)
+        if (c.samp_chosen < 0 || no_sample_markers)
             return;
         for (size_t i=0; i<c.samples.rows(); ++i)
         {
@@ -299,6 +299,11 @@ class ExplorerBase
         return path;
     }
 
+    virtual inline void setNoSampleMarkers(const bool nos)
+    {
+        no_sample_markers = nos;
+    }
+
     /**
      * \brief Connect two nodes identified by id, first passed id is child node
      */
@@ -334,6 +339,8 @@ class ExplorerBase
     std::shared_ptr<std::mutex> mtx_ptr;
     //solution path
     std::vector<std::size_t> solution;
+    //enable/disable markers for disc samples
+    bool no_sample_markers;
 };
 }
 

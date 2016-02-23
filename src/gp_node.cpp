@@ -12,7 +12,7 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(100), max_v(0),
+    exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(100), max_v(0),
     simulate_touch(true), synth_type(1), anchor("/mind_anchor")
 {
     mtx_marks = std::make_shared<std::mutex>();
@@ -420,23 +420,21 @@ void GaussianProcessNode::prepareExtData()
         model_ptr->clear();
     ext_gp = std::make_shared<gp_regression::Data>();
 
-    /*
-     * ext_size = 1;
-     * //      Internal Point
-     * // add centroid as label -1
-     * ext_gp->coord_x.push_back(0);
-     * ext_gp->coord_y.push_back(0);
-     * ext_gp->coord_z.push_back(0);
-     * ext_gp->label.push_back(-1.0);
-     * ext_gp->sigma2.push_back(sigma2);
-     * // add internal point to rviz in cyan
-     * pcl::PointXYZRGB cen;
-     * cen.x = 0;
-     * cen.y = 0;
-     * cen.z = 0;
-     * colorIt(0,255,255, cen);
-     * model_ptr->push_back(cen);
-     */
+    ext_size = 1;
+    //      Internal Point
+    // add centroid as label -1
+    ext_gp->coord_x.push_back(0);
+    ext_gp->coord_y.push_back(0);
+    ext_gp->coord_z.push_back(0);
+    ext_gp->label.push_back(-1.0);
+    ext_gp->sigma2.push_back(sigma2);
+    // add internal point to rviz in cyan
+    pcl::PointXYZRGB cen;
+    cen.x = 0;
+    cen.y = 0;
+    cen.z = 0;
+    colorIt(0,255,255, cen);
+    model_ptr->push_back(cen);
 
     //      External points
     // add points in a sphere around centroid with label 1
@@ -577,6 +575,7 @@ bool GaussianProcessNode::startExploration()
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
     explorer->setMaxNodes(200);
+    explorer->setNoSampleMarkers(true);
     //get a starting point from data cloud
     int r_id = getRandIn(0, data_ptr_->points.size()-1 );
     Eigen::Vector3d root;
@@ -671,7 +670,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
         pt.x = ss->coord_x.at(i);
         pt.y = ss->coord_y.at(i);
         pt.z = ss->coord_z.at(i);
-        cl.a = 1.0;
+        cl.a = 0.7;
         cl.b = 0.0;
         cl.r = (ssvv.at(i)<mid_v) ? 1/(mid_v - min_v) * (ssvv.at(i) - min_v) : 1.0;
         cl.g = (ssvv.at(i)>mid_v) ? -1/(max_v - mid_v) * (ssvv.at(i) - mid_v) + 1 : 1.0;
@@ -783,7 +782,7 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
         pt.x = pt_pcl.x;
         pt.y = pt_pcl.y;
         pt.z = pt_pcl.z;
-        cl.a = 1.0;
+        cl.a = 0.7;
         cl.b = 0.0;
         cl.r = (pt_pcl.intensity<mid_v) ? 1/(mid_v - min_v) * (pt_pcl.intensity - min_v) : 1.0;
         cl.g = (pt_pcl.intensity>mid_v) ? -1/(max_v - mid_v) * (pt_pcl.intensity - mid_v) + 1 : 1.0;
@@ -993,11 +992,16 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
             break;
         }
         else{ //no touch, external point
-            if (count==5){
+            if (count==0){
                 //add this point
                 k_id.resize(1);
                 k_dist.resize(1);
                 kd_full.nearestKSearch(pt, 1, k_id, k_dist);
+                float dist = std::sqrt(k_dist[0]);
+                if (dist < 0.3){
+                    ++count;
+                    continue;
+                }
                 Eigen::Vector3d unnorm_p(point);
                 reMeanAndDenormalizeData(unnorm_p);
                 geometry_msgs::PointStamped p;
@@ -1009,12 +1013,11 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
                 iof.data = false;
                 touched.isOnSurface.push_back(iof);
                 std_msgs::Float32 d;
-                d.data = std::sqrt(k_dist[0])*current_scale_;
+                d.data = dist*current_scale_;
                 touched.distances.push_back(d);
                 count =0;
             }
-            else
-                ++count;
+            count = count>=10 ? 0 : ++count;
         }
         point -= (normal*0.03);
     }
