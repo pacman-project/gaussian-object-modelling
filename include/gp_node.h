@@ -128,6 +128,12 @@ class GaussianProcessNode
         pcl::PointCloud<pcl::PointXYZI>::Ptr real_explicit_ptr;
         Eigen::Vector4d current_offset_;
         double current_scale_;
+        //Total exploration steps
+        std::size_t steps;
+        //Variance to goal
+        double variance_goal;
+        //last point touched
+        Eigen::Vector3d last_touched;
 
         // regressor, model and covariance
         gp_regression::ThinPlateRegressor::Ptr reg_;
@@ -139,8 +145,6 @@ class GaussianProcessNode
         gp_regression::Data::Ptr ext_gp;
         //external data size, for model resizing
         size_t ext_size;
-        //labels for data
-        std::vector<int> cloud_labels;
         //data noise parameter
         double sigma2;
 

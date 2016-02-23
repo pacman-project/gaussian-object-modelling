@@ -13,7 +13,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
     exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(100), max_v(0),
-    simulate_touch(true), synth_type(1), anchor("/mind_anchor")
+    simulate_touch(true), synth_type(1), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero())
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -26,9 +26,8 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
 
-    // pub_point = nh.advertise<gp_regression::SampleToExplore> ("sample_to_explore", 0, true);
-    // pub_point_marker = nh.advertise<geometry_msgs::PointStamped> ("point_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
-    // pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
+    // GOAL
+    variance_goal = 0.1;
 }
 
 void GaussianProcessNode::Publish()
@@ -151,10 +150,15 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             rate.sleep();
         }
         if (solution.empty()){
-            ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, abort!",__func__);
+            ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
+            ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %d",__func__,variance_goal, steps);
+            ROS_WARN("[GaussianProcessNode::%s]\tComputing final shape...",__func__);
+            marchingSampling(false, 0.06,0.03);
             res.next_best_path = gp_regression::Path();
+            last_touched = Eigen::Vector3d::Zero();
             return true;
         }
+        ++steps;
         std_msgs::Header solution_header;
         solution_header.stamp = ros::Time::now();
         solution_header.frame_id = proc_frame;
@@ -347,7 +351,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
         pt.x = msg->points[i].point.x;
         pt.y = msg->points[i].point.y;
         pt.z = msg->points[i].point.z;
-        colorIt(0,200,255, pt);
+        colorIt(0,255,255, pt);
         if (msg->isOnSurface[i].data){
             object_ptr->push_back(pt);
         }
@@ -374,6 +378,9 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     */
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
+    last_touched[0] = data_ptr_->points[data_ptr_->size()-1].x;
+    last_touched[1] = data_ptr_->points[data_ptr_->size()-1].y;
+    last_touched[2] = data_ptr_->points[data_ptr_->size()-1].z;
     //now we can add the externals
     model_ptr->resize(ext_size);
     for (size_t i=0; i< msg->points.size(); ++i)
@@ -433,7 +440,7 @@ void GaussianProcessNode::prepareExtData()
     cen.x = 0;
     cen.y = 0;
     cen.z = 0;
-    colorIt(0,255,255, cen);
+    colorIt(255,255,0, cen);
     model_ptr->push_back(cen);
 
     //      External points
@@ -565,7 +572,7 @@ bool GaussianProcessNode::startExploration()
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasCollision>(obj_gp, reg_);
     //termination condition
-    atlas->setVarianceTolGoal( 0.2 );
+    atlas->setVarianceTolGoal( variance_goal );
     //factor to control disc radius
     atlas->setVarRadiusFactor( 0.3 );
     //atlas is ready
@@ -574,15 +581,20 @@ bool GaussianProcessNode::startExploration()
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(200);
+    explorer->setMaxNodes(100);
     explorer->setNoSampleMarkers(true);
+    explorer->setBias(0.4); //probability of expanding on an old node
     //get a starting point from data cloud
-    int r_id = getRandIn(0, data_ptr_->points.size()-1 );
-    Eigen::Vector3d root;
-    root << data_ptr_->points[r_id].x,
-            data_ptr_->points[r_id].y,
-            data_ptr_->points[r_id].z;
-    explorer->setStart(root);
+    if (last_touched.isZero()){
+        int r_id = getRandIn(0, data_ptr_->points.size()-1 );
+        Eigen::Vector3d root;
+        root << data_ptr_->points[r_id].x,
+             data_ptr_->points[r_id].y,
+             data_ptr_->points[r_id].z;
+        explorer->setStart(root);
+    }
+    else
+        explorer->setStart(last_touched);
     //explorer is ready, start exploration (this spawns a thread)
     explorer->startExploration();
     exploration_started = true;
@@ -707,9 +719,9 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
     samples.id = 0;
     samples.type = visualization_msgs::Marker::POINTS;
     samples.action = visualization_msgs::Marker::ADD;
-    samples.scale.x = 0.02;
-    samples.scale.y = 0.02;
-    samples.scale.z = 0.02;
+    samples.scale.x = 0.025;
+    samples.scale.y = 0.025;
+    samples.scale.z = 0.025;
 
     std::shared_ptr<pcl::PointXYZ> start;
 
@@ -957,11 +969,11 @@ void
 GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched)
 {
     //move away and start raycasting
-    point += normal*0.3;
+    point += normal*0.5;
     std::vector<int> k_id;
     std::vector<float> k_dist;
     //move along direction
-    size_t max_steps(100);
+    size_t max_steps(200);
     size_t count(0);
     for (size_t i=0; i<max_steps; ++i)
     {
@@ -998,7 +1010,7 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
                 k_dist.resize(1);
                 kd_full.nearestKSearch(pt, 1, k_id, k_dist);
                 float dist = std::sqrt(k_dist[0]);
-                if (dist < 0.3){
+                if (dist < 0.4){
                     ++count;
                     continue;
                 }
@@ -1017,7 +1029,7 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
                 touched.distances.push_back(d);
                 count =0;
             }
-            count = count>=10 ? 0 : ++count;
+            count = count>=15 ? 0 : ++count;
         }
         point -= (normal*0.03);
     }
