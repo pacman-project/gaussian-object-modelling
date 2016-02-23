@@ -161,11 +161,9 @@ class GaussianProcessNode
         std::mutex mtx_samp;
         //min max variance found on samples
         double min_v, max_v;
-
         //synthetic touch data needed
         pcl::PointCloud<pcl::PointXYZ>::Ptr full_object;
         pcl::search::KdTree<pcl::PointXYZ> kd_full;
-
 
         /***********
          * METHODS *
@@ -187,9 +185,9 @@ class GaussianProcessNode
         // compute octomap from real explicit cloud
         void computeOctomap();
         // the grid plotting
-        void fakeDeterministicSampling(const double scale=1.0, const double pass=0.08);
-        // alternative hopefully faster sampling (dont make leaf_size bigger or it will skip parts of the object)
-        void marchingSampling(const float leaf_size=0.06, const float leaf_pass=0.03);
+        void fakeDeterministicSampling(const bool first_time, const double scale=1.0, const double pass=0.08);
+        // alternative hopefully faster sampling
+        void marchingSampling(const bool first_time, const float leaf_size=0.15, const float leaf_pass=0.03);
         // cube sampling for marchingSampling (nested therads)
         void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass);
         // simulated synthetic touch

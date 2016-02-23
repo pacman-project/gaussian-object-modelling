@@ -7,7 +7,6 @@
 #include <ros/package.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/filesystem/path.hpp>
-
 using namespace gp_regression;
 
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
@@ -327,7 +326,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
-            marchingSampling(0.06,0.02);
+            marchingSampling(true, 0.06,0.02);
             computeOctomap();
             return true;
         }
@@ -381,7 +380,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    marchingSampling(0.06,0.06);
+    marchingSampling(false, 0.06,0.06);
     computeOctomap();
     return;
 }
@@ -585,7 +584,7 @@ void GaussianProcessNode::checkExploration()
 }
 
 // for visualization purposes
-void GaussianProcessNode::fakeDeterministicSampling(const double scale, const double pass)
+void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const double scale, const double pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
     if(!markers || !fake_sampling)
@@ -607,8 +606,6 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
     gp_regression::Data::Ptr ss = std::make_shared<gp_regression::Data>();
     std::vector<double> ssvv;
 
-    double min_v (100.0);
-    double max_v (0.0);
     size_t count(0);
     const auto total = std::floor( std::pow((2*scale+1)/pass, 3) );
     ROS_INFO("[GaussianProcessNode::%s]\tSampling %g grid points on GP ...",__func__, total);
@@ -625,10 +622,12 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
                 if (ff.at(0) <= 0.01 && ff.at(0) >= -0.01) {
                     std::vector<double> vv;
                     reg_->evaluate(obj_gp, qq, ff,vv);
-                    if (vv.at(0) <= min_v)
-                        min_v = vv.at(0);
-                    if (vv.at(0) >= max_v)
-                        max_v = vv.at(0);
+                    if (first_time){
+                        if (vv.at(0) <= min_v)
+                            min_v = vv.at(0);
+                        if (vv.at(0) >= max_v)
+                            max_v = vv.at(0);
+                    }
                     ss->coord_x.push_back(x);
                     ss->coord_y.push_back(y);
                     ss->coord_z.push_back(z);
@@ -673,7 +672,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const double scale, const do
 }
 
 void
-GaussianProcessNode::marchingSampling(const float leaf_size, const float leaf_pass)
+GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_size, const float leaf_pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
     if(!markers || !fake_sampling)
@@ -734,19 +733,22 @@ GaussianProcessNode::marchingSampling(const float leaf_size, const float leaf_pa
     //remove duplicate points
     pcl::VoxelGrid<pcl::PointXYZI> vg;
     vg.setInputCloud(real_explicit_ptr);
-    vg.setLeafSize(leaf_size/5, leaf_size/5, leaf_size/5);
+    vg.setLeafSize(leaf_pass, leaf_pass, leaf_pass);
     pcl::PointCloud<pcl::PointXYZI> tmp;
     vg.filter(tmp);
     pcl::copyPointCloud(tmp, *real_explicit_ptr);
     ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface...",__func__,
             real_explicit_ptr->size());
     //determine min e max variance
-    for (const auto& pt: real_explicit_ptr->points)
-    {
-        if (pt.intensity <= min_v)
-            min_v = pt.intensity;
-        if (pt.intensity >= max_v)
-            max_v = pt.intensity;
+    if (first_time){
+        //only do this if it is the first time
+        for (const auto& pt: real_explicit_ptr->points)
+        {
+            if (pt.intensity <= min_v)
+                min_v = pt.intensity;
+            if (pt.intensity >= max_v)
+                max_v = pt.intensity;
+        }
     }
     const double mid_v = ( min_v + max_v ) * 0.5;
     //create the markers
@@ -930,6 +932,7 @@ GaussianProcessNode::synthTouch(const Eigen::Vector3d &point, const Eigen::Vecto
 }
 
 ///// MAIN ////////////////////////////////////////////////////////////////////
+
 int main (int argc, char *argv[])
 {
     ros::init(argc, argv, "gaussian_process");
