@@ -57,6 +57,7 @@ class ExplorerBase
         nh->setCallbackQueue(&(*cb_queue));
         // srv_stop = nh->advertiseService("stop", &ExplorerBase::cb_stop, this);
         //start the worker thread
+        solution.clear();
         is_running = true;
         worker = std::thread(&ExplorerBase::explore, this);
     }
@@ -85,6 +86,12 @@ class ExplorerBase
     {
         markers = mp;
         mtx_ptr = array_guard;
+        if (markers)
+            if(!markers->markers.empty()){
+                mark_frame = markers->markers[0].header.frame_id;
+                return;
+            }
+        ROS_WARN("[ExplorerBase::%s]\tNo marker array is provided, visualization is disabled.",__func__);
     }
 
     /**
@@ -99,8 +106,8 @@ class ExplorerBase
         //frame id is not set, cause we can't access it here. rosNode should update
         //all markers frame id before publishing them.
         visualization_msgs::Marker disc;
-        disc.header.frame_id = "update_me_before_publishing!";
-        disc.header.stamp = ros::Time::now();
+        disc.header.frame_id = mark_frame;
+        disc.header.stamp = ros::Time();
         disc.lifetime = ros::Duration(0.5);
         disc.ns = "Atlas Nodes";
         disc.id = c.getId();
@@ -142,7 +149,7 @@ class ExplorerBase
         geometry_msgs::Point s;
 
         visualization_msgs::Marker branch;
-        branch.header.frame_id = "update_me_before_publishing!";
+        branch.header.frame_id = mark_frame;
         branch.header.stamp = ros::Time();
         branch.lifetime = ros::Duration(0.5);
         branch.ns = "Atlas Branches";
@@ -175,8 +182,8 @@ class ExplorerBase
         for (size_t i=0; i<c.samples.rows(); ++i)
         {
             visualization_msgs::Marker samp;
-            samp.header.frame_id = "update_me_before_publishing!";
-            samp.header.stamp = ros::Time::now();
+            samp.header.frame_id = mark_frame;
+            samp.header.stamp = ros::Time();
             samp.lifetime = ros::Duration(0.5);
             samp.ns = "Atlas Node(" + std::to_string(c.getId()) + ") Samples";
             samp.id = i;
@@ -207,7 +214,7 @@ class ExplorerBase
         geometry_msgs::Point s;
 
         visualization_msgs::Marker proj;
-        proj.header.frame_id = "update_me_before_publishing!";
+        proj.header.frame_id = mark_frame;
         proj.header.stamp = ros::Time();
         proj.lifetime = ros::Duration(0.5);
         proj.ns = "Atlas Node(" + std::to_string(c.getId()) + ") Samples";
@@ -321,9 +328,12 @@ class ExplorerBase
     std::thread worker;
     ///marker array pointer to update during exploration
     visualization_msgs::MarkerArrayPtr markers;
+    //markers ref frame, filled by node samples
+    std::string mark_frame;
     //and its relative mutex for thread safety
     std::shared_ptr<std::mutex> mtx_ptr;
-
+    //solution path
+    std::vector<std::size_t> solution;
 };
 }
 

@@ -67,11 +67,8 @@ class ExplorerMultiBranch : public ExplorerSinglePath
             rate.sleep();
             cb_queue->callAvailable();
         }
-        if (atlas->countNodes() >= max_nodes){
-            ROS_INFO("[ExplorerMultibranch::%s]\tMax number of nodes reached, returning last created node as solution",__func__);
-            solution = getPathToRoot(parent);
-            highlightSolution(solution);
-        }
+        if (atlas->countNodes() >= max_nodes)
+            ROS_WARN("[ExplorerMultibranch::%s]\tMax number of nodes reached, cannot find a solution",__func__);
         std::lock_guard<std::mutex> lock(*mtx_ptr);
         is_running = false;
     }

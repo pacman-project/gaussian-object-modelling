@@ -12,8 +12,8 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    fake_sampling(true), exploration_started(false), out_sphere_rad(1.8), sigma2(1e-1), min_v(100), max_v(0),
-    simulate_touch(true)
+    exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(100), max_v(0),
+    simulate_touch(true), synth_type(1), anchor("/mind_anchor")
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -31,7 +31,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     // pub_direction_marker = nh.advertise<geometry_msgs::WrenchStamped> ("direction_to_explore", 0, true); // TEMP, should be a trajectory, curve, pose
 }
 
-void GaussianProcessNode::Publish ()
+void GaussianProcessNode::Publish()
 {
     if (!start){
         ROS_WARN_THROTTLE(60,"[GaussianProcessNode::%s]\tNo object model found! Call start_process service to begin creating a model.",__func__);
@@ -56,7 +56,6 @@ void GaussianProcessNode::publishCloudModel () const
         // I don't care if there are subscribers or not... publish'em all!
         if(!model_ptr->empty()){
             // publish both the internal [-1, 1] model and the ex
-
             // this actually publishes the training data, not the model!
             pub_model.publish(*model_ptr);
 
@@ -65,6 +64,7 @@ void GaussianProcessNode::publishCloudModel () const
             real_explicit.header = real_explicit_ptr->header;
             reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
             pub_real_explicit.publish(real_explicit);
+            // pub_real_explicit.publish(*full_object);
         }
     }
 }
@@ -72,15 +72,8 @@ void GaussianProcessNode::publishCloudModel () const
 void GaussianProcessNode::publishAtlas () const
 {
     if (markers)
-        if(pub_markers.getNumSubscribers() > 0){
-            std::lock_guard<std::mutex> lock (*mtx_marks);
-            for (auto &mark : markers->markers)
-            {
-                mark.header.frame_id = object_ptr->header.frame_id;
-                mark.header.stamp = ros::Time();
-            }
+        if(pub_markers.getNumSubscribers() > 0)
             pub_markers.publish(*markers);
-        }
 }
 
 
@@ -118,12 +111,17 @@ void GaussianProcessNode::deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::
     pcl::transformPointCloud(*tmp, *out, sc);
     return;
 }
+void GaussianProcessNode::deMeanAndNormalizeData(Eigen::Vector3d &data)
+{
+    data -= current_offset_.block(0,0,3,1);
+    data = data/current_scale_;
+}
 
 // void GaussianProcessNode::reMeanAndDenormalizeData(const std::vector<Eigen::Vector3d> &in, std::vector<Eigen::Vector3d> &out)
 void GaussianProcessNode::reMeanAndDenormalizeData(Eigen::Vector3d &data)
 {
     data = current_scale_*data;
-    data = data + current_offset_.block(0,0,3,1);
+    data += current_offset_.block(0,0,3,1);
 }
 template<typename PT>
 void GaussianProcessNode::reMeanAndDenormalizeData(const typename pcl::PointCloud<PT>::Ptr &data_ptr, pcl::PointCloud<PT> &out) const
@@ -142,12 +140,6 @@ void GaussianProcessNode::reMeanAndDenormalizeData(const typename pcl::PointClou
 bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res)
 {
     ros::Rate rate(10); //try to go at 10hz, as in the node
-    {
-        std::lock_guard<std::mutex> lock(*mtx_marks);
-        markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    }
-    //perform fake sampling
-    marchingSampling(0.06, 0.06);
     if(startExploration()){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
@@ -158,9 +150,14 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             checkExploration();
             rate.sleep();
         }
+        if (solution.empty()){
+            ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, abort!",__func__);
+            res.next_best_path = gp_regression::Path();
+            return true;
+        }
         std_msgs::Header solution_header;
         solution_header.stamp = ros::Time::now();
-        solution_header.frame_id = object_ptr->header.frame_id;
+        solution_header.frame_id = proc_frame;
 
         gp_regression::Path next_best_path;
         next_best_path.header = solution_header;
@@ -170,13 +167,9 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             gp_atlas_rrt::Chart chart = atlas->getNode(solution[i]);
             Eigen::Vector3d point_eigen = chart.getCenter();
             Eigen::Vector3d normal_eigen = chart.getNormal();
-            if (simulate_touch) //synthetic touch simulation
-            {
-                synthTouch(point_eigen, normal_eigen);
-                return true;
-            }
             // modifies the point
-            reMeanAndDenormalizeData(point_eigen);
+            if (!simulate_touch)
+                reMeanAndDenormalizeData(point_eigen);
             // normal does not need to be reMeanAndRenormalized for now
 
             geometry_msgs::PointStamped point_msg;
@@ -194,6 +187,11 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             next_best_path.directions.push_back( normal_msg );
         }
         res.next_best_path = next_best_path;
+        if (simulate_touch) //synthetic touch simulation
+        {
+            //send normalized path
+            synthTouch(next_best_path);
+        }
         return true;
     }
     return false;
@@ -217,7 +215,6 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     explorer.reset();
     solution.clear();
     markers.reset();
-    cloud_labels.clear();
     //////
     pcl::PointCloud<pcl::PointXYZ> tmp;
     if(req.obj_pcd.empty()){
@@ -305,20 +302,22 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             // hand_ptr->header.frame_id=proc_frame;
         }
     }
-    model_ptr->header.frame_id=object_ptr->header.frame_id;
-    real_explicit_ptr->header.frame_id=object_ptr->header.frame_id;
-    for(const auto& pt: object_ptr->points)
-        cloud_labels.push_back(0);
+    model_ptr->header.frame_id=anchor;
+    real_explicit_ptr->header.frame_id=proc_frame;
+    colorThem(0,0,255, object_ptr);
 
     prepareExtData();
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
     if (simulate_touch){
+        pcl::PointCloud<pcl::PointXYZ> tmp2;
+        pcl::demeanPointCloud(tmp, current_offset_, tmp2);
         Eigen::Matrix4f t;
-        t    << 1/current_scale_, 0, 0, -current_offset_(0),
-             0, 1/current_scale_, 0, -current_offset_(1),
-             0, 0, 1/current_scale_, -current_offset_(2),
-             0, 0, 0,          1;
-        pcl::transformPointCloud(tmp, *full_object, t);
+        t    << 1/current_scale_, 0, 0, 0,
+                0, 1/current_scale_, 0, 0,
+                0, 0, 1/current_scale_, 0,
+                0, 0, 0,                1;
+        pcl::transformPointCloud(tmp2, *full_object, t);
+        full_object->header.frame_id=anchor;
         kd_full.setInputCloud(full_object);
     }
     if (prepareData())
@@ -326,7 +325,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
-            marchingSampling(true, 0.06,0.02);
+            marchingSampling(true, 0.06,0.03);
             computeOctomap();
             return true;
         }
@@ -348,14 +347,14 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
         pt.x = msg->points[i].point.x;
         pt.y = msg->points[i].point.y;
         pt.z = msg->points[i].point.z;
-        // new data in cyan
-        colorIt(0,255,255, pt);
-        // model_ptr->push_back(pt);
-        object_ptr->push_back(pt);
-        if (msg->isOnSurface[i].data)
-            cloud_labels.push_back(0);
-        else
-            cloud_labels.push_back(1);
+        colorIt(0,200,255, pt);
+        if (msg->isOnSurface[i].data){
+            object_ptr->push_back(pt);
+        }
+        else{
+            //we need a new transform to compute externals
+            continue;
+        }
     }
 
     /* UPDATE METHOD IS NOT POSSIBLE
@@ -375,12 +374,42 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     */
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
+    //now we can add the externals
+    model_ptr->resize(ext_size);
+    for (size_t i=0; i< msg->points.size(); ++i)
+    {
+        if (!msg->isOnSurface[i].data){
+            Eigen::Vector3d point(
+                    msg->points[i].point.x,
+                    msg->points[i].point.y,
+                    msg->points[i].point.z
+                    );
+            deMeanAndNormalizeData(point);
+            pcl::PointXYZRGB pt;
+            pt.x = point[0];
+            pt.y = point[1];
+            pt.z = point[2];
+            double dist = msg->distances[i].data / current_scale_;
+            //sanity check
+            if (dist >1 || dist < 0)
+                ROS_ERROR("[GaussianProcessNode::%s]\tNew point distance is too big...",__func__);
+            ext_gp->coord_x.push_back(pt.x);
+            ext_gp->coord_y.push_back(pt.y);
+            ext_gp->coord_z.push_back(pt.z);
+            ext_gp->label.push_back(dist);
+            ext_gp->sigma2.push_back(sigma2);
+            // add external point to rviz
+            colorIt(255,0,255, pt);
+            model_ptr->push_back(pt);
+            ++ext_size;
+        }
+    }
     prepareData();
     computeGP();
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    marchingSampling(false, 0.06,0.06);
+    fakeDeterministicSampling(false, 1.05, 0.08);
     computeOctomap();
     return;
 }
@@ -389,23 +418,25 @@ void GaussianProcessNode::prepareExtData()
 {
     if (!model_ptr->empty())
         model_ptr->clear();
-    ext_size = 1;
     ext_gp = std::make_shared<gp_regression::Data>();
 
-    //      Internal Point
-    // add centroid as label -1
-    ext_gp->coord_x.push_back(0);
-    ext_gp->coord_y.push_back(0);
-    ext_gp->coord_z.push_back(0);
-    ext_gp->label.push_back(-1.0);
-    ext_gp->sigma2.push_back(sigma2);
-    // add internal point to rviz in cyan
-    pcl::PointXYZRGB cen;
-    cen.x = 0;
-    cen.y = 0;
-    cen.z = 0;
-    colorIt(0,255,255, cen);
-    model_ptr->push_back(cen);
+    /*
+     * ext_size = 1;
+     * //      Internal Point
+     * // add centroid as label -1
+     * ext_gp->coord_x.push_back(0);
+     * ext_gp->coord_y.push_back(0);
+     * ext_gp->coord_z.push_back(0);
+     * ext_gp->label.push_back(-1.0);
+     * ext_gp->sigma2.push_back(sigma2);
+     * // add internal point to rviz in cyan
+     * pcl::PointXYZRGB cen;
+     * cen.x = 0;
+     * cen.y = 0;
+     * cen.z = 0;
+     * colorIt(0,255,255, cen);
+     * model_ptr->push_back(cen);
+     */
 
     //      External points
     // add points in a sphere around centroid with label 1
@@ -458,36 +489,25 @@ bool GaussianProcessNode::prepareData()
         return false;
     }
 
-    //size sanity check
-    if (data_ptr_->size() != cloud_labels.size()){
-        ROS_ERROR("[GaussianProcessNode::%s]\tData labels mismatch. Aborting...",__func__);
-        start = false;
-        return false;
-    }
     cloud_gp = std::make_shared<gp_regression::Data>();
 
     /*****  Prepare the training data  *********************************************/
 
     //      Surface Points
-    // add object points with label 0 or 1 (not touched)
+    // add object points with label 0
     for(size_t i=0; i< data_ptr_->points.size(); ++i) {
         cloud_gp->coord_x.push_back(data_ptr_->points[i].x);
         cloud_gp->coord_y.push_back(data_ptr_->points[i].y);
         cloud_gp->coord_z.push_back(data_ptr_->points[i].z);
-        cloud_gp->label.push_back(cloud_labels.at(i));
+        cloud_gp->label.push_back(0.0);
         cloud_gp->sigma2.push_back(sigma2);
-        if (cloud_labels.at(i) == 0)
-            colorIt(0,0,255, data_ptr_->points[i]);
-        else
-            colorIt(255,0,255, data_ptr_->points[i]);
     }
     // add object points to rviz in blue
     // resize to ext_size first, so you wont lose external data, but overwrite
     // object data
     model_ptr->resize(ext_size);
-    *model_ptr += *data_ptr_;
-
-
+    for (const auto& pt: data_ptr_->points)
+        model_ptr->push_back(pt);
     return true;
 }
 
@@ -547,7 +567,7 @@ bool GaussianProcessNode::startExploration()
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasCollision>(obj_gp, reg_);
     //termination condition
-    atlas->setVarianceTolGoal( 0.4 );
+    atlas->setVarianceTolGoal( 0.2 );
     //factor to control disc radius
     atlas->setVarRadiusFactor( 0.3 );
     //atlas is ready
@@ -556,7 +576,7 @@ bool GaussianProcessNode::startExploration()
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(100);
+    explorer->setMaxNodes(200);
     //get a starting point from data cloud
     int r_id = getRandIn(0, data_ptr_->points.size()-1 );
     Eigen::Vector3d root;
@@ -579,7 +599,8 @@ void GaussianProcessNode::checkExploration()
         solution = explorer->getSolution();
         explorer->stopExploration();
         exploration_started = false;
-        ROS_INFO("[GaussianProcessNode::%s]\tSolution Found", __func__);
+        if (!solution.empty())
+            ROS_INFO("[GaussianProcessNode::%s]\tSolution Found", __func__);
     }
 }
 
@@ -587,21 +608,21 @@ void GaussianProcessNode::checkExploration()
 void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const double scale, const double pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
-    if(!markers || !fake_sampling)
+    if(!markers)
         return;
 
     markers->markers.clear();
     visualization_msgs::Marker samples;
-    samples.header.frame_id = object_ptr->header.frame_id;
-    samples.header.stamp = ros::Time::now();
-    samples.lifetime = ros::Duration(0);
+    samples.header.frame_id = anchor;
+    samples.header.stamp = ros::Time();
+    samples.lifetime = ros::Duration(0.5);
     samples.ns = "samples";
     samples.id = 0;
     samples.type = visualization_msgs::Marker::POINTS;
     samples.action = visualization_msgs::Marker::ADD;
-    samples.scale.x = 0.01;
-    samples.scale.y = 0.01;
-    samples.scale.z = 0.01;
+    samples.scale.x = 0.02;
+    samples.scale.y = 0.02;
+    samples.scale.z = 0.02;
 
     gp_regression::Data::Ptr ss = std::make_shared<gp_regression::Data>();
     std::vector<double> ssvv;
@@ -675,21 +696,21 @@ void
 GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_size, const float leaf_pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
-    if(!markers || !fake_sampling)
+    if(!markers)
         return;
 
     markers->markers.clear();
     visualization_msgs::Marker samples;
-    samples.header.frame_id = object_ptr->header.frame_id;
-    samples.header.stamp = ros::Time::now();
-    samples.lifetime = ros::Duration(0);
+    samples.header.frame_id = anchor;
+    samples.header.stamp = ros::Time();
+    samples.lifetime = ros::Duration(0.5);
     samples.ns = "samples";
     samples.id = 0;
     samples.type = visualization_msgs::Marker::POINTS;
     samples.action = visualization_msgs::Marker::ADD;
-    samples.scale.x = 0.01;
-    samples.scale.y = 0.01;
-    samples.scale.z = 0.01;
+    samples.scale.x = 0.02;
+    samples.scale.y = 0.02;
+    samples.scale.z = 0.02;
 
     std::shared_ptr<pcl::PointXYZ> start;
 
@@ -737,11 +758,13 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
     pcl::PointCloud<pcl::PointXYZI> tmp;
     vg.filter(tmp);
     pcl::copyPointCloud(tmp, *real_explicit_ptr);
+    real_explicit_ptr->header.frame_id = proc_frame;
     ROS_INFO("[GaussianProcessNode::%s]\tFound %ld points approximately on GP surface...",__func__,
             real_explicit_ptr->size());
     //determine min e max variance
     if (first_time){
-        //only do this if it is the first time
+        //only do this if it is the first time, so assuming global variance will lower
+        //with each update, you'll see points progressively turn green
         for (const auto& pt: real_explicit_ptr->points)
         {
             if (pt.intensity <= min_v)
@@ -905,32 +928,97 @@ GaussianProcessNode::publishOctomap() const
 }
 
 void
-GaussianProcessNode::synthTouch(const Eigen::Vector3d &point, const Eigen::Vector3d &normal)
+GaussianProcessNode::synthTouch(const gp_regression::Path &sol)
 {
-    //normal is facing outside
-    Eigen::Vector3d p (point +normal*0.1);
+    if (synth_type == 0){
+        //touching at random
+    }
+    else if(synth_type == 1){
+        //touch at solution point
+        //normal is facing outside
+        Eigen::Vector3d p;
+        p[0] = sol.points[0].point.x;
+        p[1] = sol.points[0].point.y;
+        p[2] = sol.points[0].point.z;
+        Eigen::Vector3d n;
+        n[0] = sol.directions[0].vector.x;
+        n[1] = sol.directions[0].vector.y;
+        n[2] = sol.directions[0].vector.z;
+        gp_regression::Path::Ptr touch = boost::make_shared<gp_regression::Path>();
+        raycast(p,n, *touch);
+        cb_update(touch);
+    }
+    else if(synth_type ==2){
+        //sliding path
+    }
+    else
+        ROS_ERROR("[GaussianProcessNode::%s]\tTouch type (%d) not implemented",__func__, synth_type);
+}
+void
+GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched)
+{
+    //move away and start raycasting
+    point += normal*0.3;
     std::vector<int> k_id;
     std::vector<float> k_dist;
     //move along direction
-    size_t max_steps(10);
+    size_t max_steps(100);
+    size_t count(0);
     for (size_t i=0; i<max_steps; ++i)
     {
         pcl::PointXYZ pt;
-        pt.x = p[0];
-        pt.y = p[1];
-        pt.z = p[2];
-        if (kd_full.radiusSearch(pt, 0.05, k_id, k_dist, 1) > 0){
+        pt.x = point[0];
+        pt.y = point[1];
+        pt.z = point[2];
+        if (kd_full.radiusSearch(pt, 0.03, k_id, k_dist, 1) > 0){
             //we intersected the object, aka touch
-
+            Eigen::Vector3d unnorm_p(
+                    full_object->points[k_id[0]].x,
+                    full_object->points[k_id[0]].y,
+                    full_object->points[k_id[0]].z
+                    );
+            reMeanAndDenormalizeData(unnorm_p);
+            geometry_msgs::PointStamped p;
+            p.point.x = unnorm_p[0];
+            p.point.y = unnorm_p[1];
+            p.point.z = unnorm_p[2];
+            touched.points.push_back(p);
+            std_msgs::Bool iof;
+            iof.data = true;
+            std_msgs::Float32 d;
+            d.data = 0.0;
+            touched.isOnSurface.push_back(iof);
+            touched.distances.push_back(d);
+            ROS_INFO("[GaussianProcessNode::%s]\tTouched the object!!",__func__);
             break;
         }
         else{ //no touch, external point
-
+            if (count==5){
+                //add this point
+                k_id.resize(1);
+                k_dist.resize(1);
+                kd_full.nearestKSearch(pt, 1, k_id, k_dist);
+                Eigen::Vector3d unnorm_p(point);
+                reMeanAndDenormalizeData(unnorm_p);
+                geometry_msgs::PointStamped p;
+                p.point.x = unnorm_p[0];
+                p.point.y = unnorm_p[1];
+                p.point.z = unnorm_p[2];
+                touched.points.push_back(p);
+                std_msgs::Bool iof;
+                iof.data = false;
+                touched.isOnSurface.push_back(iof);
+                std_msgs::Float32 d;
+                d.data = std::sqrt(k_dist[0])*current_scale_;
+                touched.distances.push_back(d);
+                count =0;
+            }
+            else
+                ++count;
         }
-        p -= (normal*0.05);
+        point -= (normal*0.03);
     }
 }
-
 ///// MAIN ////////////////////////////////////////////////////////////////////
 
 int main (int argc, char *argv[])

@@ -103,8 +103,9 @@ class GaussianProcessNode
          *
          */
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, fake_sampling, exploration_started, simulate_touch;
+        bool start, exploration_started, simulate_touch;
         const double out_sphere_rad;
+        int synth_type;
 
         /***************
          * VAR HOLDERS *
@@ -172,6 +173,7 @@ class GaussianProcessNode
          */
         // Helpers
         void deMeanAndNormalizeData(const PtC::Ptr &data_ptr, PtC::Ptr &out);
+        void deMeanAndNormalizeData(Eigen::Vector3d &data);
         void reMeanAndDenormalizeData(Eigen::Vector3d &data);
         template<typename PT>
         void reMeanAndDenormalizeData(const typename pcl::PointCloud<PT>::Ptr &data_ptr, pcl::PointCloud<PT> &out) const;
@@ -191,7 +193,8 @@ class GaussianProcessNode
         // cube sampling for marchingSampling (nested therads)
         void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass);
         // simulated synthetic touch
-        void synthTouch(const Eigen::Vector3d &point, const Eigen::Vector3d &normal);
+        void synthTouch(const gp_regression::Path &sol);
+        void raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched);
 
         /***********
          * ROS API *
@@ -219,7 +222,7 @@ class GaussianProcessNode
         //transform listener
         tf::TransformListener listener;
         //processing frame
-        std::string proc_frame;
+        std::string proc_frame, anchor;
 
         // Publish last computed atlas
         void publishAtlas () const;

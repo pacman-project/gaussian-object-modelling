@@ -115,8 +115,6 @@ class ExplorerSinglePath : public ExplorerBase
     Eigen::Vector3d start_point;
     //termination on max num nodes
     std::size_t max_nodes;
-    //solution path
-    std::vector<std::size_t> solution;
 };
 }
 

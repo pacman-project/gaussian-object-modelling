@@ -6,3 +6,5 @@ geometry_msgs/PointStamped[] points
 geometry_msgs/Vector3Stamped[] directions
 #info on points touched or not
 std_msgs/Bool[] isOnSurface
+#distance from real surface (unscaled)
+std_msgs/Float32[] distances
