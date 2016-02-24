@@ -25,6 +25,8 @@ class AtlasCollision : public AtlasVariance
             throw gp_regression::GPRegressionException("Empty Regressor pointer");
         if (id >= nodes.size())
             throw gp_regression::GPRegressionException("Out of Range node id");
+        if (!nodes[id].expandable)
+            return Eigen::Vector3d::Zero();
         if (nodes.at(id).samp_chosen < 0)
             sampleOnChart(nodes.at(id));
         Eigen::Vector3d chosen;
@@ -42,6 +44,12 @@ class AtlasCollision : public AtlasVariance
         }
         if (chosen.isZero()){
             std::cout<<"[Atlas::createNode] No viable extending direction found, cannot extend the node"<<std::endl;
+            nodes[id].expandable = false;
+            for (auto it=expandables.begin(); it!=expandables.end(); ++it)
+                if (*it == id){
+                    expandables.erase(it);
+                    break;
+                }
             return Eigen::Vector3d::Zero();
         }
         Eigen::Vector3d nextState;

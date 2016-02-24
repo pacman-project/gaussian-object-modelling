@@ -98,6 +98,7 @@ class AtlasVariance : public AtlasBase
         Chart node (center, nodes.size(), g, v.at(0));
         node.setRadius(computeRadiusFromVariance(v.at(0)));
         nodes.push_back(node);
+        expandables.push_back(node.getId());
         std::cout<<"[Atlas::createNode] Created node "<<node.getId()<<std::endl;
         return node.getId();
     }
@@ -131,6 +132,7 @@ class AtlasVariance : public AtlasBase
         return (getNode(id).getVariance() > var_tol);
     }
 
+    std::vector<std::size_t> expandables;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
     //radius is inversely proportional to variance

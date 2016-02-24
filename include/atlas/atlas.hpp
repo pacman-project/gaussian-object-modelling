@@ -22,7 +22,7 @@ namespace gp_atlas_rrt
         //only way to construct a Chart! (also prevents implicit conversions)
         explicit Chart(const Eigen::Vector3d &c, const std::size_t i, const Eigen::Vector3d &g
                 ,const double v):
-            id(i), C(c), G(g), V(v), samp_chosen(-1)
+            id(i), C(c), G(g), V(v), samp_chosen(-1), expandable(true)
         {
             gp_regression::computeTangentBasis(G, N,Tx,Ty);
         }
@@ -91,6 +91,7 @@ namespace gp_atlas_rrt
         Eigen::MatrixXd samples; //collection of uniform disc samples (nx3)
         int samp_chosen; //the chosen sample id, if sampling was not done it is -1
         std::vector<std::pair<double,std::size_t>> vars_ids; //vector of sample variances with their index
+        bool expandable; //used by AtlasCollision
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         protected:
