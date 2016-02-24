@@ -7,6 +7,7 @@
 #include <string>
 #include <stdlib.h>
 #include <mutex>
+#include <thread>
 
 // ROS headers
 #include <ros/ros.h>
@@ -88,10 +89,9 @@ class GaussianProcessNode
          */
         void Publish();
 
-        /**
-         * \brief Check exploration status and store the solution if successful
-         */
-        void checkExploration();
+        //automatically call get_next_best_path if synthetic touch is enabled
+        void automatedSynthTouch();
+
         typedef pcl::PointCloud<pcl::PointXYZRGB> PtC;
 
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -167,6 +167,7 @@ class GaussianProcessNode
         //synthetic touch data needed
         pcl::PointCloud<pcl::PointXYZ>::Ptr full_object;
         pcl::search::KdTree<pcl::PointXYZ> kd_full;
+        double synth_var_goal;
 
         /***********
          * METHODS *
@@ -193,10 +194,14 @@ class GaussianProcessNode
         // alternative hopefully faster sampling
         void marchingSampling(const bool first_time, const float leaf_size=0.15, const float leaf_pass=0.03);
         // cube sampling for marchingSampling (nested therads)
-        void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass);
+        void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass, visualization_msgs::Marker &samp);
         // simulated synthetic touch
         void synthTouch(const gp_regression::Path &sol);
         void raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched);
+        /**
+         * \brief Check exploration status and store the solution if successful
+         */
+        void checkExploration();
 
         /***********
          * ROS API *

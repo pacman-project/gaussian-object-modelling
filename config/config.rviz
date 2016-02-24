@@ -3,7 +3,9 @@ Panels:
     Help Height: 81
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
+      Expanded:
+        - /Global Options1
+        - /Grid1/Offset1
       Splitter Ratio: 0.5
     Tree Height: 667
   - Class: rviz/Selection
@@ -29,12 +31,12 @@ Visualization Manager:
   Class: ""
   Displays:
     - Class: rviz/Axes
-      Enabled: false
+      Enabled: true
       Length: 1
       Name: Axes
       Radius: 0.005
       Reference Frame: <Fixed Frame>
-      Value: false
+      Value: true
     - Alpha: 0.2
       Cell Size: 0.05
       Class: rviz/Grid
@@ -48,9 +50,9 @@ Visualization Manager:
       Offset:
         X: 0
         Y: 0
-        Z: 3
-      Plane: XZ
-      Plane Cell Count: 200
+        Z: 4
+      Plane: XY
+      Plane Cell Count: 400
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 1
@@ -94,7 +96,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: true
       Max Color: 170; 0; 0
       Max Intensity: 0.5819
@@ -110,7 +112,7 @@ Visualization Manager:
       Topic: /gaussian_process/estimated_model
       Use Fixed Frame: true
       Use rainbow: false
-      Value: true
+      Value: false
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /gaussian_process/atlas
@@ -130,7 +132,7 @@ Visualization Manager:
       Voxel Rendering: Occupied Voxels
   Enabled: true
   Global Options:
-    Background Color: 200; 200; 170
+    Background Color: 150; 150; 110
     Fixed Frame: camera_rgb_optical_frame
     Frame Rate: 30
   Name: root
@@ -152,22 +154,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.99509
+      Distance: 4.50313
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.476005
-        Y: -0.659511
-        Z: 3.79694
+        X: -0.283063
+        Y: -0.567874
+        Z: 3.32784
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.359797
+      Pitch: 0.599797
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.49829
+      Yaw: 1.46829
     Saved: ~
 Window Geometry:
   Displays:
