@@ -130,8 +130,6 @@ class GaussianProcessNode
         double current_scale_;
         //Total exploration steps
         std::size_t steps;
-        //Variance to goal
-        double variance_goal;
         //last point touched
         Eigen::Vector3d last_touched;
 
@@ -187,7 +185,7 @@ class GaussianProcessNode
         // Compute a Gaussian Process from object and store it
         bool computeGP();
         // start the RRT exploration
-        bool startExploration();
+        bool startExploration(const float v_des);
         // compute octomap from real explicit cloud
         void computeOctomap();
         // the grid plotting

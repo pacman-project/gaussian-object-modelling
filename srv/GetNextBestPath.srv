@@ -1,4 +1,4 @@
 #Empty request for now, however, the policy can be used here, or whatever other arg can be useful to generate a trajectory for exploration
-
+std_msgs/Float32 var_desired
 ---
 Path next_best_path

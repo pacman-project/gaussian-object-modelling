@@ -25,9 +25,6 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
-
-    // GOAL
-    variance_goal = 0.1;
 }
 
 void GaussianProcessNode::Publish()
@@ -139,7 +136,7 @@ void GaussianProcessNode::reMeanAndDenormalizeData(const typename pcl::PointClou
 bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::Request& req, gp_regression::GetNextBestPath::Response& res)
 {
     ros::Rate rate(10); //try to go at 10hz, as in the node
-    if(startExploration()){
+    if(startExploration(req.var_desired)){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
             // but for now, this is it, repeating the node while loop here
@@ -151,7 +148,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         }
         if (solution.empty()){
             ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
-            ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %d",__func__,variance_goal, steps);
+            ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %d",__func__,req.var_desired, steps);
             ROS_WARN("[GaussianProcessNode::%s]\tComputing final shape...",__func__);
             marchingSampling(false, 0.06,0.03);
             res.next_best_path = gp_regression::Path();
@@ -557,7 +554,7 @@ bool GaussianProcessNode::computeGP()
 }
 
 //
-bool GaussianProcessNode::startExploration()
+bool GaussianProcessNode::startExploration(const float v_des)
 {
     //make sure we have a model and an object, we should have if start was called
     if (!object_ptr || object_ptr->empty() || !data_ptr_ || data_ptr_->empty()){
@@ -572,7 +569,7 @@ bool GaussianProcessNode::startExploration()
     //create the atlas
     atlas = std::make_shared<gp_atlas_rrt::AtlasCollision>(obj_gp, reg_);
     //termination condition
-    atlas->setVarianceTolGoal( variance_goal );
+    atlas->setVarianceTolGoal( v_des );
     //factor to control disc radius
     atlas->setVarRadiusFactor( 0.3 );
     //atlas is ready
@@ -581,7 +578,7 @@ bool GaussianProcessNode::startExploration()
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(100);
+    explorer->setMaxNodes(200);
     explorer->setNoSampleMarkers(true);
     explorer->setBias(0.4); //probability of expanding on an old node
     //get a starting point from data cloud
@@ -691,9 +688,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
         pt_pcl.x = static_cast<float>(ss->coord_x.at(i));
         pt_pcl.y = static_cast<float>(ss->coord_y.at(i));
         pt_pcl.z = static_cast<float>(ss->coord_z.at(i));
-        //this goes linearly from 1 at min_v to 0.1 at max_v
-        float p_hit = ( -9*ssvv.at(i) + 9*min_v + 10*(max_v - min_v) ) / (10*(max_v - min_v));
-        pt_pcl.intensity = p_hit;
+        //intensity is variance
+        pt_pcl.intensity = ssvv.at(i);
         real_explicit_ptr->push_back(pt_pcl);
     }
     markers->markers.push_back(samples);
