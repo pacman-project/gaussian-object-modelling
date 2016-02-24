@@ -191,6 +191,8 @@ class GaussianProcessNode
         void computeOctomap();
         // the grid plotting
         void fakeDeterministicSampling(const bool first_time, const double scale=1.0, const double pass=0.08);
+        //sample at a point
+        void samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp);
         // alternative hopefully faster sampling
         void marchingSampling(const bool first_time, const float leaf_size=0.15, const float leaf_pass=0.03);
         // cube sampling for marchingSampling (nested therads)

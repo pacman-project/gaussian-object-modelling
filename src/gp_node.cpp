@@ -12,7 +12,7 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(0.0), max_v(0.8),
+    exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(0.0), max_v(0.5),
     simulate_touch(true), synth_type(1), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero())
 {
     mtx_marks = std::make_shared<std::mutex>();
@@ -341,7 +341,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
-            marchingSampling(true, 0.06,0.02);
+            // marchingSampling(true, 0.06,0.02);
+            fakeDeterministicSampling(true, 1.05, 0.07);
             computeOctomap();
             return true;
         }
@@ -418,7 +419,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
             ext_gp->label.push_back(dist);
             ext_gp->sigma2.push_back(sigma2);
             // add external point to rviz
-            colorIt(255,0,255, pt);
+            colorIt(100,0,50, pt);
             model_ptr->push_back(pt);
             ++ext_size;
         }
@@ -431,7 +432,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
-    fakeDeterministicSampling(false, 1.05, 0.08);
+    fakeDeterministicSampling(false, 1.05, 0.07);
     computeOctomap();
     return;
 }
@@ -442,21 +443,24 @@ void GaussianProcessNode::prepareExtData()
         model_ptr->clear();
     ext_gp = std::make_shared<gp_regression::Data>();
 
-    ext_size = 1;
-    //      Internal Point
-    // add centroid as label -1
-    ext_gp->coord_x.push_back(0);
-    ext_gp->coord_y.push_back(0);
-    ext_gp->coord_z.push_back(0);
-    ext_gp->label.push_back(-1.0);
-    ext_gp->sigma2.push_back(sigma2);
-    // add internal point to rviz in cyan
-    pcl::PointXYZRGB cen;
-    cen.x = 0;
-    cen.y = 0;
-    cen.z = 0;
-    colorIt(255,255,0, cen);
-    model_ptr->push_back(cen);
+    ext_size = 0;
+    /*
+     * ext_size = 1;
+     * //      Internal Point
+     * // add centroid as label -1
+     * ext_gp->coord_x.push_back(0);
+     * ext_gp->coord_y.push_back(0);
+     * ext_gp->coord_z.push_back(0);
+     * ext_gp->label.push_back(-1.0);
+     * ext_gp->sigma2.push_back(sigma2);
+     * // add internal point to rviz in cyan
+     * pcl::PointXYZRGB cen;
+     * cen.x = 0;
+     * cen.y = 0;
+     * cen.z = 0;
+     * colorIt(255,255,0, cen);
+     * model_ptr->push_back(cen);
+     */
 
     //      External points
     // add points in a sphere around centroid with label 1
@@ -559,7 +563,8 @@ bool GaussianProcessNode::computeGP()
 
     obj_gp = std::make_shared<gp_regression::Model>();
     reg_ = std::make_shared<gp_regression::ThinPlateRegressor>();
-    my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad * 2);
+    // my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad * 2);
+    my_kernel = std::make_shared<gp_regression::ThinPlate>(0.5);
     reg_->setCovFunction(my_kernel);
     const bool withoutNormals = false;
     reg_->create<withoutNormals>(data_gp, obj_gp);
@@ -655,47 +660,21 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
 
     size_t count(0);
     const auto total = std::floor( std::pow((2*scale+1)/pass, 3) );
-    const double mid_v = ( min_v + max_v ) * 0.5;
     ROS_INFO("[GaussianProcessNode::%s]\tSampling %g grid points on GP ...",__func__, total);
     for (double x = -scale; x<= scale; x += pass)
     {
+        std::vector<std::thread> threads;
         for (double y = -scale; y<= scale; y += pass)
         {
             for (double z = -scale; z<= scale; z += pass)
             {
-                gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
-                qq->coord_x.push_back(x);
-                qq->coord_y.push_back(y);
-                qq->coord_z.push_back(z);
-                std::vector<double> ff,vv;
-                reg_->evaluate(obj_gp, qq, ff, vv);
-                if (std::abs(ff.at(0)) <= 0.01) {
-                    geometry_msgs::Point pt;
-                    std_msgs::ColorRGBA cl;
-                    pcl::PointXYZI pt_pcl;
-                    pt.x = x;
-                    pt.y = y;
-                    pt.z = z;
-                    cl.a = 0.7;
-                    cl.b = 0.0;
-                    cl.r = (vv[0]<mid_v) ? 1/(mid_v - min_v) * (vv[0] - min_v) : 1.0;
-                    cl.g = (vv[0]>mid_v) ? -1/(max_v - mid_v) * (vv[0] - mid_v) + 1 : 1.0;
-                    samples.points.push_back(pt);
-                    samples.colors.push_back(cl);
-                    pt_pcl.x = x;
-                    pt_pcl.y = y;
-                    pt_pcl.z = z;
-                    //intensity is variance
-                    pt_pcl.intensity = vv[0];
-                    //lock
-                    std::lock_guard<std::mutex> lock (*mtx_marks);
-                    real_explicit_ptr->push_back(pt_pcl);
-                    markers->markers[markers->markers.size()-1] = samples;
-                }
                 ++count;
                 std::cout<<" -> "<<count<<"/"<<total<<"\r";
+                threads.emplace_back(&GaussianProcessNode::samplePoint, this, x,y,z, std::ref(samples));
             }
         }
+        for (auto &t: threads)
+            t.join();
         //update visualization
         publishAtlas();
         ros::spinOnce();
@@ -720,6 +699,41 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
+}
+void
+GaussianProcessNode::samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp)
+{
+    gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+    qq->coord_x.push_back(x);
+    qq->coord_y.push_back(y);
+    qq->coord_z.push_back(z);
+    std::vector<double> ff,vv;
+    reg_->evaluate(obj_gp, qq, ff, vv);
+    if (std::abs(ff.at(0)) <= 0.01) {
+        const double mid_v = ( min_v + max_v ) * 0.5;
+        geometry_msgs::Point pt;
+        std_msgs::ColorRGBA cl;
+        pcl::PointXYZI pt_pcl;
+        pt.x = x;
+        pt.y = y;
+        pt.z = z;
+        cl.a = 1.0;
+        cl.b = 0.0;
+        cl.r = (vv[0]<mid_v) ? 1/(mid_v - min_v) * (vv[0] - min_v) : 1.0;
+        cl.g = (vv[0]>mid_v) ? -1/(max_v - mid_v) * (vv[0] - mid_v) + 1 : 1.0;
+        pt_pcl.x = x;
+        pt_pcl.y = y;
+        pt_pcl.z = z;
+        //intensity is variance
+        pt_pcl.intensity = vv[0];
+        //locks
+        std::lock_guard<std::mutex> lock (*mtx_marks);
+        std::lock_guard<std::mutex> lk (mtx_samp);
+        samp.points.push_back(pt);
+        samp.colors.push_back(cl);
+        real_explicit_ptr->push_back(pt_pcl);
+        markers->markers[markers->markers.size()-1] = samp;
+    }
 }
 
 void
@@ -849,7 +863,7 @@ GaussianProcessNode::marchingCubes(pcl::PointXYZ start, const float leaf, const 
                     p.x = x;
                     p.y = y;
                     p.z = z;
-                    cl.a = 0.7;
+                    cl.a = 1.0;
                     cl.b = 0.0;
                     cl.r = (pt.intensity<mid_v) ? 1/(mid_v - min_v) * (pt.intensity - min_v) : 1.0;
                     cl.g = (pt.intensity>mid_v) ? -1/(max_v - mid_v) * (pt.intensity - mid_v) + 1 : 1.0;
@@ -1033,7 +1047,7 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
                 k_dist.resize(1);
                 kd_full.nearestKSearch(pt, 1, k_id, k_dist);
                 float dist = std::sqrt(k_dist[0]);
-                if (dist < 0.3){
+                if (dist < 0.2){
                     ++count;
                     continue;
                 }

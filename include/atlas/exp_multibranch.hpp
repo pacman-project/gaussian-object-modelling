@@ -44,7 +44,7 @@ class ExplorerMultiBranch : public ExplorerSinglePath
         ros::Rate rate(50);
         while (atlas->countNodes() < max_nodes && !hasSolution())
         {
-            if (atlas->isSolution(parent))
+            if (atlas->isSolution(parent) && atlas->countNodes() != 1)
             {
                 solution = getPathToRoot(parent);
                 highlightSolution(solution);

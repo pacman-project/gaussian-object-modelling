@@ -31,12 +31,12 @@ Visualization Manager:
   Class: ""
   Displays:
     - Class: rviz/Axes
-      Enabled: true
+      Enabled: false
       Length: 1
       Name: Axes
       Radius: 0.005
       Reference Frame: <Fixed Frame>
-      Value: true
+      Value: false
     - Alpha: 0.2
       Cell Size: 0.05
       Class: rviz/Grid
@@ -77,7 +77,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 5
+      Size (Pixels): 8
       Size (m): 0.01
       Style: Points
       Topic: /gaussian_process/training_data
@@ -118,6 +118,8 @@ Visualization Manager:
       Marker Topic: /gaussian_process/atlas
       Name: Atlas & Samples
       Namespaces:
+        Atlas Branches: true
+        Atlas Nodes: true
         samples: true
       Queue Size: 100
       Value: true
@@ -154,22 +156,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 4.50313
+      Distance: 3.48722
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.283063
-        Y: -0.567874
-        Z: 3.32784
+        X: 0.129761
+        Y: -0.0668765
+        Z: 3.79769
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.599797
+      Pitch: 0.799797
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.46829
+      Yaw: 1.65959
     Saved: ~
 Window Geometry:
   Displays:

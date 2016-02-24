@@ -11,7 +11,8 @@ class ThinPlate
 public:
         inline double compute(double value)
         {
-                return 2*value*value*value - 3*R_*value*value + R3_;
+                double ret_val = 2*value*value*value - 3*R_*value*value + R3_;
+                return ret_val >= 0 ? ret_val : 0.01;
         }
 
         inline double computediff(double value)
