@@ -156,6 +156,9 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
             ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %d",__func__,req.var_desired.data, steps);
             ROS_WARN("[GaussianProcessNode::%s]\tComputing final shape...",__func__);
+            //pause a bit for better visualization
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            markers = boost::make_shared<visualization_msgs::MarkerArray>();
             marchingSampling(false, 0.06,0.02);
             res.next_best_path = gp_regression::Path();
             last_touched = Eigen::Vector3d::Zero();
@@ -422,6 +425,9 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     }
     prepareData();
     computeGP();
+    //visualize training data
+    publishCloudModel();
+    ros::spinOnce();
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     //perform fake sampling
@@ -1057,7 +1063,7 @@ void GaussianProcessNode::automatedSynthTouch()
     if (start && steps>0 && simulate_touch){
         gp_regression::GetNextBestPathRequest req;
         gp_regression::GetNextBestPathResponse res;
-        synth_var_goal -= 0.05;
+        synth_var_goal -= 0.1;
         if (synth_var_goal <=0)
             synth_var_goal = 0.1;
         req.var_desired.data = synth_var_goal;
