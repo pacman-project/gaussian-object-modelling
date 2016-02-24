@@ -564,13 +564,13 @@ bool GaussianProcessNode::computeGP()
     obj_gp = std::make_shared<gp_regression::Model>();
     reg_ = std::make_shared<gp_regression::ThinPlateRegressor>();
     // my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad * 2);
-    my_kernel = std::make_shared<gp_regression::ThinPlate>(0.5);
+    my_kernel = std::make_shared<gp_regression::ThinPlate>(2.0);
     reg_->setCovFunction(my_kernel);
     const bool withoutNormals = false;
     reg_->create<withoutNormals>(data_gp, obj_gp);
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created using %ld training points. Total time consumed: %ld nanoseconds.", __func__, cloud_gp->label.size(), elapsed );
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - begin_time).count();
+    ROS_INFO("[GaussianProcessNode::%s]\tRegressor and Model created using %ld training points. Total time consumed: %ld milliseconds.", __func__, cloud_gp->label.size(), elapsed );
 
     start = true;
     return true;
@@ -697,8 +697,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
+    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d seconds.", __func__, elapsed );
 }
 void
 GaussianProcessNode::samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp)
@@ -822,8 +822,8 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::minutes>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d minutes.", __func__, elapsed );
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
+    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d seconds.", __func__, elapsed );
 }
 
 //Doesnt fully work!! looks like diagonal adjacency is also needed,
@@ -1006,11 +1006,11 @@ void
 GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched)
 {
     //move away and start raycasting
-    point += normal*0.5;
+    point += normal*0.7;
     std::vector<int> k_id;
     std::vector<float> k_dist;
     //move along direction
-    size_t max_steps(200);
+    size_t max_steps(100);
     size_t count(0);
     for (size_t i=0; i<max_steps; ++i)
     {
@@ -1047,7 +1047,7 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
                 k_dist.resize(1);
                 kd_full.nearestKSearch(pt, 1, k_id, k_dist);
                 float dist = std::sqrt(k_dist[0]);
-                if (dist < 0.2){
+                if (dist < 0.3){
                     ++count;
                     continue;
                 }
@@ -1079,10 +1079,8 @@ void GaussianProcessNode::automatedSynthTouch()
         gp_regression::GetNextBestPathResponse res;
         synth_var_goal -= 0.1;
         if (synth_var_goal <=0)
-            synth_var_goal = 0.1;
+            synth_var_goal = 0.05;
         req.var_desired.data = synth_var_goal;
-        //pause a bit for better visualization
-        std::this_thread::sleep_for(std::chrono::seconds(3));
         cb_get_next_best_path(req,res);
     }
 }
