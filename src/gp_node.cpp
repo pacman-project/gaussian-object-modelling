@@ -14,7 +14,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
     exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(0.0), max_v(0.5),
-    simulate_touch(true), synth_type(2), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero()),
+    simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero()),
     ignore_last_touched(true), sample_res(0.07)
 {
     mtx_marks = std::make_shared<std::mutex>();
@@ -27,9 +27,10 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
+    nh.param<int>("touch_type", synth_type, 2);
+    nh.param<double>("global_goal", goal, 0.1);
 
     synth_var_goal = 0.45;
-    goal = 0.05;
 }
 
 void GaussianProcessNode::Publish()
@@ -144,8 +145,12 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
 {
     ros::Rate rate(10); //try to go at 10hz, as in the node
     current_goal = req.var_desired.data;
-    if (simulate_touch)
+    if (simulate_touch){
         synth_var_goal = req.var_desired.data;
+        nh.getParam("touch_type", synth_type);
+        if (synth_type == 0)
+            synth_var_goal = goal;
+    }
     if(startExploration(req.var_desired.data)){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
@@ -194,7 +199,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             }
             if (simulate_touch && synth_var_goal > goal){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, automatically reducing it.",__func__, synth_var_goal);
-                synth_var_goal = synth_var_goal < goal ? goal : synth_var_goal - 0.05;
+                synth_var_goal = (synth_var_goal - 0.1) < goal ? goal : synth_var_goal - 0.1;
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
                 samples.header.frame_id = anchor;
@@ -268,7 +273,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             else
                 obj_name = "object";
             std::string pkg_path (ros::package::getPath("gp_regression"));
-            boost::filesystem::path pcd_path (pkg_path + "/results/" + obj_name + ".pcd");
+            boost::filesystem::path pcd_path (pkg_path + "/results/" + obj_name + "_" + std::to_string(synth_type) + ".pcd");
             if (pcl::io::savePCDFile(pcd_path.c_str(), reconstructed))
                 ROS_ERROR("[GaussianProcessNode::%s] Error saving reconstructed shape %s",__func__, pcd_path.c_str());
             //save a result file (appending)
@@ -462,8 +467,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //perform fake sampling
             // marchingSampling(true, 0.06,0.02);
-            fakeDeterministicSampling(true, 1.05, 0.05);//this is just done to compute global variance
-            fakeDeterministicSampling(false, 1.01, sample_res);
+            fakeDeterministicSampling(true, 1.01, sample_res);
             computeOctomap();
             return true;
         }
@@ -586,7 +590,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
     createTouchMarkers(points);
     //perform fake sampling
-    fakeDeterministicSampling(false, 1.01, sample_res);
+    fakeDeterministicSampling(true, 1.01, sample_res);
     computeOctomap();
     return;
 }
@@ -866,11 +870,9 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
         }
         for (auto &t: threads)
             t.join();
-        if (!first_time){
-            //update visualization
-            publishAtlas();
-            ros::spinOnce();
-        }
+        //update visualization
+        publishAtlas();
+        ros::spinOnce();
     }
     std::cout<<std::endl;
 
@@ -892,8 +894,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d seconds.", __func__, elapsed );
-    if (elapsed > 60){
-        sample_res = sample_res < 0.13 ? sample_res + 0.01 : 0.13;
+    if (elapsed > 60)
+        sample_res = sample_res < 0.1 ? sample_res + 0.01 : 0.1;
 }
 void
 GaussianProcessNode::samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp)
@@ -1177,9 +1179,9 @@ GaussianProcessNode::synthTouch(const gp_regression::Path &sol)
         //touching at random
         int id = getRandIn(0, real_explicit_ptr->size()-1);
         Eigen::Vector3d p;
-        p[0] = real_explicit_ptr->points[id].x;
-        p[1] = real_explicit_ptr->points[id].y;
-        p[2] = real_explicit_ptr->points[id].z;
+        p[0] = real_explicit_ptr->points.at(id).x;
+        p[1] = real_explicit_ptr->points.at(id).y;
+        p[2] = real_explicit_ptr->points.at(id).z;
         Eigen::Vector3d n;
         gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
         qq->coord_x.push_back(p[0]);
