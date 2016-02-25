@@ -53,18 +53,15 @@ class ExplorerMultiBranch : public ExplorerSinglePath
                 ROS_INFO("[ExplorerMultibranch::%s]\tSolution Found!",__func__);
                 return;
             }
-            if (atlas->expandables.size() == 0)
+            if (atlas->num_expandables <= 0)
                 break;
             const double dice = getRandIn(0.0, 1.0, true);
             if (dice < bias){
                 //we extend from a random node which is not the current
                 int id(parent);
                 if (atlas->countNodes() > 1)
-                    while (id == parent)
-                    {
-                        int i = getRandIn(0, atlas->expandables.size()-1);
-                        id = atlas->expandables.at(i);
-                    }
+                    while (id == parent || !atlas->getNode(id).expandable)
+                        id = getRandIn(0, atlas->countNodes()-1);
                 parent = id;
             }
             exp_step(parent);
@@ -74,7 +71,7 @@ class ExplorerMultiBranch : public ExplorerSinglePath
         }
         if (atlas->countNodes() >= max_nodes)
             ROS_WARN("[ExplorerMultibranch::%s]\tMax number of nodes reached, cannot find a solution",__func__);
-        if (atlas->expandables.size() == 0)
+        if (atlas->num_expandables <= 0)
             ROS_WARN("[ExplorerMultibranch::%s]\tCannot extend the Atlas further, all manifold is charted",__func__);
         std::lock_guard<std::mutex> lock(*mtx_ptr);
         is_running = false;

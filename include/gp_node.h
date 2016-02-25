@@ -103,7 +103,7 @@ class GaussianProcessNode
          *
          */
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, exploration_started, simulate_touch;
+        bool start, exploration_started, simulate_touch, ignore_last_touched;
         const double out_sphere_rad;
         int synth_type;
 
@@ -123,7 +123,7 @@ class GaussianProcessNode
         // this is not true, model_ptr contains the trainint data in PCL format!
         PtC::Ptr model_ptr;
         // internal explicit (or reconstructed) model in the real world
-        // lets abuse the intensity channel to store hit probability (inv variance)
+        // lets abuse the intensity channel to store variance
         // it's a float so who cares!!
         pcl::PointCloud<pcl::PointXYZI>::Ptr real_explicit_ptr;
         Eigen::Vector4d current_offset_;
@@ -162,12 +162,18 @@ class GaussianProcessNode
         pcl::octree::OctreePointCloud<pcl::PointXYZ>::Ptr s_oct;
         pcl::PointCloud<pcl::PointXYZ>::Ptr oct_cent;
         std::mutex mtx_samp;
+        double sample_res;
         //min max variance found on samples
         double min_v, max_v;
         //synthetic touch data needed
-        pcl::PointCloud<pcl::PointXYZ>::Ptr full_object;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr full_object, full_object_real;
         pcl::search::KdTree<pcl::PointXYZ> kd_full;
         double synth_var_goal;
+        double current_goal;
+        std::string obj_name;
+
+        //Final gloabl variance goal
+        double goal;
 
         /***********
          * METHODS *
@@ -199,13 +205,19 @@ class GaussianProcessNode
         void marchingCubes(const pcl::PointXYZ start, const float leaf, const float pass, visualization_msgs::Marker &samp);
         // simulated synthetic touch
         void synthTouch(const gp_regression::Path &sol);
-        void raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched);
+        Eigen::Vector3d raycast(Eigen::Vector3d &point, const Eigen::Vector3d &normal, gp_regression::Path &touched, bool no_external=false);
         /**
          * \brief Check exploration status and store the solution if successful
          */
         void checkExploration();
         //create arrows to view touches
         void createTouchMarkers(const Eigen::MatrixXd &pts);
+        //calculate euclidean norm
+        double inline L2(const Eigen::Vector3d &a, const Eigen::Vector3d &b) const
+        {
+            return (std::sqrt( std::pow(a[0]+b[0],2) + std::pow(a[1]+b[1],2) + std::pow(a[2]+b[2],2) ));
+        }
+
 
         /***********
          * ROS API *

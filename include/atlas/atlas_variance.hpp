@@ -19,6 +19,7 @@ class AtlasVariance : public AtlasBase
         var_tol = 0.5; //this should be give by user
                        //whoever uses this class will take care of it, by calling
                        //setVarianceTolGoal()
+        num_expandables = 0;
     }
     virtual ~AtlasVariance(){}
 
@@ -98,7 +99,7 @@ class AtlasVariance : public AtlasBase
         Chart node (center, nodes.size(), g, v.at(0));
         node.setRadius(computeRadiusFromVariance(v.at(0)));
         nodes.push_back(node);
-        expandables.push_back(node.getId());
+        ++num_expandables;
         std::cout<<"[Atlas::createNode] Created node "<<node.getId()<<std::endl;
         return node.getId();
     }
@@ -132,7 +133,7 @@ class AtlasVariance : public AtlasBase
         return (getNode(id).getVariance() > var_tol);
     }
 
-    std::vector<std::size_t> expandables;
+    std::size_t num_expandables;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     protected:
     //radius is inversely proportional to variance

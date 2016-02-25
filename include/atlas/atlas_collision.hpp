@@ -45,11 +45,7 @@ class AtlasCollision : public AtlasVariance
         if (chosen.isZero()){
             std::cout<<"[Atlas::createNode] No viable extending direction found, cannot extend the node"<<std::endl;
             nodes[id].expandable = false;
-            for (auto it=expandables.begin(); it!=expandables.end(); ++it)
-                if (*it == id){
-                    expandables.erase(it);
-                    break;
-                }
+            --num_expandables;
             return Eigen::Vector3d::Zero();
         }
         Eigen::Vector3d nextState;
