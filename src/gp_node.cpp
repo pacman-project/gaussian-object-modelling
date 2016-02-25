@@ -156,14 +156,16 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             checkExploration();
             rate.sleep();
         }
+        ++steps;
         if (solution.empty()){
             if (current_goal > goal && !simulate_touch){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, However global goal is set to %g. Call this service again with reduced request!",__func__, current_goal, goal);
-                return;
+                return true;
             }
             if (simulate_touch && synth_var_goal > goal){
+                ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, automatically reducing it.",__func__, synth_var_goal);
                 synth_var_goal = synth_var_goal < goal ? goal : synth_var_goal - 0.05;
-                return;
+                return true;
             }
             ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
             ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %d",__func__,req.var_desired.data, steps);
@@ -226,7 +228,6 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             steps = 0;
             return true;
         }
-        ++steps;
         std_msgs::Header solution_header;
         solution_header.stamp = ros::Time::now();
         solution_header.frame_id = proc_frame;
