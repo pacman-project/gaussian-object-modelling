@@ -160,11 +160,71 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         if (solution.empty()){
             if (current_goal > goal && !simulate_touch){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, However global goal is set to %g. Call this service again with reduced request!",__func__, current_goal, goal);
+                markers = boost::make_shared<visualization_msgs::MarkerArray>();
+                visualization_msgs::Marker samples;
+                samples.header.frame_id = anchor;
+                samples.header.stamp = ros::Time();
+                samples.lifetime = ros::Duration(5.0);
+                samples.ns = "samples";
+                samples.id = 0;
+                samples.type = visualization_msgs::Marker::POINTS;
+                samples.action = visualization_msgs::Marker::ADD;
+                samples.scale.x = 0.025;
+                samples.scale.y = 0.025;
+                samples.scale.z = 0.025;
+                const double mid_v = (min_v + max_v)/2;
+                for (const auto &ptc: real_explicit_ptr->points)
+                {
+                    geometry_msgs::Point pt;
+                    std_msgs::ColorRGBA cl;
+                    pt.x = ptc.x;
+                    pt.y = ptc.y;
+                    pt.z = ptc.z;
+                    cl.a = 1.0;
+                    cl.b = 0.0;
+                    cl.r = (ptc.intensity<mid_v) ? 1/(mid_v - min_v) *  (ptc.intensity - min_v) : 1.0;
+                    cl.g = (ptc.intensity>mid_v) ? -1/(max_v - mid_v) * (ptc.intensity - mid_v) + 1 : 1.0;
+                    samples.points.push_back(pt);
+                    samples.colors.push_back(cl);
+                }
+                markers->markers.push_back(samples);
+                publishAtlas();
+                ros::spinOnce();
                 return true;
             }
             if (simulate_touch && synth_var_goal > goal){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, automatically reducing it.",__func__, synth_var_goal);
                 synth_var_goal = synth_var_goal < goal ? goal : synth_var_goal - 0.05;
+                markers = boost::make_shared<visualization_msgs::MarkerArray>();
+                visualization_msgs::Marker samples;
+                samples.header.frame_id = anchor;
+                samples.header.stamp = ros::Time();
+                samples.lifetime = ros::Duration(5.0);
+                samples.ns = "samples";
+                samples.id = 0;
+                samples.type = visualization_msgs::Marker::POINTS;
+                samples.action = visualization_msgs::Marker::ADD;
+                samples.scale.x = 0.025;
+                samples.scale.y = 0.025;
+                samples.scale.z = 0.025;
+                const double mid_v = (min_v + max_v)/2;
+                for (const auto &ptc: real_explicit_ptr->points)
+                {
+                    geometry_msgs::Point pt;
+                    std_msgs::ColorRGBA cl;
+                    pt.x = ptc.x;
+                    pt.y = ptc.y;
+                    pt.z = ptc.z;
+                    cl.a = 1.0;
+                    cl.b = 0.0;
+                    cl.r = (ptc.intensity<mid_v) ? 1/(mid_v - min_v) *  (ptc.intensity - min_v) : 1.0;
+                    cl.g = (ptc.intensity>mid_v) ? -1/(max_v - mid_v) * (ptc.intensity - mid_v) + 1 : 1.0;
+                    samples.points.push_back(pt);
+                    samples.colors.push_back(cl);
+                }
+                markers->markers.push_back(samples);
+                publishAtlas();
+                ros::spinOnce();
                 return true;
             }
             ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
@@ -832,6 +892,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d seconds.", __func__, elapsed );
+    if (elapsed > 60){
+        sample_res = sample_res < 0.13 ? sample_res + 0.01 : 0.13;
 }
 void
 GaussianProcessNode::samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp)
