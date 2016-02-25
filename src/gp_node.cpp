@@ -358,17 +358,24 @@ bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_reg
 void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
 {
     //assuming points in processing_frame
+    Eigen::MatrixXd points;
+    points.resize(msg->points.size(), 4);
     for (size_t i=0; i< msg->points.size(); ++i)
     {
-        pcl::PointXYZRGB pt;
-        pt.x = msg->points[i].point.x;
-        pt.y = msg->points[i].point.y;
-        pt.z = msg->points[i].point.z;
-        colorIt(0,255,255, pt);
+        points(i,0) = msg->points[i].point.x;
+        points(i,1) = msg->points[i].point.y;
+        points(i,2) = msg->points[i].point.z;
         if (msg->isOnSurface[i].data){
+            points(i,3) = 1;
+            pcl::PointXYZRGB pt;
+            pt.x = msg->points[i].point.x;
+            pt.y = msg->points[i].point.y;
+            pt.z = msg->points[i].point.z;
+            colorIt(0,255,255, pt);
             object_ptr->push_back(pt);
         }
         else{
+            points(i,3) = 0;
             //we need a new transform to compute externals
             continue;
         }
@@ -424,6 +431,14 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
             ++ext_size;
         }
     }
+    //create touch marker(s)
+    for (size_t i=0; i<points.rows(); ++i){
+        Eigen::Vector3d p = points.block(i,0,1,3);
+        deMeanAndNormalizeData(p);
+        points.block(i,0,1,3) = p;
+    }
+    createTouchMarkers(points);
+    //start recomputing GP
     prepareData();
     computeGP();
     //visualize training data
@@ -435,6 +450,11 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     fakeDeterministicSampling(false, 1.05, 0.07);
     computeOctomap();
     return;
+}
+void
+GaussianProcessNode::createTouchMarkers(const Eigen::MatrixXd &pts)
+{
+    //TODO
 }
 
 void GaussianProcessNode::prepareExtData()
@@ -465,10 +485,9 @@ void GaussianProcessNode::prepareExtData()
     //      External points
     // add points in a sphere around centroid with label 1
     // sphere bounds computation
-    const int ang_div = 8; //divide 360° in 8 pieces, i.e. steps of 45°
-    const int lin_div = 4; //divide diameter into 4 pieces
-    // This makes 8*6 = 48 points.
-    const double ang_step = M_PI * 2 / ang_div; //steps of 45°
+    const int ang_div = 4; //divide 360° in ang_div pieces
+    const int lin_div = 3; //divide diameter into lin_div pieces
+    const double ang_step = M_PI * 2 / ang_div;
     const double lin_step = 2 * out_sphere_rad / lin_div;
     // 8 steps for diameter times 6 for angle, make  points on the sphere surface
     for (double lin=-out_sphere_rad+lin_step/2; lin< out_sphere_rad; lin+=lin_step)

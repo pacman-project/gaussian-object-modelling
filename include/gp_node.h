@@ -204,6 +204,8 @@ class GaussianProcessNode
          * \brief Check exploration status and store the solution if successful
          */
         void checkExploration();
+        //create arrows to view touches
+        void createTouchMarkers(const Eigen::MatrixXd &pts);
 
         /***********
          * ROS API *
