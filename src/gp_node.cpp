@@ -1220,7 +1220,7 @@ GaussianProcessNode::synthTouch(const gp_regression::Path &sol)
         gp_regression::Path::Ptr touch = boost::make_shared<gp_regression::Path>();
         for (size_t i = sol.points.size()-1; i>=0; --i)
         {
-            int steps = 6;
+            int steps = 5;
             //traverse in reversal so we start from root
             Eigen::Vector3d p;
             p[0] = sol.points[i].point.x;
