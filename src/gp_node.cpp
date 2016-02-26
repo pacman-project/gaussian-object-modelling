@@ -317,7 +317,11 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 mesh.scale.z = 1.0;
                 std::string mesh_path ("package://asus_scanner_models/" + obj_name + "/" + obj_name + ".stl");
                 mesh.mesh_resource = mesh_path.c_str();
-                mesh.pose.position.x = 0.5;
+                mesh.pose.position.x = 0.3;
+                mesh.color.a=1.0;
+                mesh.color.r=0.5;
+                mesh.color.g=0.5;
+                mesh.color.b=0.5;
                 markers->markers.push_back(mesh);
             }
             return true;
@@ -495,8 +499,30 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             ros::spinOnce();
             //initialize objects involved
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
-            //perform fake sampling
+            //show ground truth at start
+            if (simulate_touch){
+                visualization_msgs::Marker mesh;
+                mesh.header.frame_id = proc_frame;
+                mesh.header.stamp = ros::Time();
+                mesh.lifetime = ros::Duration(5.0);
+                mesh.ns = "GroundTruth";
+                mesh.id = 0;
+                mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+                mesh.action = visualization_msgs::Marker::ADD;
+                mesh.scale.x = 1.0;
+                mesh.scale.y = 1.0;
+                mesh.scale.z = 1.0;
+                std::string mesh_path ("package://asus_scanner_models/" + obj_name + "/" + obj_name + ".stl");
+                mesh.mesh_resource = mesh_path.c_str();
+                mesh.pose.position.x = 0.3;
+                mesh.color.a=1;
+                mesh.color.r=0.5;
+                mesh.color.g=0.5;
+                mesh.color.b=0.5;
+                markers->markers.push_back(mesh);
+            }
             // marchingSampling(true, 0.06,0.02);
+            //perform fake sampling
             fakeDeterministicSampling(true, 1.01, sample_res);
             computeOctomap();
             return true;
