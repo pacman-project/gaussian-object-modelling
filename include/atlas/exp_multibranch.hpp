@@ -79,7 +79,7 @@ class ExplorerMultiBranch : public ExplorerSinglePath
     virtual void exp_step(std::size_t &node)
     {
         Eigen::Vector3d next_point = atlas->getNextState(node);
-        if (next_point.isZero())
+        if (next_point.isZero() || !atlas->getNode(node).expandable)
             return;
         createSamplesMarker(atlas->getNode(node), next_point);
         std::size_t child = atlas->createNode(next_point);

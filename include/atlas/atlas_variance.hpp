@@ -162,6 +162,7 @@ class AtlasVariance : public AtlasBase
         const std::size_t tot_samples = std::ceil(std::abs(disc_samples_factor) * R);
         // std::cout<<"total samples "<<tot_samples<<std::endl;
         c.samples.resize(tot_samples, 3);
+        c.vars_ids.clear();
         std::vector<double> f,v;
         //transformation into the kinect frame from local
         Eigen::Matrix4d Tkl;

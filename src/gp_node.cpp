@@ -29,8 +29,8 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
-
-    synth_var_goal = 0.45;
+    nh.param<bool>("simulate_touch", simulate_touch, true);
+    synth_var_goal = 0.3;
 }
 
 void GaussianProcessNode::Publish()
@@ -146,7 +146,6 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
     ros::Rate rate(10); //try to go at 10hz, as in the node
     current_goal = req.var_desired.data;
     if (simulate_touch){
-        synth_var_goal = req.var_desired.data;
         nh.getParam("touch_type", synth_type);
         if (synth_type == 0)
             synth_var_goal = goal;
@@ -161,9 +160,8 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             checkExploration();
             rate.sleep();
         }
-        ++steps;
         if (solution.empty()){
-            if (current_goal > goal && !simulate_touch){
+            if ((current_goal > goal) && !simulate_touch){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, However global goal is set to %g. Call this service again with reduced request!",__func__, current_goal, goal);
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
@@ -197,7 +195,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 ros::spinOnce();
                 return true;
             }
-            if (simulate_touch && synth_var_goal > goal){
+            if (simulate_touch && (synth_var_goal > goal)){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, automatically reducing it.",__func__, synth_var_goal);
                 synth_var_goal = (synth_var_goal - 0.1) < goal ? goal : synth_var_goal - 0.1;
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
@@ -230,6 +228,8 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 markers->markers.push_back(samples);
                 publishAtlas();
                 ros::spinOnce();
+                if (steps == 0)
+                    ++steps;
                 return true;
             }
             ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
@@ -243,9 +243,9 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             last_touched = Eigen::Vector3d::Zero();
             pcl::PointCloud<pcl::PointXYZI> reconstructed;
             reMeanAndDenormalizeData(real_explicit_ptr, reconstructed);
-            double MSE (0.0), RMSE(0.0);
+            double MSE (0.0), RMSE(0.0), SSE(0.0);
             if (simulate_touch){
-                obj_name = obj_name + "_type-" + std::to_string(synth_type);
+                test_name = obj_name + "_" + std::to_string(synth_type);
                 pcl::PointCloud<pcl::PointXYZ>::Ptr real_recon = boost::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
                 pcl::copyPointCloud(reconstructed, *real_recon);
                 kd_full.setInputCloud(real_recon);
@@ -269,30 +269,60 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 RMSE /= ( full_object_real->points.size() + real_recon->points.size() );
                 ROS_WARN("[GaussianProcessNode::%s]\tCalculated MSE is %g",__func__, MSE);
                 ROS_WARN("[GaussianProcessNode::%s]\tCalculated RMSE is %g",__func__, RMSE);
+                //SSE
+                for(const auto &p: full_object_real->points)
+                {
+                    gp_regression::Data::Ptr qq = std::make_shared<gp_regression::Data>();
+                    qq->coord_x.push_back(p.x);
+                    qq->coord_y.push_back(p.y);
+                    qq->coord_z.push_back(p.z);
+                    std::vector<double> ff;
+                    reg_->evaluate(obj_gp, qq, ff);
+                    SSE += std::pow(ff[0], 2);
+                }
+                ROS_WARN("[GaussianProcessNode::%s]\tCalculated SSE is %g",__func__, SSE);
             }
             else
                 obj_name = "object";
             std::string pkg_path (ros::package::getPath("gp_regression"));
-            boost::filesystem::path pcd_path (pkg_path + "/results/" + obj_name + "_" + std::to_string(synth_type) + ".pcd");
+            boost::filesystem::path pcd_path (pkg_path + "/results/" + test_name + ".pcd");
             if (pcl::io::savePCDFile(pcd_path.c_str(), reconstructed))
                 ROS_ERROR("[GaussianProcessNode::%s] Error saving reconstructed shape %s",__func__, pcd_path.c_str());
             //save a result file (appending)
             std::string file_path (pkg_path + "/results/tests.txt");
             std::ofstream file (file_path.c_str(), std::ios::out | std::ios::app);
             //file is
-            //name      steps       goal        RMSE
+            //name      steps       goal        RMSE      SSE
             if (file.is_open()){
                 if(simulate_touch)
-                    file << obj_name.c_str() <<"\t\t"<<steps<<"\t"<<req.var_desired.data<<"\t"<<RMSE<<std::endl;
+                    file << test_name.c_str() <<"\t\t"<<steps<<"\t"<<req.var_desired.data<<"\t"<<RMSE<<"\t"<<SSE<<std::endl;
                 else
-                    file << obj_name.c_str() <<"\t\t"<<steps<<"\t"<<req.var_desired.data<<"\tNaN"<<std::endl; //for real demo we dont have a mesh, hence no comparison
+                    file << test_name.c_str() <<"\t\t"<<steps<<"\t"<<req.var_desired.data<<"\tNaN\tNaN"<<std::endl; //for real demo we dont have a mesh, hence no comparison
                 file.close();
             }
             else
                 ROS_ERROR("[GaussianProcessNode::%s] Cannot open file %s for writing",__func__, file_path.c_str());
             steps = 0;
+            if (simulate_touch){
+                visualization_msgs::Marker mesh;
+                mesh.header.frame_id = proc_frame;
+                mesh.header.stamp = ros::Time();
+                mesh.lifetime = ros::Duration(5.0);
+                mesh.ns = "GroundTruth";
+                mesh.id = 0;
+                mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+                mesh.action = visualization_msgs::Marker::ADD;
+                mesh.scale.x = 1.0;
+                mesh.scale.y = 1.0;
+                mesh.scale.z = 1.0;
+                std::string mesh_path ("package://asus_scanner_models/" + obj_name + "/" + obj_name + ".stl");
+                mesh.mesh_resource = mesh_path.c_str();
+                mesh.pose.position.x = 0.5;
+                markers->markers.push_back(mesh);
+            }
             return true;
         }
+        ++steps;
         std_msgs::Header solution_header;
         solution_header.stamp = ros::Time::now();
         solution_header.frame_id = proc_frame;
@@ -588,7 +618,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     ros::spinOnce();
     //initialize objects involved
     markers = boost::make_shared<visualization_msgs::MarkerArray>();
-    createTouchMarkers(points);
+    // createTouchMarkers(points); //UGLY, no time to beautify it
     //perform fake sampling
     fakeDeterministicSampling(true, 1.01, sample_res);
     computeOctomap();
@@ -1321,7 +1351,7 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
                 k_dist.resize(1);
                 kd_full.nearestKSearch(pt, 1, k_id, k_dist);
                 float dist = std::sqrt(k_dist[0]);
-                if (dist< 0.2 || dist > 1.0){
+                if (dist< 0.3 || dist > 1.0){
                     ++count;
                     point -= (normal*0.03);
                     continue;
@@ -1350,7 +1380,7 @@ GaussianProcessNode::raycast(Eigen::Vector3d &point, const Eigen::Vector3d &norm
 
 void GaussianProcessNode::automatedSynthTouch()
 {
-    if (start && steps>0 && simulate_touch){
+    if (start && (steps>0) && simulate_touch){
         gp_regression::GetNextBestPathRequest req;
         gp_regression::GetNextBestPathResponse res;
         req.var_desired.data = synth_var_goal;

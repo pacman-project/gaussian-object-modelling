@@ -170,7 +170,7 @@ class GaussianProcessNode
         pcl::search::KdTree<pcl::PointXYZ> kd_full;
         double synth_var_goal;
         double current_goal;
-        std::string obj_name;
+        std::string obj_name, test_name;
 
         //Final gloabl variance goal
         double goal;

@@ -31,6 +31,7 @@ class AtlasCollision : public AtlasVariance
             sampleOnChart(nodes.at(id));
         Eigen::Vector3d chosen;
         chosen.setZero();
+        nodes[id].expandable = false;
         for (size_t i=0; i<nodes.at(id).vars_ids.size(); ++i)
         {
             std::size_t s_id = nodes.at(id).vars_ids[i].second;
@@ -39,12 +40,12 @@ class AtlasCollision : public AtlasVariance
             if (!isInCollision(nodes.at(id).samples.row(s_id), id)){
                 nodes.at(id).samp_chosen = s_id;
                 chosen = nodes.at(id).samples.row(s_id);
+                nodes[id].expandable = true;
                 break;
             }
         }
-        if (chosen.isZero()){
-            std::cout<<"[Atlas::createNode] No viable extending direction found, cannot extend the node"<<std::endl;
-            nodes[id].expandable = false;
+        if (!nodes[id].expandable){
+            std::cout<<"[Atlas::getNextState] No viable extending direction found, cannot extend the node"<<std::endl;
             --num_expandables;
             return Eigen::Vector3d::Zero();
         }
