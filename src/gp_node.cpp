@@ -30,7 +30,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
     nh.param<bool>("simulate_touch", simulate_touch, true);
-    synth_var_goal = 0.3;
+    synth_var_goal = 0.2;
 }
 
 void GaussianProcessNode::Publish()
@@ -826,7 +826,7 @@ bool GaussianProcessNode::startExploration(const float v_des)
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
     explorer->setMarkers(markers, mtx_marks);
     explorer->setAtlas(atlas);
-    explorer->setMaxNodes(500);
+    explorer->setMaxNodes(300);
     explorer->setNoSampleMarkers(true);
     explorer->setBias(0.4); //probability of expanding on an old node
     //get a starting point from data cloud

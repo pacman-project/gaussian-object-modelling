@@ -9,7 +9,7 @@ for ((i=0; i<=2; i++)); do
     for obj in "${objects[@]}"
     do
         rosservice call /gaussian_process/start_process "obj_pcd: '${PWD}/../resources/${obj}.pcd'"
-        rosservice call /gaussian_process/get_next_best_path "{var_desired: {data: 0.4}}"
+        rosservice call /gaussian_process/get_next_best_path "{var_desired: {data: 0.3}}"
         file=${PWD}/../results/${obj}_${i}.pcd
         while [ ! -f ${file} ]
         do
