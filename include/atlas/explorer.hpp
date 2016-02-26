@@ -82,13 +82,14 @@ class ExplorerBase
      * \brief set a marker array to update with visualization during exploration
      */
     virtual void setMarkers(const visualization_msgs::MarkerArrayPtr &mp,
-                            const std::shared_ptr<std::mutex> &array_guard)
+                            const std::shared_ptr<std::mutex> &array_guard,
+                            std::string frame)
     {
         markers = mp;
         mtx_ptr = array_guard;
         if (markers)
             if(!markers->markers.empty()){
-                mark_frame = markers->markers[0].header.frame_id;
+                mark_frame = frame;
                 return;
             }
         ROS_WARN("[ExplorerBase::%s]\tNo marker array is provided, visualization is disabled.",__func__);

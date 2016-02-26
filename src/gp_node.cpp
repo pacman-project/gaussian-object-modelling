@@ -850,7 +850,7 @@ bool GaussianProcessNode::startExploration(const float v_des)
 
     //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
-    explorer->setMarkers(markers, mtx_marks);
+    explorer->setMarkers(markers, mtx_marks, anchor);
     explorer->setAtlas(atlas);
     explorer->setMaxNodes(300);
     explorer->setNoSampleMarkers(true);
