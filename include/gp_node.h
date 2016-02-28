@@ -14,12 +14,14 @@
 #include <ros/console.h>
 #include <ros/package.h>
 #include <pcl_ros/point_cloud.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <std_msgs/Bool.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
+#include <shape_msgs/Mesh.h>
 #include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <tf/transform_listener.h>
@@ -37,8 +39,10 @@
 // #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl_ros/transforms.h>
-#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/search/kdtree.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/surface/poisson.h>
 
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>
@@ -128,6 +132,7 @@ class GaussianProcessNode
         pcl::PointCloud<pcl::PointXYZI>::Ptr real_explicit_ptr;
         Eigen::Vector4d current_offset_;
         double current_scale_;
+        shape_msgs::Mesh predicted_shape_;
         //Total exploration steps
         std::size_t steps;
         //last point touched
@@ -195,6 +200,8 @@ class GaussianProcessNode
         bool startExploration(const float v_des);
         // compute octomap from real explicit cloud
         void computeOctomap();
+        // compute the predicted shape from real explicit cloud as a message
+        void computePredictedShapeMsg();
         // the grid plotting
         void fakeDeterministicSampling(const bool first_time, const double scale=1.0, const double pass=0.08);
         //sample at a point

@@ -3,3 +3,4 @@
 #calls pacman_vision get_cloud_in_hand service to get point cloud from vision.
 string obj_pcd
 ---
+shape_msgs/Mesh predicted_shape

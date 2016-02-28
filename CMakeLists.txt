@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   visualization_msgs
+  shape_msgs
   cmake_modules
   pacman_vision_comm
   roslib
@@ -53,6 +54,7 @@ generate_messages(
   geometry_msgs
   sensor_msgs
   visualization_msgs
+  shape_msgs
 )
 
 catkin_package(
