@@ -38,11 +38,15 @@
 // #include <pcl/filters/voxel_grid.h>
 // #include <pcl/filters/extract_indices.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl_ros/transforms.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/surface/poisson.h>
+// #include <pcl/surface/marching_cubes_hoppe.h>
+// #include <pcl/surface/marching_cubes_hoppe.h>
+#include <pcl/surface/gp3.h>
 
 // Vision services
 #include <pacman_vision_comm/get_cloud_in_hand.h>

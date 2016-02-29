@@ -13,7 +13,7 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(0.0), max_v(0.5),
+    exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
     simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero()),
     ignore_last_touched(true), sample_res(0.07)
 {
@@ -714,8 +714,8 @@ void GaussianProcessNode::prepareExtData()
     //      External points
     // add points in a sphere around centroid with label 1
     // sphere bounds computation
-    const int ang_div = 4; //divide 360° in ang_div pieces
-    const int lin_div = 2; //divide diameter into lin_div pieces
+    const int ang_div = 5; //divide 360° in ang_div pieces
+    const int lin_div = 3; //divide diameter into lin_div pieces
     const double ang_step = M_PI * 2 / ang_div;
     const double lin_step = 2 * out_sphere_rad / lin_div;
     // 8 steps for diameter times 6 for angle, make  points on the sphere surface
@@ -1251,6 +1251,7 @@ GaussianProcessNode::computePredictedShapeMsg()
     n.setInputCloud( my_cloud );
     n.setSearchMethod (tree);
     n.setKSearch (20);
+    n.useSensorOriginAsViewPoint();
     n.compute(*normals);
 
     pcl::PointCloud<pcl::PointNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointNormal>);
@@ -1261,10 +1262,29 @@ GaussianProcessNode::computePredictedShapeMsg()
 
     pcl::PolygonMesh triangles;
 
-    pcl::Poisson<pcl::PointNormal> poisson;
-    poisson.setDepth(9);
-    poisson.setInputCloud(cloud_with_normals);
-    poisson.reconstruct (triangles);
+    // pcl::Poisson<pcl::PointNormal> poisson;
+    // poisson.setDepth(9);
+    // poisson.setInputCloud(cloud_with_normals);
+    // poisson.reconstruct (triangles);
+    // pcl::MarchingCubesHoppe<pcl::PointNormal> mc;
+    // mc.setInputCloud(cloud_with_normals);
+    // mc.setGridResolution(0.001, 0.001, 0.001);
+    // mc.setIsoLevel(0.9);
+    // mc.setPercentageExtendGrid(0.8);
+    // mc.reconstruct(triangles);
+    pcl::GreedyProjectionTriangulation<pcl::PointNormal> gp3;
+    gp3.setInputCloud(cloud_with_normals);
+    gp3.setMaximumNearestNeighbors(100);
+    gp3.setSearchRadius(0.05);
+    gp3.setMu(2.5);
+    gp3.setMaximumSurfaceAngle(M_PI/4); // 45 degrees
+    gp3.setMinimumAngle(M_PI/18); // 10 degrees
+    gp3.setMaximumAngle(2*M_PI/3); // 120 degrees
+    if (gp3.getNormalConsistency())
+        gp3.setNormalConsistency(false);
+    gp3.reconstruct(triangles);
+
+    // pcl::io::savePLYFile("/home/tabjones/Desktop/prova.ply", triangles);
 
     // convert from pcl::PolygonMesh  into shape_msgs::Mesh
     pcl::PointCloud<pcl::PointXYZ> cloud;
