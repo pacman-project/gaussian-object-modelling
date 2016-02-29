@@ -1226,14 +1226,19 @@ GaussianProcessNode::computeOctomap()
 void
 GaussianProcessNode::computePredictedShapeMsg()
 {
+
+    pcl::PointCloud<pcl::PointXYZI> real_explicit;
+    real_explicit.header = real_explicit_ptr->header;
+    reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
+
     // Followed this tutorial to compute the mesh: http://www.pointclouds.org/assets/icra2012/surface.pdf
     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> n;
     pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
     const pcl::PointCloud<pcl::PointXYZ>::Ptr my_cloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ> >();
-    my_cloud->width = real_explicit_ptr->width;
-    my_cloud->height = real_explicit_ptr->height;
-    for( auto pt: real_explicit_ptr->points)
+    my_cloud->width = real_explicit.width;
+    my_cloud->height = real_explicit.height;
+    for( auto pt: real_explicit.points)
     {
         pcl::PointXYZ p;
         p.x = pt.x;
