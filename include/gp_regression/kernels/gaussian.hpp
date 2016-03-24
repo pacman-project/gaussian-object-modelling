@@ -26,7 +26,7 @@ public:
                 return out;
         }
 
-        inline double computediff2(double &value)
+        inline double computediffdiff(double &value)
         {
                 // double e = compute(value);
                 // double out = inv_length2_*inv_length2_*e;

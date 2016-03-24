@@ -4,23 +4,25 @@
   <version>0.0.0</version>
   <description>The gp_regression package for object modelling</description>
 
-  <maintainer email="edoardo.farnioli@gmail.com">Edoardo Farnioli</maintainer>
+  <maintainer email="fspinelli@gmail.com">Federico Spinelli</maintainer>
   <maintainer email="cjrosales@gmail.com">Carlos J. Rosales</maintainer>
 
   <license>ToDo</license>
 
-  <author email="edoardo.farnioli@gmail.com">Edoardo Farnioli</author>
+  <author email="fspinelli@gmail.com">Federico Spinelli</author>
   <author email="cjrosales@gmail.com">Carlos J. Rosales</author>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>message_generation</build_depend>
   <build_depend>pacman_vision_comm</build_depend>
   <build_depend>roscpp</build_depend>
+  <build_depend>octomap</build_depend>
 
   <run_depend>message_runtime</run_depend>
   <run_depend>pacman_vision_comm</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>message_generation</run_depend>
+  <run_depend>octomap</run_depend>
 
   <export>
 

@@ -10,16 +10,21 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   visualization_msgs
+  shape_msgs
   cmake_modules
   pacman_vision_comm
+  roslib
+  tf
 )
 
 #ToDo: port to 1.7.2
 #TODO:  1.7.1 is  fine for  just loading  clouds, readding  it back  at whatever
 #       version it finds on system (Fri 06 Nov 2015 04:48:02 PM CET -- Tabjones)
-find_package(PCL REQUIRED)
+find_package(PCL 1.7.2 REQUIRED)
 
 find_package(Eigen REQUIRED)
+
+find_package(octomap REQUIRED)
 
 # find_package(OpenMP)
 # if (OPENMP_FOUND)
@@ -30,12 +35,14 @@ find_package(Eigen REQUIRED)
 add_service_files(
     FILES
     StartProcess.srv
-    GetToExploreTrajectory.srv
+    GetNextBestPath.srv
+    Update.srv
+    # StopExploration.srv
     )
 
 add_message_files(
     FILES
-    SampleToExplore.msg
+    Path.msg
     Chart.msg
     Atlas.msg
     MapCollection.msg
@@ -47,6 +54,7 @@ generate_messages(
   geometry_msgs
   sensor_msgs
   visualization_msgs
+  shape_msgs
 )
 
 catkin_package(
@@ -60,13 +68,14 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     ${Eigen_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
+    ${OCTOMAP_INCLUDE_DIRS}
 )
 
 # ROS node
 add_executable(gaussian_process
+    ${gp_INCLUDES}
     src/gp_node.cpp
-    src/gp_node_main.cpp
-    src/gp/SampleSet.cpp
+    # src/gp/SampleSet.cpp
 )
 
 add_dependencies(gaussian_process
@@ -76,20 +85,25 @@ add_dependencies(gaussian_process
 target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
 )
 
 ## Tests
 
-add_executable(test_gaussian
-  tests/test_gaussian.cpp
-  ${gp_INCLUDES}
-)
+# add_executable(test_gaussian
+#   tests/test_gaussian.cpp
+#   ${gp_INCLUDES}
+# )
 
-add_executable(test_gp
-  tests/test_gp.cpp
-  src/gp/SampleSet.cpp
-  # ${gp_INCLUDES}
-)
+# add_executable(test_gp
+#   tests/test_gp.cpp
+#   src/gp/SampleSet.cpp
+#   # ${gp_INCLUDES}
+# )
+
+# add_executable(test_eigen
+#   tests/test_eigen.cpp
+# )
 
 # add a target to generate API documentation with Doxygen
 find_package(Doxygen)

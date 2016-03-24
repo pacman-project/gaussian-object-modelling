@@ -111,16 +111,17 @@ int main( int argc, char** argv )
 
         // set values according to the problem at hand
         double R = 0.4;
-        double sigma = 0.02;
-        double length = 0.03;
-        //ThinPlate my_kernel(R);
-        //ThinPlateRegressor regresor;
-        //Gaussian my_kernel(sigma, length);
-        //GaussianRegressor regresor;
-        Laplace my_kernel(sigma, length);
-        LaplaceRegressor regresor;
+        // double sigma = 0.02;
+        // double length = 0.03;
+        ThinPlate my_kernel(R);
+        ThinPlateRegressor regresor;
+        // Gaussian my_kernel(sigma, length);
+        // GaussianRegressor regresor;
+        // Laplace my_kernel(sigma, length);
+        // LaplaceRegressor regresor;
         regresor.setCovFunction(my_kernel);
-        regresor.create(cloud, sphere);
+        const bool withNormals = false;
+        regresor.create<withNormals>(cloud, sphere);
 
         // cout << "Model points: " << endl;
         cout << sphere->P << endl << endl;
@@ -131,7 +132,7 @@ int main( int argc, char** argv )
         // cout << "Model Kppdiff: " << endl;
         // cout << sphere.Kppdiff << endl << endl;
         // cout << "Model Normal: " << endl;
-        cout << sphere->N*0.01 << endl << endl;
+        // cout << sphere->N*0.01 << endl << endl;
         // cout << "Model Tx: " << endl;
         // cout << sphere->Tx << endl << endl;
         // cout << "Model Ty: " << endl;
@@ -280,12 +281,12 @@ int main( int argc, char** argv )
         center(1) = query->coord_y.at(0);
         center(2) = query->coord_z.at(0);
 
-        //GPProjector<ThinPlate> projector;
-        GPProjector<Laplace> projector;
+        GPProjector<ThinPlate> projector;
+        //GPProjector<Laplace> projector;
         //GPProjector<Gaussian> projector;
 
         Chart::Ptr chart;
-        projector.generateChart(regresor, sphere, center, 1.0, chart);
+        projector.generateChart(regresor, sphere, center, chart);
 
         cout << "Chart info: " << endl << endl;
         cout << "Center: " << chart->C << endl << endl;
@@ -302,7 +303,7 @@ int main( int argc, char** argv )
 
         // 2. create the chart there
         Chart::Ptr init_chart = std::make_shared<Chart>();
-        projector.generateChart(regresor, sphere, center, 1.0, init_chart);
+        projector.generateChart(regresor, sphere, center, init_chart);
 
         Data::Ptr init_p = std::make_shared<Data>();
         init_p->coord_x.push_back(init_center(0));
@@ -353,7 +354,7 @@ int main( int argc, char** argv )
 
         // 5. now generate chart in projeccted point
         Chart::Ptr projected_chart = std::make_shared<Chart>();
-        projector.generateChart(regresor, sphere, projected_point, 1.0, projected_chart);
+        projector.generateChart(regresor, sphere, projected_point, projected_chart);
 
         /*cout << "Projected chart info: " << endl << endl;
         cout << "Center: " << projected_chart.C << endl << endl;

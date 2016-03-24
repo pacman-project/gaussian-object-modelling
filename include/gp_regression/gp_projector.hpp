@@ -50,21 +50,42 @@ namespace gp_regression
  */
 struct Chart
 {
-        Eigen::Vector3d C; // points
-        Eigen::Vector3d N; // (inward) normal t chart
-        Eigen::Vector3d Tx; // tangent basis 1
-        Eigen::Vector3d Ty; // tangent basis 2
-        double R;  // size
+        int id;                 // id of the chart
+        Eigen::Vector3d C;      // points
+        Eigen::Vector3d N;      // (inward) normal t chart
+        Eigen::Vector3d Tx;     // tangent basis 1
+        Eigen::Vector3d Ty;     // tangent basis 2
+        double R;               // size
         typedef std::shared_ptr<Chart> Ptr;
         typedef std::shared_ptr<const Chart> ConstPtr;
 };
 
-struct Atlas
+class Atlas
 {
-        std::vector<Chart> charts;
-        Eigen::MatrixXd adjency;
+public:
+        std::vector<Chart> charts_;
+        Eigen::MatrixXd adjency_;
         typedef std::shared_ptr<Atlas> Ptr;
         typedef std::shared_ptr<const Atlas> ConstPtr;
+
+        //TODO FIX this causes eigen assert fail, probably line 15-16,
+        //tried to fix it with that if size==1, but stil isnt working
+        void addChart(Chart::ConstPtr chart, const int parent_index)
+        {
+                if (!chart)
+                        throw GPRegressionException("Empty Chart pointer");
+                charts_.push_back(*chart);
+                /*if (charts_.empty()){
+                    // atlas was empty, adjacency is a scalar
+                    adjency_.resize(1,1);
+                    adjency_(0,0) = 0.0;
+                    return;
+                }
+                adjency_.resize(adjency_.rows() + 1, adjency_.cols() + 1);
+                adjency_(adjency_.rows(), parent_index) = 1.0;
+                adjency_(parent_index, adjency_.cols()) = 1.0;*/
+                return;
+        }
 };
 
 template <typename CovType>
@@ -74,7 +95,7 @@ public:
         virtual ~GPProjector() {}
 
         // pointer to the covariance function type
-        //CovType* kernel_;
+        // CovType* kernel_;
 
         /**
          * @brief project Solves the projection of a point x_j onto f(x)=0, where f(x) ~ GP(m(x),k(x,x')),
@@ -95,14 +116,14 @@ public:
          */
         bool project(Model::ConstPtr gp, GPRegressor<CovType> &regressor, Chart::ConstPtr chart, const Eigen::Vector3d &in,
                     Eigen::Vector3d &out, double step_size = 1.0,
-                    double eps_f_eval = 1e-10, int max_iter = 5000, double eps_x = 1e-15)
+                    double eps_f_eval = 1e-2, int max_iter = 5000, double eps_x = 1e-15)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
                 if (!chart)
                         throw GPRegressionException("Empty Chart pointer");
                 Eigen::Vector3d current = in;
-                std::vector<double> current_f, current_v;
+                std::vector<double> current_f;
                 Data::Ptr currentP = std::make_shared<Data>();
                 int iter = 0;
                 int impr_counter = 0;
@@ -113,7 +134,6 @@ public:
                         currentP->coord_y.clear();
                         currentP->coord_z.clear();
                         current_f.clear();
-                        current_v.clear();
 
                         // and fill with current values
                         currentP->coord_x.push_back( current(0) );
@@ -121,7 +141,7 @@ public:
                         currentP->coord_z.push_back( current(2) );
 
                         // evaluate the current result
-                        regressor.evaluate(gp, currentP, current_f, current_v);
+                        regressor.evaluate(gp, currentP, current_f);
 
                         // print stats at current
                         // std::cout << "iter: " << iter << std::endl;
@@ -195,16 +215,14 @@ public:
                 return 0;
         }
 
-        void generateChart(GPRegressor<CovType> &reg, Model::ConstPtr gp, const Eigen::Vector3d &C, const double R, Chart::Ptr &chart)
+        void generateChart(GPRegressor<CovType> &reg, Model::ConstPtr gp, const Eigen::Vector3d &C, Chart::Ptr &chart)
         {
                 if (!gp)
                         throw GPRegressionException("Empty Model pointer");
-                //reset chart, we dont care what there was
+                // reset chart, we dont care what there was
                 chart = std::make_shared<Chart>();
                 chart->C = C;
-                chart->R = R;
                 Data::Ptr q = std::make_shared<Data>();
-
                 q->coord_x.push_back( C(0) );
                 q->coord_y.push_back( C(1) );
                 q->coord_z.push_back( C(2) );
@@ -214,29 +232,11 @@ public:
                 chart->N = N.row(0).normalized();
                 chart->Tx = Tx.row(0);
                 chart->Ty = Ty.row(0);
+                // the size of the chart reflects the 95% confidence interval
+                chart->R = 1.96*std::sqrt(v.at(0));
                 return;
         }
 
-        //TODO FIX this causes eigen assert fail, probably line 15-16,
-        //tried to fix it with that if size==1, but stil isnt working
-        void addChartToAtlas(Chart::ConstPtr chart, Atlas::Ptr &atlas, const int parent_index)
-        {
-                if (!atlas)
-                        throw GPRegressionException("Empty Atlas pointer");
-                if (!chart)
-                        throw GPRegressionException("Empty Chart pointer");
-                atlas->charts.push_back(*chart);
-                if (atlas->charts.size() == 1){
-                //atlas was empty, adjacency is a scalar
-                    atlas->adjency.resize(1,1);
-                    atlas->adjency(0,0) = 1;
-                    return;
-                }
-                atlas->adjency.resize(atlas->adjency.rows() + 1, atlas->adjency.cols() + 1);
-                atlas->adjency(atlas->adjency.rows(), parent_index) = 1.0;
-                atlas->adjency(parent_index, atlas->adjency.cols()) = 1.0;
-                return;
-        }
 private:
 
 };
