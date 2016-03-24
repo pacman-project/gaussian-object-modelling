@@ -340,10 +340,40 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             Eigen::Vector3d point_eigen = chart.getCenter();
             Eigen::Vector3d normal_eigen = chart.getNormal();
             // modifies the point
-            if (!simulate_touch)
+            if (!simulate_touch){
                 reMeanAndDenormalizeData(point_eigen);
-            // normal does not need to be reMeanAndRenormalized for now
+                // normal does not need to be reMeanAndRenormalized for now
 
+                //insert a geodesic intermediate point between nodes
+                //Atlas generates always at least two nodes
+                if (i>0){
+                    gp_atlas_rrt::Chart prev_chart = atlas->getNode(solution[i-1]);
+                    Eigen::Vector3d p1 = prev_chart.getCenter();
+                    Eigen::Vector3d n1 = prev_chart.getNormal();
+                    Eigen::Vector3d p2 = point_eigen;
+                    Eigen::Vector3d n2 = normal_eigen;
+                    reMeanAndDenormalizeData(p1);
+                    Eigen::Vector3d n3 = n1.cross(n2);
+                    if (n3.isZero(1e-5)){
+                        //Charts are parallel
+                        //TODO get mean point from the two centers
+                    }
+                    else{
+                        n3.normalize();
+                        //get coeffs of planes equation
+                        double d1,d2,da,db, den;
+                        d1 = - (n1.dot(p1));
+                        d2 = - (n2.dot(p2));
+                        da = - (n3.dot(p1));
+                        db = - (n3.dot(p2));
+                        den = n1.dot(n2.cross(n3));
+                        Eigen::Vector3f Pa = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - da*n1.cross(n2) )/den;
+                        Eigen::Vector3f Pb = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - db*n1.cross(n2) )/den;
+                        Eigen::Vector3d Pmean (0.5*(Pa[0]+Pb[0]), 0.5*(Pa[1]+Pb[1]), 0.5*(Pa[2]+Pb[2]));
+                        //TODO find the normal of the mean point
+                    }
+                }
+            }
             geometry_msgs::PointStamped point_msg;
             geometry_msgs::Vector3Stamped normal_msg;
             point_msg.point.x = point_eigen(0);
