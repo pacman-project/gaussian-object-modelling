@@ -372,8 +372,8 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                         da = - (n3.dot(p1));
                         db = - (n3.dot(p2));
                         den = n1.dot(n2.cross(n3));
-                        Eigen::Vector3f Pa = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - da*n1.cross(n2) )/den;
-                        Eigen::Vector3f Pb = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - db*n1.cross(n2) )/den;
+                        Eigen::Vector3d Pa = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - da*n1.cross(n2) )/den;
+                        Eigen::Vector3d Pb = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - db*n1.cross(n2) )/den;
                         Pmean << 0.5*(Pa[0]+Pb[0]), 0.5*(Pa[1]+Pb[1]), 0.5*(Pa[2]+Pb[2]);
                         Nmean = n1+n2;
                         Nmean.normalize();
