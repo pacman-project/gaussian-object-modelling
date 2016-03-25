@@ -13,7 +13,7 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    exploration_started(false), out_sphere_rad(2.0), sigma2(5e-2), min_v(0.0), max_v(0.5),
+    exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
     simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero()),
     ignore_last_touched(true), sample_res(0.07)
 {
@@ -27,6 +27,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
+    anchor = proc_frame;
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
     nh.param<bool>("simulate_touch", simulate_touch, true);
@@ -233,7 +234,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 return true;
             }
             ROS_WARN("[GaussianProcessNode::%s]\tNo solution found, Object shape is reconstructed !",__func__);
-            ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %d",__func__,req.var_desired.data, steps);
+            ROS_WARN("[GaussianProcessNode::%s]\tVariance requested: %g, Total number of touches %ld",__func__,req.var_desired.data, steps);
             ROS_WARN("[GaussianProcessNode::%s]\tComputing final shape...",__func__);
             //pause a bit for better visualization
             std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -410,6 +411,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     data_ptr_=boost::make_shared<PtC>();
     model_ptr= boost::make_shared<PtC>();
     real_explicit_ptr= boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    predicted_shape_.vertices.clear();
+    predicted_shape_.triangles.clear();
     reg_.reset();
     obj_gp.reset();
     my_kernel.reset();
@@ -555,6 +558,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             //perform fake sampling
             fakeDeterministicSampling(true, 1.01, sample_res);
             computeOctomap();
+            computePredictedShapeMsg();
+            res.predicted_shape = predicted_shape_;
             return true;
         }
     return false;
@@ -563,6 +568,7 @@ bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_reg
 {
     const gp_regression::Path::ConstPtr &msg = boost::make_shared<gp_regression::Path>(req.explored_points);
     cb_update(msg);
+    res.predicted_shape = predicted_shape_;
     return true;
 }
 
@@ -678,6 +684,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     //perform fake sampling
     fakeDeterministicSampling(true, 1.01, sample_res);
     computeOctomap();
+    computePredictedShapeMsg();
     return;
 }
 void
@@ -737,8 +744,8 @@ void GaussianProcessNode::prepareExtData()
     //      External points
     // add points in a sphere around centroid with label 1
     // sphere bounds computation
-    const int ang_div = 4; //divide 360° in ang_div pieces
-    const int lin_div = 2; //divide diameter into lin_div pieces
+    const int ang_div = 5; //divide 360° in ang_div pieces
+    const int lin_div = 3; //divide diameter into lin_div pieces
     const double ang_step = M_PI * 2 / ang_div;
     const double lin_step = 2 * out_sphere_rad / lin_div;
     // 8 steps for diameter times 6 for angle, make  points on the sphere surface
@@ -938,6 +945,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
 
     real_explicit_ptr = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     real_explicit_ptr->header.frame_id = proc_frame;
+    predicted_shape_.triangles.clear();
+    predicted_shape_.vertices.clear();
 
     size_t count(0);
     const auto total = std::floor( std::pow((2*scale+1)/pass, 3) );
@@ -979,7 +988,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d seconds.", __func__, elapsed );
+    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %ld seconds.", __func__, elapsed );
     if (elapsed > 60)
         sample_res = sample_res < 0.1 ? sample_res + 0.01 : 0.1;
 }
@@ -1106,7 +1115,7 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
-    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %d seconds.", __func__, elapsed );
+    ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %ld seconds.", __func__, elapsed );
 }
 
 //Doesnt fully work!! looks like diagonal adjacency is also needed,
@@ -1242,6 +1251,95 @@ GaussianProcessNode::computeOctomap()
 
     //TODO what about free(unoccupied) voxels, can they be
     //artificially generated ? or raycasted from pointcloud ?
+}
+
+void
+GaussianProcessNode::computePredictedShapeMsg()
+{
+
+    pcl::PointCloud<pcl::PointXYZI> real_explicit;
+    real_explicit.header = real_explicit_ptr->header;
+    reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
+
+    // Followed this tutorial to compute the mesh: http://www.pointclouds.org/assets/icra2012/surface.pdf
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> n;
+    pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr my_cloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZ> >();
+    my_cloud->width = real_explicit.width;
+    my_cloud->height = real_explicit.height;
+    for( auto pt: real_explicit.points)
+    {
+        pcl::PointXYZ p;
+        p.x = pt.x;
+        p.y = pt.y;
+        p.z = pt.z;
+
+        my_cloud->points.push_back( p );
+    }
+    tree->setInputCloud( my_cloud );
+    n.setInputCloud( my_cloud );
+    n.setSearchMethod (tree);
+    n.setKSearch (20);
+    n.useSensorOriginAsViewPoint();
+    n.compute(*normals);
+
+    pcl::PointCloud<pcl::PointNormal>::Ptr cloud_with_normals (new pcl::PointCloud<pcl::PointNormal>);
+    pcl::concatenateFields ( *my_cloud, *normals, *cloud_with_normals);
+
+    pcl::search::KdTree<pcl::PointNormal>::Ptr tree2 (new pcl::search::KdTree<pcl::PointNormal>);
+    tree2->setInputCloud (cloud_with_normals);
+
+    pcl::PolygonMesh triangles;
+
+    // pcl::Poisson<pcl::PointNormal> poisson;
+    // poisson.setDepth(9);
+    // poisson.setInputCloud(cloud_with_normals);
+    // poisson.reconstruct (triangles);
+    // pcl::MarchingCubesHoppe<pcl::PointNormal> mc;
+    // mc.setInputCloud(cloud_with_normals);
+    // mc.setGridResolution(0.001, 0.001, 0.001);
+    // mc.setIsoLevel(0.9);
+    // mc.setPercentageExtendGrid(0.8);
+    // mc.reconstruct(triangles);
+    pcl::GreedyProjectionTriangulation<pcl::PointNormal> gp3;
+    gp3.setInputCloud(cloud_with_normals);
+    gp3.setMaximumNearestNeighbors(100);
+    gp3.setSearchRadius(0.05);
+    gp3.setMu(2.5);
+    gp3.setMaximumSurfaceAngle(M_PI/4); // 45 degrees
+    gp3.setMinimumAngle(M_PI/18); // 10 degrees
+    gp3.setMaximumAngle(2*M_PI/3); // 120 degrees
+    if (gp3.getNormalConsistency())
+        gp3.setNormalConsistency(false);
+    gp3.reconstruct(triangles);
+
+    // pcl::io::savePLYFile("/home/tabjones/Desktop/prova.ply", triangles);
+
+    // convert from pcl::PolygonMesh  into shape_msgs::Mesh
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    pcl::fromPCLPointCloud2(triangles.cloud, cloud);
+    // first the vertices
+    for( auto pct: cloud.points )
+    {
+        geometry_msgs::Point p;
+        pcl::PointXYZ pt = pct;
+        p.x = pt.x;
+        p.y = pt.y;
+        p.z = pt.z;
+        predicted_shape_.vertices.push_back(p);
+    }
+    // and then the faces
+    // ToDO: check that the normal is pointing outwards
+    for(int i = 0; i < triangles.polygons.size(); ++i)
+    {
+        pcl::Vertices v = triangles.polygons.at(i);
+        shape_msgs::MeshTriangle t;
+        t.vertex_indices.at(0) = v.vertices.at( 0 );
+        t.vertex_indices.at(1) = v.vertices.at( 1 );
+        t.vertex_indices.at(2) = v.vertices.at( 2 );
+        predicted_shape_.triangles.push_back( t );
+    }
 }
 
 void

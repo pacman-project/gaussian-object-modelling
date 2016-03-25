@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   visualization_msgs
+  shape_msgs
   cmake_modules
   pacman_vision_comm
   roslib
@@ -19,7 +20,7 @@ find_package(catkin REQUIRED COMPONENTS
 #ToDo: port to 1.7.2
 #TODO:  1.7.1 is  fine for  just loading  clouds, readding  it back  at whatever
 #       version it finds on system (Fri 06 Nov 2015 04:48:02 PM CET -- Tabjones)
-find_package(PCL REQUIRED)
+find_package(PCL 1.7.2 REQUIRED)
 
 find_package(Eigen REQUIRED)
 
@@ -53,6 +54,7 @@ generate_messages(
   geometry_msgs
   sensor_msgs
   visualization_msgs
+  shape_msgs
 )
 
 catkin_package(
