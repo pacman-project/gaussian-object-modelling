@@ -355,9 +355,13 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                     Eigen::Vector3d n2 = normal_eigen;
                     reMeanAndDenormalizeData(p1);
                     Eigen::Vector3d n3 = n1.cross(n2);
+                    Eigen::Vector3d Pmean;
+                    Eigen::Vector3d Nmean;
                     if (n3.isZero(1e-5)){
                         //Charts are parallel
-                        //TODO get mean point from the two centers
+                        //get mean point from the two centers
+                        Pmean << 0.5*(p1[0]+p2[0]), 0.5*(p1[1]+p2[1]), 0.5*(p1[2]+p2[2]);
+                        Nmean = n1;
                     }
                     else{
                         n3.normalize();
@@ -370,9 +374,23 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                         den = n1.dot(n2.cross(n3));
                         Eigen::Vector3f Pa = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - da*n1.cross(n2) )/den;
                         Eigen::Vector3f Pb = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - db*n1.cross(n2) )/den;
-                        Eigen::Vector3d Pmean (0.5*(Pa[0]+Pb[0]), 0.5*(Pa[1]+Pb[1]), 0.5*(Pa[2]+Pb[2]));
-                        //TODO find the normal of the mean point
+                        Pmean << 0.5*(Pa[0]+Pb[0]), 0.5*(Pa[1]+Pb[1]), 0.5*(Pa[2]+Pb[2]);
+                        Nmean = n1+n2;
+                        Nmean.normalize();
                     }
+                    geometry_msgs::PointStamped geodesic_msg;
+                    geometry_msgs::Vector3Stamped geo_normal_msg;
+                    geodesic_msg.point.x = Pmean(0);
+                    geodesic_msg.point.y = Pmean(1);
+                    geodesic_msg.point.z = Pmean(2);
+                    geodesic_msg.header = solution_header;
+                    geo_normal_msg.vector.x = Nmean(0);
+                    geo_normal_msg.vector.y = Nmean(1);
+                    geo_normal_msg.vector.z = Nmean(2);
+                    geo_normal_msg.header = solution_header;
+
+                    next_best_path.points.push_back( geodesic_msg );
+                    next_best_path.directions.push_back( geo_normal_msg );
                 }
             }
             geometry_msgs::PointStamped point_msg;
