@@ -1,0 +1,3 @@
+# ignore test results
+*.txt
+*.pcd

@@ -1,0 +1,5 @@
+mug:
+	MaxPointsOnObject: 400
+	MaxPointsOnHand: 100
+	MaxPointsOutside: 200
+	CubeResolution: 15

@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- ========================== -->
+  <!--        Configuration       -->
+  <!-- ========================== -->
+
+  <!-- run_service_caller:  If true runs rqt_service_caller gui for calling services.-->
+  <arg name="run_service_caller" default="false" doc="If true runs rqt_service_caller gui for calling various services" />
+
+  <!-- run_rviz:  If true runs rviz gui.-->
+  <arg name="run_rviz" default="true" doc="If true runs rviz gui with config stored under cfg directory."/>
+
+  <arg name="simulate" default="false" doc="Use a simulated vito anchor broadcaster." />
+
+  <!--============================== -->
+  <!--       Implementation          -->
+  <!-- ============================= -->
+
+  <!-- launch gaussian process node  -->
+  <node name="gaussian_process" pkg="gp_regression" type="gaussian_process" output="screen" respawn="true" />
+
+  <!-- rviz -->
+  <node if="$(arg run_rviz)" name="rviz_gp" pkg="rviz" type="rviz" respawn="false" args="-d $(find gp_regression)/config/config.rviz" output="screen"/>
+
+  <!-- rqt_service_caller -->
+  <node if="$(arg run_service_caller)" name="service_caller_gp" pkg="rqt_service_caller" type="rqt_service_caller" respawn="false"/>
+
+  <node pkg="tf" type="static_transform_publisher" name="vito_mind_brcaster" args="0 0 3 0 0 0 1 /vito_anchor /mind_anchor 50" />
+
+  <!-- vito anchor fake broadcaster -->
+  <node if="$(arg simulate)" pkg="tf" type="static_transform_publisher" name="vito_anchor_simulation" args="0 0 1 0 0 0 1 /camera_rgb_optical_frame /vito_anchor 50" />
+
+</launch>
