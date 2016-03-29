@@ -1008,8 +1008,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %ld seconds.", __func__, elapsed );
-    if (elapsed > 60)
-        sample_res = sample_res < 0.1 ? sample_res + 0.01 : 0.1;
+    // if (elapsed > 60)
+    //     sample_res = sample_res < 0.1 ? sample_res + 0.01 : 0.1;
 }
 void
 GaussianProcessNode::samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp)
