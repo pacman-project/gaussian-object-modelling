@@ -14,8 +14,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
     exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
-    simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero()),
-    ignore_last_touched(true), sample_res(0.07)
+    simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero())
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -30,7 +29,9 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     anchor = proc_frame;
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
+    nh.param<double>("sample_res", sample_res, 0.07);
     nh.param<bool>("simulate_touch", simulate_touch, true);
+    nh.param<bool>("ignore_last_touched", ignore_last_touched, true);
     synth_var_goal = 0.2;
 }
 
