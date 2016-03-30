@@ -14,7 +14,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
     exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
-    simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero())
+    simulate_touch(true), anchor("/mind_anchor"), steps(0)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -31,7 +31,6 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     nh.param<double>("global_goal", goal, 0.1);
     nh.param<double>("sample_res", sample_res, 0.07);
     nh.param<bool>("simulate_touch", simulate_touch, true);
-    nh.param<bool>("ignore_last_touched", ignore_last_touched, true);
     synth_var_goal = 0.2;
 }
 
@@ -147,12 +146,29 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
 {
     ros::Rate rate(10); //try to go at 10hz, as in the node
     current_goal = req.var_desired.data;
+    Eigen::Vector3d start_point;
+    if (req.start_point.header.frame_id.empty())
+        //start from random point
+        start_point.setZero();
+    else if (req.start_point.header.frame_id.compare(proc_frame) == 0){
+        //start from supplied point in correct frame
+        start_point[0] = req.start_point.point.x;
+        start_point[1] = req.start_point.point.y;
+        start_point[2] = req.start_point.point.z;
+        deMeanAndNormalizeData(start_point);
+    }
+    else{
+        //not implemented
+        //TODO convert point in proc_frame
+        ROS_WARN("[GaussianProcessNode::%s]\tSupplied start poin in %s frame, while it should be in %s. Fallback to random point",__func__, req.start_point.header.frame_id.c_str(), proc_frame.c_str());
+        start_point.setZero();
+    }
     if (simulate_touch){
         nh.getParam("touch_type", synth_type);
         if (synth_type == 0)
             synth_var_goal = goal;
     }
-    if(startExploration(req.var_desired.data)){
+    if(startExploration(current_goal, start_point)){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
             // but for now, this is it, repeating the node while loop here
@@ -242,7 +258,6 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             marchingSampling(false, 0.06,0.02);
             res.next_best_path = gp_regression::Path();
-            last_touched = Eigen::Vector3d::Zero();
             pcl::PointCloud<pcl::PointXYZI> reconstructed;
             reMeanAndDenormalizeData(real_explicit_ptr, reconstructed);
             double MSE (0.0), RMSE(0.0), SSE(0.0);
@@ -637,9 +652,6 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     */
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
-    last_touched[0] = data_ptr_->points[data_ptr_->size()-1].x;
-    last_touched[1] = data_ptr_->points[data_ptr_->size()-1].y;
-    last_touched[2] = data_ptr_->points[data_ptr_->size()-1].z;
     //now we can add the externals
     model_ptr->resize(ext_size);
     for (size_t i=0; i< msg->points.size(); ++i)
@@ -885,7 +897,7 @@ bool GaussianProcessNode::computeGP()
 }
 
 //
-bool GaussianProcessNode::startExploration(const float v_des)
+bool GaussianProcessNode::startExploration(const float v_des, Eigen::Vector3d &start)
 {
     //make sure we have a model and an object, we should have if start was called
     if (!object_ptr || object_ptr->empty() || !data_ptr_ || data_ptr_->empty()){
@@ -912,17 +924,14 @@ bool GaussianProcessNode::startExploration(const float v_des)
     explorer->setMaxNodes(300);
     explorer->setNoSampleMarkers(true);
     explorer->setBias(0.4); //probability of expanding on an old node
-    //get a starting point from data cloud
-    if (last_touched.isZero() || ignore_last_touched){
+    if (start.isZero()){
+        //get a random starting point from data cloud
         int r_id = getRandIn(0, data_ptr_->points.size()-1 );
-        Eigen::Vector3d root;
-        root << data_ptr_->points[r_id].x,
-             data_ptr_->points[r_id].y,
-             data_ptr_->points[r_id].z;
-        explorer->setStart(root);
+        start[0]= data_ptr_->points[r_id].x;
+        start[1]= data_ptr_->points[r_id].y;
+        start[2]= data_ptr_->points[r_id].z;
     }
-    else
-        explorer->setStart(last_touched);
+    explorer->setStart(start);
     //explorer is ready, start exploration (this spawns a thread)
     explorer->startExploration();
     exploration_started = true;
