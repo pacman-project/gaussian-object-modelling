@@ -26,7 +26,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
-    anchor = proc_frame;
+    anchor = proc_frame; //TODO remove after fixing of mind anchor
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
     nh.param<double>("sample_res", sample_res, 0.07);
@@ -585,7 +585,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 }
 bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res)
 {
-    const gp_regression::Path::ConstPtr &msg = boost::make_shared<gp_regression::Path>(req.explored_points);
+    gp_regression::Path::Ptr msg = boost::make_shared<gp_regression::Path>();
+    *msg = req.explored_points;
     cb_update(msg);
     res.predicted_shape = predicted_shape_;
     return true;
