@@ -1,4 +1,4 @@
 #Empty request for now, however, the policy can be used here, or whatever other arg can be useful to generate a trajectory for exploration
-Path explored_points
+gp_regression/Path explored_points
 ---
 shape_msgs/Mesh predicted_shape
