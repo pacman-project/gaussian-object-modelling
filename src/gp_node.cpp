@@ -24,6 +24,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZI> >("estimated_model", 1);
     pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
+    pub_ground_truth= nh.advertise<visualization_msgs::MarkerArray> ("ground_truth", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
     nh.param<int>("touch_type", synth_type, 2);
@@ -47,6 +48,7 @@ void GaussianProcessNode::Publish()
     publishOctomap();
     //publish markers
     publishAtlas();
+    publishGroundTruth();
 }
 
 // Publish cloud method
@@ -78,6 +80,12 @@ void GaussianProcessNode::publishAtlas () const
     if (markers)
         if(pub_markers.getNumSubscribers() > 0)
             pub_markers.publish(*markers);
+}
+void GaussianProcessNode::publishGroundTruth () const
+{
+    if (gt_marks)
+        if(pub_ground_truth.getNumSubscribers() > 0)
+            pub_ground_truth.publish(*gt_marks);
 }
 
 
@@ -453,6 +461,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     explorer.reset();
     solution.clear();
     markers.reset();
+    gt_marks.reset();
     steps = 0;
     //////
     if(req.obj_pcd.empty()){
@@ -481,6 +490,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
         pcl::fromROSMsg (msg2, *object_ptr);
         //add 4 objects to chose from
+        gt_marks = boost::make_shared<visualization_msgs::MarkerArray>();
         for (size_t i=0; i<4; ++i)
         {
             visualization_msgs::Marker mesh;
@@ -521,7 +531,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             mesh.color.r=0.5;
             mesh.color.g=0.5;
             mesh.color.b=0.5;
-            markers->markers.push_back(mesh);
+            gt_marks->markers.push_back(mesh);
         }
     }
     else{
