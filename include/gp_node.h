@@ -111,7 +111,7 @@ class GaussianProcessNode
          *
          */
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, exploration_started, simulate_touch, ignore_last_touched;
+        bool start, exploration_started, simulate_touch;
         const double out_sphere_rad;
         int synth_type;
 
@@ -201,7 +201,7 @@ class GaussianProcessNode
         // Compute a Gaussian Process from object and store it
         bool computeGP();
         // start the RRT exploration
-        bool startExploration(const float v_des);
+        bool startExploration(const float v_des, Eigen::Vector3d &start);
         // compute octomap from real explicit cloud
         void computeOctomap();
         // compute the predicted shape from real explicit cloud as a message

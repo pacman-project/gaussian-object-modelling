@@ -14,8 +14,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
     exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
-    simulate_touch(true), anchor("/mind_anchor"), steps(0), last_touched(Eigen::Vector3d::Zero()),
-    ignore_last_touched(true), sample_res(0.07)
+    simulate_touch(true), steps(0)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -23,13 +22,13 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("training_data", 1);
     pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZI> >("estimated_model", 1);
-    pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1); //TODO fix correct topic name
+    pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
-    anchor = proc_frame;
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
+    nh.param<double>("sample_res", sample_res, 0.07);
     nh.param<bool>("simulate_touch", simulate_touch, true);
     synth_var_goal = 0.2;
 }
@@ -146,12 +145,29 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
 {
     ros::Rate rate(10); //try to go at 10hz, as in the node
     current_goal = req.var_desired.data;
+    Eigen::Vector3d start_point;
+    if (req.start_point.header.frame_id.empty())
+        //start from random point
+        start_point.setZero();
+    else if (req.start_point.header.frame_id.compare(proc_frame) == 0){
+        //start from supplied point in correct frame
+        start_point[0] = req.start_point.point.x;
+        start_point[1] = req.start_point.point.y;
+        start_point[2] = req.start_point.point.z;
+        deMeanAndNormalizeData(start_point);
+    }
+    else{
+        //not implemented
+        //TODO convert point in proc_frame
+        ROS_WARN("[GaussianProcessNode::%s]\tSupplied start poin in %s frame, while it should be in %s. Fallback to random point",__func__, req.start_point.header.frame_id.c_str(), proc_frame.c_str());
+        start_point.setZero();
+    }
     if (simulate_touch){
         nh.getParam("touch_type", synth_type);
         if (synth_type == 0)
             synth_var_goal = goal;
     }
-    if(startExploration(req.var_desired.data)){
+    if(startExploration(current_goal, start_point)){
         while(exploration_started){
             // don't like it, cause we loose the actual velocity of the atlas
             // but for now, this is it, repeating the node while loop here
@@ -166,7 +182,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, However global goal is set to %g. Call this service again with reduced request!",__func__, current_goal, goal);
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
-                samples.header.frame_id = anchor;
+                samples.header.frame_id = proc_frame;
                 samples.header.stamp = ros::Time();
                 samples.lifetime = ros::Duration(5.0);
                 samples.ns = "samples";
@@ -201,7 +217,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 synth_var_goal = (synth_var_goal - 0.1) < goal ? goal : synth_var_goal - 0.1;
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
-                samples.header.frame_id = anchor;
+                samples.header.frame_id = proc_frame;
                 samples.header.stamp = ros::Time();
                 samples.lifetime = ros::Duration(5.0);
                 samples.ns = "samples";
@@ -241,7 +257,6 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             marchingSampling(false, 0.06,0.02);
             res.next_best_path = gp_regression::Path();
-            last_touched = Eigen::Vector3d::Zero();
             pcl::PointCloud<pcl::PointXYZI> reconstructed;
             reMeanAndDenormalizeData(real_explicit_ptr, reconstructed);
             double MSE (0.0), RMSE(0.0), SSE(0.0);
@@ -341,10 +356,58 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             Eigen::Vector3d point_eigen = chart.getCenter();
             Eigen::Vector3d normal_eigen = chart.getNormal();
             // modifies the point
-            if (!simulate_touch)
+            if (!simulate_touch){
                 reMeanAndDenormalizeData(point_eigen);
-            // normal does not need to be reMeanAndRenormalized for now
+                // normal does not need to be reMeanAndRenormalized for now
 
+                //insert a geodesic intermediate point between nodes
+                //Atlas generates always at least two nodes
+                if (i>0){
+                    gp_atlas_rrt::Chart prev_chart = atlas->getNode(solution[i-1]);
+                    Eigen::Vector3d p1 = prev_chart.getCenter();
+                    Eigen::Vector3d n1 = prev_chart.getNormal();
+                    Eigen::Vector3d p2 = point_eigen;
+                    Eigen::Vector3d n2 = normal_eigen;
+                    reMeanAndDenormalizeData(p1);
+                    Eigen::Vector3d n3 = n1.cross(n2);
+                    Eigen::Vector3d Pmean;
+                    Eigen::Vector3d Nmean;
+                    if (n3.isZero(1e-5)){
+                        //Charts are parallel
+                        //get mean point from the two centers
+                        Pmean << 0.5*(p1[0]+p2[0]), 0.5*(p1[1]+p2[1]), 0.5*(p1[2]+p2[2]);
+                        Nmean = n1;
+                    }
+                    else{
+                        n3.normalize();
+                        //get coeffs of planes equation
+                        double d1,d2,da,db, den;
+                        d1 = - (n1.dot(p1));
+                        d2 = - (n2.dot(p2));
+                        da = - (n3.dot(p1));
+                        db = - (n3.dot(p2));
+                        den = n1.dot(n2.cross(n3));
+                        Eigen::Vector3d Pa = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - da*n1.cross(n2) )/den;
+                        Eigen::Vector3d Pb = ( - d1*n2.cross(n3) -d2*n3.cross(n1) - db*n1.cross(n2) )/den;
+                        Pmean << 0.5*(Pa[0]+Pb[0]), 0.5*(Pa[1]+Pb[1]), 0.5*(Pa[2]+Pb[2]);
+                        Nmean = n1+n2;
+                        Nmean.normalize();
+                    }
+                    geometry_msgs::PointStamped geodesic_msg;
+                    geometry_msgs::Vector3Stamped geo_normal_msg;
+                    geodesic_msg.point.x = Pmean(0);
+                    geodesic_msg.point.y = Pmean(1);
+                    geodesic_msg.point.z = Pmean(2);
+                    geodesic_msg.header = solution_header;
+                    geo_normal_msg.vector.x = Nmean(0);
+                    geo_normal_msg.vector.y = Nmean(1);
+                    geo_normal_msg.vector.z = Nmean(2);
+                    geo_normal_msg.header = solution_header;
+
+                    next_best_path.points.push_back( geodesic_msg );
+                    next_best_path.directions.push_back( geo_normal_msg );
+                }
+            }
             geometry_msgs::PointStamped point_msg;
             geometry_msgs::Vector3Stamped normal_msg;
             point_msg.point.x = point_eigen(0);
@@ -417,6 +480,49 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         listener.transformPointCloud(proc_frame, msg, msg_conv);
         sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
         pcl::fromROSMsg (msg2, *object_ptr);
+        //add 4 objects to chose from
+        for (size_t i=0; i<4; ++i)
+        {
+            visualization_msgs::Marker mesh;
+            mesh.header.frame_id = proc_frame;
+            mesh.header.stamp = ros::Time();
+            mesh.lifetime = ros::Duration();
+            if (i==0){
+                mesh.ns = "Spoon";
+                std::string mesh_path ("package://inhand_scanner_models/kitchenUtensilB/kitchenUtensilB.stl");
+                mesh.mesh_resource = mesh_path.c_str();
+            }
+            else if (i==1){
+                mesh.ns = "Square Container";
+                std::string mesh_path ("package://asus_scanner_models/bowlB/bowlB.stl");
+                mesh.pose.position.x = 0.2;
+                mesh.mesh_resource = mesh_path.c_str();
+            }
+            else if (i==2){
+                mesh.ns = "Pasta Container";
+                std::string mesh_path ("package://asus_scanner_models/containerB/containerB.stl");
+                mesh.pose.position.x = 0.2;
+                mesh.pose.position.y = 0.2;
+                mesh.mesh_resource = mesh_path.c_str();
+            }
+            else if (i==3){
+                mesh.ns = "Container";
+                std::string mesh_path ("package://asus_scanner_models/containerA/containerA.stl");
+                mesh.pose.position.y = 0.2;
+                mesh.mesh_resource = mesh_path.c_str();
+            }
+            mesh.id = 0;
+            mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+            mesh.action = visualization_msgs::Marker::ADD;
+            mesh.scale.x = 1.0;
+            mesh.scale.y = 1.0;
+            mesh.scale.z = 1.0;
+            mesh.color.a=1;
+            mesh.color.r=0.5;
+            mesh.color.g=0.5;
+            mesh.color.b=0.5;
+            markers->markers.push_back(mesh);
+        }
     }
     else{
         if(req.obj_pcd.compare("sphere") == 0 || req.obj_pcd.compare("half_sphere") == 0){
@@ -477,7 +583,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             // hand_ptr->header.frame_id=proc_frame;
         }
     }
-    model_ptr->header.frame_id=anchor;
+    model_ptr->header.frame_id=proc_frame;
     real_explicit_ptr->header.frame_id=proc_frame;
     colorThem(0,0,255, object_ptr);
 
@@ -492,7 +598,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
                 0, 0, 1/current_scale_, 0,
                 0, 0, 0,                1;
         pcl::transformPointCloud(tmp, *full_object, t);
-        full_object->header.frame_id=anchor;
+        full_object->header.frame_id=proc_frame;
         kd_full.setInputCloud(full_object);
     }
     if (prepareData())
@@ -536,7 +642,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
 }
 bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res)
 {
-    const gp_regression::Path::ConstPtr &msg = boost::make_shared<gp_regression::Path>(req.explored_points);
+    gp_regression::Path::Ptr msg = boost::make_shared<gp_regression::Path>();
+    *msg = req.explored_points;
     cb_update(msg);
     res.predicted_shape = predicted_shape_;
     return true;
@@ -587,9 +694,6 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     */
 
     deMeanAndNormalizeData( object_ptr, data_ptr_ );
-    last_touched[0] = data_ptr_->points[data_ptr_->size()-1].x;
-    last_touched[1] = data_ptr_->points[data_ptr_->size()-1].y;
-    last_touched[2] = data_ptr_->points[data_ptr_->size()-1].z;
     //now we can add the externals
     model_ptr->resize(ext_size);
     for (size_t i=0; i< msg->points.size(); ++i)
@@ -639,7 +743,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
                 0, 0, 1/current_scale_, 0,
                 0, 0, 0,                1;
         pcl::transformPointCloud(tmp, *full_object, t);
-        full_object->header.frame_id=anchor;
+        full_object->header.frame_id=proc_frame;
         kd_full.setInputCloud(full_object);
     }
     //start recomputing GP
@@ -663,7 +767,7 @@ GaussianProcessNode::createTouchMarkers(const Eigen::MatrixXd &pts)
     if (pts.rows() <= 1)
         return;
     visualization_msgs::Marker lines;
-    lines.header.frame_id = anchor;
+    lines.header.frame_id = proc_frame;
     lines.header.stamp = ros::Time();
     lines.lifetime = ros::Duration(5.0);
     lines.ns = "last_touch";
@@ -835,7 +939,7 @@ bool GaussianProcessNode::computeGP()
 }
 
 //
-bool GaussianProcessNode::startExploration(const float v_des)
+bool GaussianProcessNode::startExploration(const float v_des, Eigen::Vector3d &start)
 {
     //make sure we have a model and an object, we should have if start was called
     if (!object_ptr || object_ptr->empty() || !data_ptr_ || data_ptr_->empty()){
@@ -857,22 +961,19 @@ bool GaussianProcessNode::startExploration(const float v_des)
 
     //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
-    explorer->setMarkers(markers, mtx_marks, anchor);
+    explorer->setMarkers(markers, mtx_marks, proc_frame);
     explorer->setAtlas(atlas);
     explorer->setMaxNodes(300);
     explorer->setNoSampleMarkers(true);
     explorer->setBias(0.4); //probability of expanding on an old node
-    //get a starting point from data cloud
-    if (last_touched.isZero() || ignore_last_touched){
+    if (start.isZero()){
+        //get a random starting point from data cloud
         int r_id = getRandIn(0, data_ptr_->points.size()-1 );
-        Eigen::Vector3d root;
-        root << data_ptr_->points[r_id].x,
-             data_ptr_->points[r_id].y,
-             data_ptr_->points[r_id].z;
-        explorer->setStart(root);
+        start[0]= data_ptr_->points[r_id].x;
+        start[1]= data_ptr_->points[r_id].y;
+        start[2]= data_ptr_->points[r_id].z;
     }
-    else
-        explorer->setStart(last_touched);
+    explorer->setStart(start);
     //explorer is ready, start exploration (this spawns a thread)
     explorer->startExploration();
     exploration_started = true;
@@ -901,7 +1002,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
         return;
 
     visualization_msgs::Marker samples;
-    samples.header.frame_id = anchor;
+    samples.header.frame_id = proc_frame;
     samples.header.stamp = ros::Time();
     samples.lifetime = ros::Duration(5.0);
     samples.ns = "samples";
@@ -959,8 +1060,8 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(end_time - begin_time).count();
     ROS_INFO("[GaussianProcessNode::%s]\tTotal time consumed: %ld seconds.", __func__, elapsed );
-    if (elapsed > 60)
-        sample_res = sample_res < 0.1 ? sample_res + 0.01 : 0.1;
+    // if (elapsed > 60)
+    //     sample_res = sample_res < 0.1 ? sample_res + 0.01 : 0.1;
 }
 void
 GaussianProcessNode::samplePoint(const double x, const double y, const double z, visualization_msgs::Marker &samp)
@@ -1006,7 +1107,7 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
         return;
 
     visualization_msgs::Marker samples;
-    samples.header.frame_id = anchor;
+    samples.header.frame_id = proc_frame;
     samples.header.stamp = ros::Time();
     samples.lifetime = ros::Duration(5.0);
     samples.ns = "samples";
