@@ -25,6 +25,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1);
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     pub_ground_truth= nh.advertise<visualization_msgs::MarkerArray> ("ground_truth", 1);
+    pub_samples= nh.advertise<visualization_msgs::MarkerArray> ("samples", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
     nh.param<int>("touch_type", synth_type, 2);
@@ -49,6 +50,7 @@ void GaussianProcessNode::Publish()
     //publish markers
     publishAtlas();
     publishGroundTruth();
+    publishSamples();
 }
 
 // Publish cloud method
@@ -86,6 +88,12 @@ void GaussianProcessNode::publishGroundTruth () const
     if (gt_marks)
         if(pub_ground_truth.getNumSubscribers() > 0)
             pub_ground_truth.publish(*gt_marks);
+}
+void GaussianProcessNode::publishSamples () const
+{
+    if (samples_marks)
+        if(pub_samples.getNumSubscribers() > 0)
+            pub_samples.publish(*samples_marks);
 }
 
 
@@ -188,11 +196,11 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         if (solution.empty()){
             if ((current_goal > goal) && !simulate_touch){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, However global goal is set to %g. Call this service again with reduced request!",__func__, current_goal, goal);
-                markers = boost::make_shared<visualization_msgs::MarkerArray>();
+                samples_marks = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
                 samples.header.frame_id = proc_frame;
                 samples.header.stamp = ros::Time();
-                samples.lifetime = ros::Duration(5.0);
+                samples.lifetime = ros::Duration(1.0);
                 samples.ns = "samples";
                 samples.id = 0;
                 samples.type = visualization_msgs::Marker::POINTS;
@@ -215,15 +223,15 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                     samples.points.push_back(pt);
                     samples.colors.push_back(cl);
                 }
-                markers->markers.push_back(samples);
-                publishAtlas();
+                samples_marks->markers.push_back(samples);
+                publishSamples();
                 ros::spinOnce();
                 return true;
             }
             if (simulate_touch && (synth_var_goal > goal)){
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, automatically reducing it.",__func__, synth_var_goal);
                 synth_var_goal = (synth_var_goal - 0.1) < goal ? goal : synth_var_goal - 0.1;
-                markers = boost::make_shared<visualization_msgs::MarkerArray>();
+                samples_marks = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
                 samples.header.frame_id = proc_frame;
                 samples.header.stamp = ros::Time();
@@ -250,8 +258,8 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                     samples.points.push_back(pt);
                     samples.colors.push_back(cl);
                 }
-                markers->markers.push_back(samples);
-                publishAtlas();
+                samples_marks->markers.push_back(samples);
+                publishSamples();
                 ros::spinOnce();
                 if (steps == 0)
                     ++steps;
@@ -263,6 +271,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
             //pause a bit for better visualization
             std::this_thread::sleep_for(std::chrono::seconds(3));
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
+            samples_marks = boost::make_shared<visualization_msgs::MarkerArray>();
             marchingSampling(false, 0.06,0.02);
             res.next_best_path = gp_regression::Path();
             pcl::PointCloud<pcl::PointXYZI> reconstructed;
@@ -328,6 +337,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 ROS_ERROR("[GaussianProcessNode::%s] Cannot open file %s for writing",__func__, file_path.c_str());
             steps = 0;
             if (simulate_touch){
+                //TODO this is wrong, but only invoked in simulation, so nvm for the review
                 visualization_msgs::Marker mesh;
                 mesh.header.frame_id = proc_frame;
                 mesh.header.stamp = ros::Time();
@@ -359,7 +369,6 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
         next_best_path.header = solution_header;
         for (size_t i=0; i<solution.size(); ++i)
         {
-            // ToDO: solutionToPath(solution, path) function
             gp_atlas_rrt::Chart chart = atlas->getNode(solution[i]);
             Eigen::Vector3d point_eigen = chart.getCenter();
             Eigen::Vector3d normal_eigen = chart.getNormal();
@@ -462,6 +471,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     solution.clear();
     markers.reset();
     gt_marks.reset();
+    samples_marks.reset();
     steps = 0;
     //////
     if(req.obj_pcd.empty()){
@@ -491,7 +501,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         pcl::fromROSMsg (msg2, *object_ptr);
         //add 4 objects to chose from
         gt_marks = boost::make_shared<visualization_msgs::MarkerArray>();
-        for (size_t i=0; i<4; ++i)
+        for (size_t i=0; i<3; ++i)
         {
             visualization_msgs::Marker mesh;
             mesh.header.frame_id = proc_frame;
@@ -511,14 +521,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             else if (i==2){
                 mesh.ns = "Pasta Container";
                 std::string mesh_path ("package://asus_scanner_models/containerB/containerB.stl");
-                mesh.pose.position.x = 0.2;
-                mesh.pose.position.y = 0.2;
-                mesh.mesh_resource = mesh_path.c_str();
-            }
-            else if (i==3){
-                mesh.ns = "Container";
-                std::string mesh_path ("package://asus_scanner_models/containerA/containerA.stl");
-                mesh.pose.position.y = 0.2;
+                mesh.pose.position.x = 0.4;
                 mesh.mesh_resource = mesh_path.c_str();
             }
             mesh.id = 0;
@@ -620,6 +623,8 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             markers = boost::make_shared<visualization_msgs::MarkerArray>();
             //show ground truth at start
             if (simulate_touch){
+                //TODO this is not consisten with current marker segmentation,
+                //reminder for a later cleanup, this should be pushed to gt_marks
                 visualization_msgs::Marker mesh;
                 mesh.header.frame_id = proc_frame;
                 mesh.header.stamp = ros::Time();
@@ -734,15 +739,15 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
             ++ext_size;
         }
     }
-    //create touch marker(s)
-    for (size_t i=0; i<points.rows(); ++i){
-        Eigen::Vector3d p;
-        p << points(i,0), points(i,1), points(i,2);
-        deMeanAndNormalizeData(p);
-        points(i,0) = p[0];
-        points(i,1) = p[1];
-        points(i,2) = p[2];
-    }
+    // //create touch marker(s)
+    // for (size_t i=0; i<points.rows(); ++i){
+    //     Eigen::Vector3d p;
+    //     p << points(i,0), points(i,1), points(i,2);
+    //     deMeanAndNormalizeData(p);
+    //     points(i,0) = p[0];
+    //     points(i,1) = p[1];
+    //     points(i,2) = p[2];
+    // }
     //update full model
     if (simulate_touch){
         pcl::PointCloud<pcl::PointXYZ> tmp;
@@ -769,11 +774,13 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
     fakeDeterministicSampling(true, 1.01, sample_res);
     computeOctomap();
     computePredictedShapeMsg();
+    ROS_INFO("[GaussianProcessNode::%s]\tModel updated with %d new points",__func__, points.rows());
     return;
 }
 void
 GaussianProcessNode::createTouchMarkers(const Eigen::MatrixXd &pts)
 {
+    //TODO UNUSED
     if (pts.rows() <= 1)
         return;
     visualization_msgs::Marker lines;
@@ -971,6 +978,8 @@ bool GaussianProcessNode::startExploration(const float v_des, Eigen::Vector3d &s
 
     //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
+    //reset atlas markers
+    markers = boost::make_shared<visualization_msgs::MarkerArray>();
     explorer->setMarkers(markers, mtx_marks, proc_frame);
     explorer->setAtlas(atlas);
     explorer->setMaxNodes(300);
@@ -1008,13 +1017,12 @@ void GaussianProcessNode::checkExploration()
 void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const double scale, const double pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
-    if(!markers)
-        return;
+    samples_marks = boost::make_shared<visualization_msgs::MarkerArray>();
 
     visualization_msgs::Marker samples;
     samples.header.frame_id = proc_frame;
     samples.header.stamp = ros::Time();
-    samples.lifetime = ros::Duration(5.0);
+    samples.lifetime = ros::Duration(0.5);
     samples.ns = "samples";
     samples.id = 0;
     samples.type = visualization_msgs::Marker::POINTS;
@@ -1022,7 +1030,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
     samples.scale.x = 0.025;
     samples.scale.y = 0.025;
     samples.scale.z = 0.025;
-    markers->markers.push_back(samples);
+    samples_marks->markers.push_back(samples);
 
     real_explicit_ptr = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     real_explicit_ptr->header.frame_id = proc_frame;
@@ -1047,7 +1055,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
         for (auto &t: threads)
             t.join();
         //update visualization
-        publishAtlas();
+        publishSamples();
         ros::spinOnce();
     }
     std::cout<<std::endl;
@@ -1105,7 +1113,7 @@ GaussianProcessNode::samplePoint(const double x, const double y, const double z,
         samp.points.push_back(pt);
         samp.colors.push_back(cl);
         real_explicit_ptr->push_back(pt_pcl);
-        markers->markers[markers->markers.size()-1] = samp;
+        samples_marks->markers[samples_marks->markers.size()-1] = samp;
     }
 }
 
@@ -1113,8 +1121,7 @@ void
 GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_size, const float leaf_pass)
 {
     auto begin_time = std::chrono::high_resolution_clock::now();
-    if(!markers)
-        return;
+    samples_marks = boost::make_shared<visualization_msgs::MarkerArray>();
 
     visualization_msgs::Marker samples;
     samples.header.frame_id = proc_frame;
@@ -1128,7 +1135,7 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
     samples.scale.y = 0.025;
     samples.scale.z = 0.025;
 
-    markers->markers.push_back(samples);
+    samples_marks->markers.push_back(samples);
     std::shared_ptr<pcl::PointXYZ> start;
 
     ROS_INFO("[GaussianProcessNode::%s]\tMarching sampling on GP...",__func__);
@@ -1264,9 +1271,9 @@ GaussianProcessNode::marchingCubes(pcl::PointXYZ start, const float leaf, const 
             }
     {
         std::lock_guard<std::mutex> lock (*mtx_marks);
-        markers->markers[markers->markers.size()-1] = samp;
+        samples_marks->markers[samples_marks->markers.size()-1] = samp;
         //update visualization
-        publishAtlas();
+        publishSamples();
     }
     ros::spinOnce();
     //Expand in all directions found before

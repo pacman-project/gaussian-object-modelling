@@ -239,6 +239,7 @@ class GaussianProcessNode
         // visualization of atlas and explorer
         visualization_msgs::MarkerArrayPtr markers;
         visualization_msgs::MarkerArrayPtr gt_marks;
+        visualization_msgs::MarkerArrayPtr samples_marks;
         // and its mutex
         std::shared_ptr<std::mutex> mtx_marks;
 
@@ -250,6 +251,7 @@ class GaussianProcessNode
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_markers; //, pub_point_marker, pub_direction_marker;
         ros::Publisher pub_ground_truth;
+        ros::Publisher pub_samples;
         ros::Subscriber sub_update_;
         ros::Publisher pub_model;
         ros::Publisher pub_real_explicit;
@@ -263,6 +265,7 @@ class GaussianProcessNode
         // Publish last computed atlas and ground truth meshes
         void publishAtlas () const;
         void publishGroundTruth () const;
+        void publishSamples () const;
 
         //callback to start process service, executes when service is called
         bool cb_start(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res);

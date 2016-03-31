@@ -104,12 +104,10 @@ class ExplorerBase
             ROS_WARN_THROTTLE(30,"[ExplorerBase::%s]\tNo marker array to update is provided, visualization is disabled.",__func__);
             return;
         }
-        //frame id is not set, cause we can't access it here. rosNode should update
-        //all markers frame id before publishing them.
         visualization_msgs::Marker disc;
         disc.header.frame_id = mark_frame;
         disc.header.stamp = ros::Time();
-        disc.lifetime = ros::Duration(5.0);
+        disc.lifetime = ros::Duration(0.5);
         disc.ns = "Atlas Nodes";
         disc.id = c.getId();
         disc.type = visualization_msgs::Marker::CYLINDER;
@@ -152,7 +150,7 @@ class ExplorerBase
         visualization_msgs::Marker branch;
         branch.header.frame_id = mark_frame;
         branch.header.stamp = ros::Time();
-        branch.lifetime = ros::Duration(5.0);
+        branch.lifetime = ros::Duration(0.5);
         branch.ns = "Atlas Branches";
         //need to know the branch id, too bad branches don't have it.
         //Lets use Cantor pairing function: 0.5(a+b)(a+b+1)+b
@@ -185,7 +183,7 @@ class ExplorerBase
             visualization_msgs::Marker samp;
             samp.header.frame_id = mark_frame;
             samp.header.stamp = ros::Time();
-            samp.lifetime = ros::Duration(5.0);
+            samp.lifetime = ros::Duration(0.5);
             samp.ns = "Atlas Node(" + std::to_string(c.getId()) + ") Samples";
             samp.id = i;
             samp.type = visualization_msgs::Marker::SPHERE;
@@ -217,7 +215,7 @@ class ExplorerBase
         visualization_msgs::Marker proj;
         proj.header.frame_id = mark_frame;
         proj.header.stamp = ros::Time();
-        proj.lifetime = ros::Duration(5.0);
+        proj.lifetime = ros::Duration(0.5);
         proj.ns = "Atlas Node(" + std::to_string(c.getId()) + ") Samples";
         proj.id = c.samples.rows();
         proj.type = visualization_msgs::Marker::ARROW;
