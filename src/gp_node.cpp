@@ -14,7 +14,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
     exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
-    simulate_touch(true), anchor("/mind_anchor"), steps(0)
+    simulate_touch(true), steps(0)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -26,7 +26,6 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     pub_markers = nh.advertise<visualization_msgs::MarkerArray> ("atlas", 1);
     sub_update_ = nh.subscribe(nh.resolveName("/path_log"),1, &GaussianProcessNode::cb_update, this);
     nh.param<std::string>("/processing_frame", proc_frame, "/camera_rgb_optical_frame");
-    anchor = proc_frame; //TODO remove after fixing of mind anchor
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
     nh.param<double>("sample_res", sample_res, 0.07);
@@ -183,7 +182,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 ROS_WARN("[GaussianProcessNode::%s]\tNo solution found at requested variance %g, However global goal is set to %g. Call this service again with reduced request!",__func__, current_goal, goal);
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
-                samples.header.frame_id = anchor;
+                samples.header.frame_id = proc_frame;
                 samples.header.stamp = ros::Time();
                 samples.lifetime = ros::Duration(5.0);
                 samples.ns = "samples";
@@ -218,7 +217,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
                 synth_var_goal = (synth_var_goal - 0.1) < goal ? goal : synth_var_goal - 0.1;
                 markers = boost::make_shared<visualization_msgs::MarkerArray>();
                 visualization_msgs::Marker samples;
-                samples.header.frame_id = anchor;
+                samples.header.frame_id = proc_frame;
                 samples.header.stamp = ros::Time();
                 samples.lifetime = ros::Duration(5.0);
                 samples.ns = "samples";
@@ -541,7 +540,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
             // hand_ptr->header.frame_id=proc_frame;
         }
     }
-    model_ptr->header.frame_id=anchor;
+    model_ptr->header.frame_id=proc_frame;
     real_explicit_ptr->header.frame_id=proc_frame;
     colorThem(0,0,255, object_ptr);
 
@@ -556,7 +555,7 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
                 0, 0, 1/current_scale_, 0,
                 0, 0, 0,                1;
         pcl::transformPointCloud(tmp, *full_object, t);
-        full_object->header.frame_id=anchor;
+        full_object->header.frame_id=proc_frame;
         kd_full.setInputCloud(full_object);
     }
     if (prepareData())
@@ -701,7 +700,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
                 0, 0, 1/current_scale_, 0,
                 0, 0, 0,                1;
         pcl::transformPointCloud(tmp, *full_object, t);
-        full_object->header.frame_id=anchor;
+        full_object->header.frame_id=proc_frame;
         kd_full.setInputCloud(full_object);
     }
     //start recomputing GP
@@ -725,7 +724,7 @@ GaussianProcessNode::createTouchMarkers(const Eigen::MatrixXd &pts)
     if (pts.rows() <= 1)
         return;
     visualization_msgs::Marker lines;
-    lines.header.frame_id = anchor;
+    lines.header.frame_id = proc_frame;
     lines.header.stamp = ros::Time();
     lines.lifetime = ros::Duration(5.0);
     lines.ns = "last_touch";
@@ -919,7 +918,7 @@ bool GaussianProcessNode::startExploration(const float v_des, Eigen::Vector3d &s
 
     //setup explorer
     explorer = std::make_shared<gp_atlas_rrt::ExplorerMultiBranch>(nh, "explorer");
-    explorer->setMarkers(markers, mtx_marks, anchor);
+    explorer->setMarkers(markers, mtx_marks, proc_frame);
     explorer->setAtlas(atlas);
     explorer->setMaxNodes(300);
     explorer->setNoSampleMarkers(true);
@@ -960,7 +959,7 @@ void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const
         return;
 
     visualization_msgs::Marker samples;
-    samples.header.frame_id = anchor;
+    samples.header.frame_id = proc_frame;
     samples.header.stamp = ros::Time();
     samples.lifetime = ros::Duration(5.0);
     samples.ns = "samples";
@@ -1065,7 +1064,7 @@ GaussianProcessNode::marchingSampling(const bool first_time, const float leaf_si
         return;
 
     visualization_msgs::Marker samples;
-    samples.header.frame_id = anchor;
+    samples.header.frame_id = proc_frame;
     samples.header.stamp = ros::Time();
     samples.lifetime = ros::Duration(5.0);
     samples.ns = "samples";
