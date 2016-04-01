@@ -87,11 +87,10 @@ class ExplorerBase
     {
         markers = mp;
         mtx_ptr = array_guard;
-        if (markers)
-            if(!markers->markers.empty()){
-                mark_frame = frame;
-                return;
-            }
+        if (markers){
+            mark_frame = frame;
+            return;
+        }
         ROS_WARN("[ExplorerBase::%s]\tNo marker array is provided, visualization is disabled.",__func__);
     }
 
