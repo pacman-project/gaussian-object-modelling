@@ -33,6 +33,43 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     nh.param<double>("sample_res", sample_res, 0.07);
     nh.param<bool>("simulate_touch", simulate_touch, true);
     synth_var_goal = 0.2;
+    //add 3 objects to chose from
+    gt_marks = boost::make_shared<visualization_msgs::MarkerArray>();
+    for (size_t i=0; i<3; ++i)
+    {
+        visualization_msgs::Marker mesh;
+        mesh.header.frame_id = proc_frame;
+        mesh.header.stamp = ros::Time();
+        mesh.lifetime = ros::Duration();
+        if (i==0){
+            mesh.ns = "Spoon";
+            std::string mesh_path ("package://inhand_scanner_models/kitchenUtensilB/kitchenUtensilB.stl");
+            mesh.mesh_resource = mesh_path.c_str();
+        }
+        else if (i==1){
+            mesh.ns = "Square Container";
+            std::string mesh_path ("package://asus_scanner_models/bowlB/bowlB.stl");
+            mesh.pose.position.x = 0.2;
+            mesh.mesh_resource = mesh_path.c_str();
+        }
+        else if (i==2){
+            mesh.ns = "Pasta Container";
+            std::string mesh_path ("package://asus_scanner_models/containerB/containerB.stl");
+            mesh.pose.position.x = 0.4;
+            mesh.mesh_resource = mesh_path.c_str();
+        }
+        mesh.id = 0;
+        mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
+        mesh.action = visualization_msgs::Marker::ADD;
+        mesh.scale.x = 1.0;
+        mesh.scale.y = 1.0;
+        mesh.scale.z = 1.0;
+        mesh.color.a=1;
+        mesh.color.r=0.5;
+        mesh.color.g=0.5;
+        mesh.color.b=0.5;
+        gt_marks->markers.push_back(mesh);
+    }
 }
 
 void GaussianProcessNode::Publish()
@@ -499,43 +536,6 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         listener.transformPointCloud(proc_frame, msg, msg_conv);
         sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
         pcl::fromROSMsg (msg2, *object_ptr);
-        //add 4 objects to chose from
-        gt_marks = boost::make_shared<visualization_msgs::MarkerArray>();
-        for (size_t i=0; i<3; ++i)
-        {
-            visualization_msgs::Marker mesh;
-            mesh.header.frame_id = proc_frame;
-            mesh.header.stamp = ros::Time();
-            mesh.lifetime = ros::Duration();
-            if (i==0){
-                mesh.ns = "Spoon";
-                std::string mesh_path ("package://inhand_scanner_models/kitchenUtensilB/kitchenUtensilB.stl");
-                mesh.mesh_resource = mesh_path.c_str();
-            }
-            else if (i==1){
-                mesh.ns = "Square Container";
-                std::string mesh_path ("package://asus_scanner_models/bowlB/bowlB.stl");
-                mesh.pose.position.x = 0.2;
-                mesh.mesh_resource = mesh_path.c_str();
-            }
-            else if (i==2){
-                mesh.ns = "Pasta Container";
-                std::string mesh_path ("package://asus_scanner_models/containerB/containerB.stl");
-                mesh.pose.position.x = 0.4;
-                mesh.mesh_resource = mesh_path.c_str();
-            }
-            mesh.id = 0;
-            mesh.type = visualization_msgs::Marker::MESH_RESOURCE;
-            mesh.action = visualization_msgs::Marker::ADD;
-            mesh.scale.x = 1.0;
-            mesh.scale.y = 1.0;
-            mesh.scale.z = 1.0;
-            mesh.color.a=1;
-            mesh.color.r=0.5;
-            mesh.color.g=0.5;
-            mesh.color.b=0.5;
-            gt_marks->markers.push_back(mesh);
-        }
     }
     else{
         if(req.obj_pcd.compare("sphere") == 0 || req.obj_pcd.compare("half_sphere") == 0){
