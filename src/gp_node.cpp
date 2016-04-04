@@ -49,13 +49,13 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
         else if (i==1){
             mesh.ns = "Square Container";
             std::string mesh_path ("package://asus_scanner_models/bowlB/bowlB.stl");
-            mesh.pose.position.x = 0.2;
+            mesh.pose.position.x = 0.3;
             mesh.mesh_resource = mesh_path.c_str();
         }
         else if (i==2){
             mesh.ns = "Pasta Container";
             std::string mesh_path ("package://asus_scanner_models/containerB/containerB.stl");
-            mesh.pose.position.x = 0.4;
+            mesh.pose.position.x = 0.6;
             mesh.mesh_resource = mesh_path.c_str();
         }
         mesh.id = 0;
@@ -74,6 +74,8 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
 
 void GaussianProcessNode::Publish()
 {
+    publishGroundTruth();
+
     if (!start){
         ROS_WARN_THROTTLE(60,"[GaussianProcessNode::%s]\tNo object model found! Call start_process service to begin creating a model.",__func__);
         return;
@@ -86,7 +88,6 @@ void GaussianProcessNode::Publish()
     publishOctomap();
     //publish markers
     publishAtlas();
-    publishGroundTruth();
     publishSamples();
 }
 
@@ -117,20 +118,17 @@ void GaussianProcessNode::publishCloudModel () const
 void GaussianProcessNode::publishAtlas () const
 {
     if (markers)
-        if(pub_markers.getNumSubscribers() > 0)
-            pub_markers.publish(*markers);
+        pub_markers.publish(*markers);
 }
 void GaussianProcessNode::publishGroundTruth () const
 {
     if (gt_marks)
-        if(pub_ground_truth.getNumSubscribers() > 0)
-            pub_ground_truth.publish(*gt_marks);
+        pub_ground_truth.publish(*gt_marks);
 }
 void GaussianProcessNode::publishSamples () const
 {
     if (samples_marks)
-        if(pub_samples.getNumSubscribers() > 0)
-            pub_samples.publish(*samples_marks);
+        pub_samples.publish(*samples_marks);
 }
 
 
