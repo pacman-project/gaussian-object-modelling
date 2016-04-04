@@ -20,6 +20,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
     srv_update = nh.advertiseService("update_process", &GaussianProcessNode::cb_updateS, this);
     srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
+    srv_compute_fine_mesh_ = nh.advertiseService("compute_fine_mesh", &GaussianProcessNode::cb_compute_fine_mesh, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("training_data", 1);
     pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZI> >("estimated_model", 1);
     pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1);
@@ -1009,6 +1010,14 @@ void GaussianProcessNode::checkExploration()
         if (!solution.empty())
             ROS_INFO("[GaussianProcessNode::%s]\tSolution Found", __func__);
     }
+}
+
+bool GaussianProcessNode::cb_compute_fine_mesh(gp_regression::Update::Request &req, gp_regression::Update::Response &res)
+{
+    // just call the marching cube with a smaller values and re-publish the cloud
+    marchingSampling(false, 0.01,0.005);
+    publishCloudModel();
+    ros::spinOnce();
 }
 
 // for visualization purposes
