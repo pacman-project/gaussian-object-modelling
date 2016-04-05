@@ -201,7 +201,8 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
     if (req.start_point.header.frame_id.empty())
         //start from random point
         start_point.setZero();
-    else if (req.start_point.header.frame_id.compare(proc_frame) == 0){
+    else if (req.start_point.header.frame_id.compare(proc_frame) == 0
+            || req.start_point.header.frame_id.compare("/"+proc_frame) == 0){
         //start from supplied point in correct frame
         start_point[0] = req.start_point.point.x;
         start_point[1] = req.start_point.point.y;
