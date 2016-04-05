@@ -506,7 +506,6 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     explorer.reset();
     solution.clear();
     markers.reset();
-    gt_marks.reset();
     samples_marks.reset();
     steps = 0;
     //////
@@ -1015,7 +1014,7 @@ void GaussianProcessNode::checkExploration()
 bool GaussianProcessNode::cb_compute_fine_mesh(gp_regression::Update::Request &req, gp_regression::Update::Response &res)
 {
     // just call the marching cube with a smaller values and re-publish the cloud
-    marchingSampling(false, 0.01,0.005);
+    marchingSampling(false, 0.06,0.01);
     publishCloudModel();
     ros::spinOnce();
 }
