@@ -75,10 +75,18 @@ include_directories(
 add_executable(gaussian_process
     ${gp_INCLUDES}
     src/gp_node.cpp
-    # src/gp/SampleSet.cpp
+)
+
+#i ROS test node for surfaces
+add_executable(surface_gp
+    ${gp_INCLUDES}
+    src/surface_approx.cpp
 )
 
 add_dependencies(gaussian_process
+  gp_regression_generate_messages_cpp
+)
+add_dependencies(surface_gp
   gp_regression_generate_messages_cpp
 )
 
@@ -86,6 +94,11 @@ target_link_libraries(gaussian_process
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   ${OCTOMAP_LIBRARIES}
+)
+
+target_link_libraries(surface_gp
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 ## Tests
