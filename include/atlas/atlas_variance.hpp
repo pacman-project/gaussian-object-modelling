@@ -50,17 +50,17 @@ class AtlasVariance : public AtlasBase
 
     virtual double computeRadiusFromVariance(const double v) const
     {
-        if (v > 0.5){
-            std::cout<<"Variance is too big "<<v<<std::endl;
-            return 0.01;
-        }
-        if (v < 0){
-            std::cout<<"Variance is negative "<<v<<std::endl;
-            return 0.3;
-        }
+        // if (v > 0.5){
+        //     std::cout<<"Variance is too big "<<v<<std::endl;
+        //     return 0.01;
+        // }
+        // if (v < 0){
+        //     std::cout<<"Variance is negative "<<v<<std::endl;
+        //     return 0.3;
+        // }
         if (std::isnan(v) || std::isinf(v)){
             std::cout<<"Variance is NAN / Inf "<<v<<std::endl;
-            return 0.05;
+            return 0.05; //0.05 is probably not the best return in this case!
         }
         return ( -var_factor*v + 0.2);
     }
