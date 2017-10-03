@@ -5,10 +5,11 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Status1
         - /Grid1/Offset1
         - /Training Set1
       Splitter Ratio: 0.5
-    Tree Height: 836
+    Tree Height: 851
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -17,7 +18,7 @@ Panels:
       - /2D Nav Goal1
       - /Publish Point1
     Name: Tool Properties
-    Splitter Ratio: 0.588679
+    Splitter Ratio: 0.588679016
   - Class: rviz/Views
     Expanded:
       - /Current View1
@@ -35,16 +36,16 @@ Visualization Manager:
       Enabled: false
       Length: 1
       Name: Axes
-      Radius: 0.005
+      Radius: 0.00499999989
       Reference Frame: <Fixed Frame>
       Value: false
-    - Alpha: 0.2
-      Cell Size: 0.05
+    - Alpha: 0.200000003
+      Cell Size: 0.0500000007
       Class: rviz/Grid
       Color: 75; 75; 75
       Enabled: true
       Line Style:
-        Line Width: 0.03
+        Line Width: 0.0299999993
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -79,9 +80,10 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 8
-      Size (m): 0.04
+      Size (m): 0.0399999991
       Style: Spheres
       Topic: /gaussian_process/training_data
+      Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -100,27 +102,31 @@ Visualization Manager:
       Enabled: false
       Invert Rainbow: true
       Max Color: 170; 0; 0
-      Max Intensity: 0.5819
+      Max Intensity: 0.581900001
       Min Color: 0; 170; 0
-      Min Intensity: 0.00984425
+      Min Intensity: 0.00984425005
       Name: Estimated Model
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.005
+      Size (m): 0.00499999989
       Style: Flat Squares
       Topic: /gaussian_process/estimated_model
+      Unreliable: false
       Use Fixed Frame: true
       Use rainbow: false
       Value: false
     - Class: octomap_rviz_plugin/OccupancyGrid
       Enabled: false
+      Max. Height Display: inf
       Max. Octree Depth: 16
+      Min. Height Display: -inf
       Name: Octomap
       Octomap Topic: /gaussian_process/octomap
       Queue Size: 1
       Value: false
+      Voxel Alpha: 1
       Voxel Coloring: Cell Probability
       Voxel Rendering: Occupied Voxels
     - Class: rviz/MarkerArray
@@ -128,8 +134,7 @@ Visualization Manager:
       Marker Topic: /gaussian_process/atlas
       Name: Atlas
       Namespaces:
-        Atlas Branches: true
-        Atlas Nodes: true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -143,7 +148,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 86; 86; 63
-    Fixed Frame: left_hand_palm_link
+    Fixed Frame: table_plate_link
     Frame Rate: 30
   Name: root
   Tools:
@@ -164,30 +169,33 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.8725
+      Distance: 50.4349518
       Enable Stereo Rendering:
-        Stereo Eye Separation: 0.06
+        Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.173408
-        Y: -0.0448234
-        Z: 0.130626
+        X: 0.173408002
+        Y: -0.0448234007
+        Z: 0.130625993
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.0500000007
+      Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.01
-      Pitch: -1.5348
+      Near Clip Distance: 0.00999999978
+      Pitch: 0.2402035
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.61086
+      Yaw: 3.9358573
     Saved: ~
 Window Geometry:
   Displays:
-    collapsed: true
-  Height: 1047
-  Hide Left Dock: true
+    collapsed: false
+  Height: 1027
+  Hide Left Dock: false
   Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd00000004000000000000013c000003dcfc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006900fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730000000019000003dc000000e900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000003cafc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000043000003ca000000bd00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000078000000044fc0100000002fb0000000800540069006d00650000000000000007800000025e00fffffffb0000000800540069006d0065010000000000000450000000000000000000000780000003dc00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000016a000003e5fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006700fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000000000003e5000000e300fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000003cafc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000043000003ca000000b300fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000078000000044fc0100000002fb0000000800540069006d0065000000000000000780000002ff00fffffffb0000000800540069006d00650100000000000004500000000000000000000005cb000003e500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -196,6 +204,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1920
-  X: 3840
-  Y: 0
+  Width: 1851
+  X: 69
+  Y: 53

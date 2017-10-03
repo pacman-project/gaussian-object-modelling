@@ -49,7 +49,8 @@
 #include <pcl/surface/gp3.h>
 
 // Vision services
-#include <pacman_vision_comm/get_cloud_in_hand.h>
+// #include <pacman_vision_comm/get_cloud_in_hand.h>
+#include <tabletop_object_detector/TabletopSegmentation.h>
 
 // This node services (includes custom messages)
 #include <gp_regression/StartProcess.h>

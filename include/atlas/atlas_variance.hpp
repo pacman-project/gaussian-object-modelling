@@ -50,6 +50,7 @@ class AtlasVariance : public AtlasBase
 
     virtual double computeRadiusFromVariance(const double v) const
     {
+	std::cout << "COMPUTING RADIUS FROM VARIANCE: " << v <<  std::endl;
         if (v > 0.5){
             std::cout<<"Variance is too big "<<v<<std::endl;
             return 0.01;

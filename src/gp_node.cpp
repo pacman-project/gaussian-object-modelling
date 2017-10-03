@@ -13,8 +13,8 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    exploration_started(false), out_sphere_rad(2.0), sigma2(1e-1), min_v(0.0), max_v(0.5),
-    simulate_touch(true), steps(0)
+    exploration_started(false), out_sphere_rad(0.5), sigma2(1e-1), min_v(0.0), max_v(0.5),
+    simulate_touch(false), steps(0)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -32,7 +32,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     nh.param<int>("touch_type", synth_type, 2);
     nh.param<double>("global_goal", goal, 0.1);
     nh.param<double>("sample_res", sample_res, 0.07);
-    nh.param<bool>("simulate_touch", simulate_touch, true);
+    nh.param<bool>("simulate_touch", simulate_touch, false);
     synth_var_goal = 0.2;
     //add 3 objects to chose from
     gt_marks = boost::make_shared<visualization_msgs::MarkerArray>();
@@ -198,11 +198,14 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
     ros::Rate rate(10); //try to go at 10hz, as in the node
     current_goal = req.var_desired.data;
     Eigen::Vector3d start_point;
+    std::cout << "Frame requested: " << req.start_point.header.frame_id << std::endl;
     if (req.start_point.header.frame_id.empty())
-        //start from random point
+    {
+        ROS_WARN_STREAM("[GaussianProcessNode::"<<__func__<<"]	Supplied start point without frame, while it should be in "<<proc_frame<<". Fallback to point zero");
         start_point.setZero();
-    else if (req.start_point.header.frame_id.compare(proc_frame) == 0
-            || req.start_point.header.frame_id.compare("/"+proc_frame) == 0){
+    } else if (req.start_point.header.frame_id.compare(proc_frame) == 0
+            || req.start_point.header.frame_id.compare("/"+proc_frame) == 0)
+    {
         //start from supplied point in correct frame
         start_point[0] = req.start_point.point.x;
         start_point[1] = req.start_point.point.y;
@@ -212,7 +215,7 @@ bool GaussianProcessNode::cb_get_next_best_path(gp_regression::GetNextBestPath::
     else{
         //not implemented
         //TODO convert point in proc_frame
-        ROS_WARN("[GaussianProcessNode::%s]\tSupplied start poin in %s frame, while it should be in %s. Fallback to random point",__func__, req.start_point.header.frame_id.c_str(), proc_frame.c_str());
+        ROS_WARN("[GaussianProcessNode::%s]\tSupplied start point in %s frame, while it should be in %s. Fallback to random point",__func__, req.start_point.header.frame_id.c_str(), proc_frame.c_str());
         start_point.setZero();
     }
     if (simulate_touch){
@@ -513,16 +516,18 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
     if(req.obj_pcd.empty()){
         //Request was empty, means we have to call pacman vision service to
         //get a cloud.
-        std::string service_name = nh.resolveName("/pacman_vision/listener/get_cloud_in_hand");
-        pacman_vision_comm::get_cloud_in_hand service;
+        // std::string service_name = nh.resolveName("/pacman_vision/listener/get_cloud_in_hand");
+        //pacman_vision_comm::get_cloud_in_hand service;
+	tabletop_object_detector::TabletopSegmentation service;
+	std::string service_name = nh.resolveName("/tabletop_segmentation");
         // service.request.save = "false";
         ////////////////////////////////////////////////////////////////////////
         //TODO: Service  requires to know which  hand is grasping the  object we
         //dont have a way  to tell inside here. Assuming it's  the left hand for
         //now.(Fri 06 Nov 2015 05:11:45 PM CET -- tabjones)
         ////////////////////////////////////////////////////////////////////////
-        service.request.right = false;
-        if (!ros::service::call<pacman_vision_comm::get_cloud_in_hand>(service_name, service))
+        // service.request.right = false;
+        if (!ros::service::call<tabletop_object_detector::TabletopSegmentation>(service_name, service))
         {
             ROS_ERROR("[GaussianProcessNode::%s]\tGet cloud in hand service call failed!",__func__);
             return (false);
@@ -530,11 +535,20 @@ bool GaussianProcessNode::cb_start(gp_regression::StartProcess::Request& req, gp
         //object and hand clouds are saved into class
         sensor_msgs::PointCloud msg, msg_conv;
         sensor_msgs::PointCloud2 msg2;
-        sensor_msgs::convertPointCloud2ToPointCloud(service.response.obj, msg);
+        //sensor_msgs::convertPointCloud2ToPointCloud(service.response.clusters.at(0), msg);
         // pcl::fromROSMsg (service.response.hand, *hand_ptr);
-        listener.transformPointCloud(proc_frame, msg, msg_conv);
-        sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
-        pcl::fromROSMsg (msg2, *object_ptr);
+	std::cout << "service.response.clusters.at(0).size() " << service.response.clusters.size() << std::endl;
+	if(!service.response.clusters.empty())
+	{
+	        listener.transformPointCloud(proc_frame, service.response.clusters.at(0), msg_conv);
+	        sensor_msgs::convertPointCloudToPointCloud2(msg_conv, msg2);
+	        pcl::fromROSMsg (msg2, *object_ptr);
+	}
+	else
+	{
+		ROS_WARN("[GaussianProcessNode::%s]\tNo object found!",__func__);
+                return (false);
+	}
     }
     else{
         if(req.obj_pcd.compare("sphere") == 0 || req.obj_pcd.compare("half_sphere") == 0){

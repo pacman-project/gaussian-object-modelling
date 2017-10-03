@@ -221,6 +221,7 @@ public:
          */
         void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
         {
+                std::cout << "Calling this evaluate..." << std::endl;
                 if(!gp)
                         throw GPRegressionException("Empty Model pointer");
 
@@ -270,6 +271,8 @@ public:
                 if (std::isnan(f.at(0))|| std::isinf(f.at(0)))
                     std::cout<<"Kqp "<<Kqp<<std::endl;
                 convertToSTD(V_diagonal, v);
+		for(auto i: v)
+			std::cout << "This variance: " << i << std::endl;
         }
 
         /**

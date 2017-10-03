@@ -17,12 +17,14 @@
   <build_depend>pacman_vision_comm</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>octomap</build_depend>
+  <build_depend>tabletop_object_detector</build_depend>
 
   <run_depend>message_runtime</run_depend>
   <run_depend>pacman_vision_comm</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>message_generation</run_depend>
   <run_depend>octomap</run_depend>
+  <run_depend>tabletop_object_detector</run_depend>
 
   <export>
 

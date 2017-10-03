@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   pacman_vision_comm
   roslib
   tf
+  tabletop_object_detector
 )
 
 #ToDo: port to 1.7.2
@@ -58,7 +59,7 @@ generate_messages(
 )
 
 catkin_package(
-    CATKIN_DEPENDS roscpp message_runtime pacman_vision_comm message_generation
+    CATKIN_DEPENDS roscpp message_runtime pacman_vision_comm message_generation tabletop_object_detector
     )
 
 file(GLOB_RECURSE gp_INCLUDES RELATIVE ${PROJECT_SOURCE_DIR} include/*.h include/*.hpp)
