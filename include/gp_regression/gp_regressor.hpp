@@ -221,7 +221,7 @@ public:
          */
         void evaluate(Model::ConstPtr gp, Data::ConstPtr query, std::vector<double> &f, std::vector<double> &v, Eigen::MatrixXd &N)
         {
-                std::cout << "Calling this evaluate..." << std::endl;
+                //std::cout << "Calling this evaluate..." << std::endl;
                 if(!gp)
                         throw GPRegressionException("Empty Model pointer");
 
@@ -236,7 +236,7 @@ public:
                 Eigen::MatrixXd Kqp, Kpq;
                 Eigen::MatrixXd Kqq;
                 Eigen::VectorXd F, V_diagonal;
-                Eigen::MatrixXd V, Vt;
+                Eigen::MatrixXd V, Vt, Vchol;
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
                 N.resizeLike(Q);
@@ -247,6 +247,7 @@ public:
                         {
                                 N.row(i) += gp->alpha(j)*kernel_->computediff(Kqp(i,j))*(Q.row(i) - gp->P.row(j));
                                 Kqp(i,j) = kernel_->compute(Kqp(i,j));
+                                //std::cout << "Element Kqp(" << i << ", " << j << ") = " << Kqp(i,j) << std::endl;
                         }
                         // N.row(i).normalize(); // to return the gradient properly
                 }
@@ -257,13 +258,14 @@ public:
                 buildEuclideanDistanceMatrix(Q, Q, Kqq);
 
                 for(int i = 0; i < Kqq.array().size(); ++i)
+                {
+                        //std::cout << "Before kernel --> Kqq.array(" << i << ") = " << Kqq.array()(i) << std::endl;
                         Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
+                        //std::cout << "After kernel --> Kqq.array(" << i << ") = " << Kqq.array()(i) << std::endl;
+                }
 
-                // V = gp->cholesker.matrixL().solve(Kpq); // this is giving negative and large values
-                                                           // perhaps it is not the correct function
-                V = gp->cholesker.solve(Kpq);
-                // Vt = V.transpose();
-                V = Kqq - Kqp*V;
+                Vchol = gp->cholesker.solve(Kpq);
+                V = Kqq - Kqp*Vchol;
                 V_diagonal = V.diagonal();
 
                 // conversions
@@ -271,8 +273,8 @@ public:
                 if (std::isnan(f.at(0))|| std::isinf(f.at(0)))
                     std::cout<<"Kqp "<<Kqp<<std::endl;
                 convertToSTD(V_diagonal, v);
-		for(auto i: v)
-			std::cout << "This variance: " << i << std::endl;
+                /*for(auto i: v)
+                        std::cout << "This variance: " << i << std::endl;*/
         }
 
         /**
@@ -298,7 +300,7 @@ public:
                 Eigen::MatrixXd Kqp, Kpq;
                 Eigen::MatrixXd Kqq;
                 Eigen::VectorXd F, V_diagonal;
-                Eigen::MatrixXd V, Vt;
+                Eigen::MatrixXd V, Vt, Vchol;
                 convertToEigen(query->coord_x, query->coord_y, query->coord_z, Q);
                 buildEuclideanDistanceMatrix(Q, gp->P, Kqp);
 
@@ -314,16 +316,15 @@ public:
                 for(int i = 0; i < Kqq.array().size(); ++i)
                         Kqq.array()(i) = kernel_->compute(Kqq.array()(i));
 
-                // V = gp->cholesker.matrixL().solve(Kpq); // this is giving negative and large values
-                                                           // perhaps it is not the correct function
-                V = gp->cholesker.solve(Kpq);
-                // Vt = V.transpose();
-                V = Kqq - Kqp*V;
-                V_diagonal = V.diagonal();
+                        Vchol = gp->cholesker.solve(Kpq);
+                        V = Kqq - Kqp*Vchol;
+                        V_diagonal = V.diagonal();
 
                 // conversions
                 convertToSTD(F, f);
                 convertToSTD(V_diagonal, v);
+                /*for(auto i: v)
+                        std::cout << "This variance: " << i << std::endl;*/
         }
 
         /**
