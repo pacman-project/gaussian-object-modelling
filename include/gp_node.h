@@ -112,7 +112,7 @@ class GaussianProcessNode
          *
          */
         //control if we can start processing, i.e. we have a model and clouds
-        bool start, exploration_started, simulate_touch;
+        bool start, exploration_started, simulate_touch, on_update;
         const double out_sphere_rad;
         int synth_type;
 

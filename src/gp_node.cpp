@@ -13,8 +13,8 @@ using namespace gp_regression;
 GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_process")), start(false),
     object_ptr(boost::make_shared<PtC>()), hand_ptr(boost::make_shared<PtC>()), data_ptr_(boost::make_shared<PtC>()),
     model_ptr(boost::make_shared<PtC>()), real_explicit_ptr(boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>()),
-    exploration_started(false), out_sphere_rad(0.5), sigma2(1e-1), min_v(0.0), max_v(0.5),
-    simulate_touch(false), steps(0)
+    exploration_started(false), out_sphere_rad(1.5), sigma2(1e-2), min_v(0.0), max_v(0.5),
+    simulate_touch(false), steps(0), on_update(false)
 {
     mtx_marks = std::make_shared<std::mutex>();
     srv_start = nh.advertiseService("start_process", &GaussianProcessNode::cb_start, this);
@@ -679,6 +679,7 @@ bool GaussianProcessNode::cb_updateS(gp_regression::Update::Request &req, gp_reg
 
 void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
 {
+    on_update = true;
     //assuming points in processing_frame
     if (!msg)
         return;
@@ -745,7 +746,7 @@ void GaussianProcessNode::cb_update(const gp_regression::Path::ConstPtr &msg)
             ext_gp->coord_y.push_back(pt.y);
             ext_gp->coord_z.push_back(pt.z);
             ext_gp->label.push_back(dist);
-            ext_gp->sigma2.push_back(sigma2);
+            ext_gp->sigma2.push_back(0.5*sigma2); // twice more precision
             // add external point to rviz
             colorIt(100,0,50, pt);
             model_ptr->push_back(pt);
@@ -906,7 +907,10 @@ bool GaussianProcessNode::prepareData()
         cloud_gp->coord_y.push_back(data_ptr_->points[i].y);
         cloud_gp->coord_z.push_back(data_ptr_->points[i].z);
         cloud_gp->label.push_back(0.0);
-        cloud_gp->sigma2.push_back(sigma2);
+        if(on_update)
+                cloud_gp->sigma2.push_back(0.5*sigma2); // updates come from touching, to do: pass data including sigma in msg
+        else
+                cloud_gp->sigma2.push_back(sigma2);
     }
     // add object points to rviz in blue
     // resize to ext_size first, so you wont lose external data, but overwrite
@@ -946,7 +950,7 @@ bool GaussianProcessNode::computeGP()
     obj_gp = std::make_shared<gp_regression::Model>();
     reg_ = std::make_shared<gp_regression::ThinPlateRegressor>();
     // my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad * 2);
-    my_kernel = std::make_shared<gp_regression::ThinPlate>(2.0);
+    my_kernel = std::make_shared<gp_regression::ThinPlate>(out_sphere_rad*2);
     reg_->setCovFunction(my_kernel);
     const bool withoutNormals = false;
     reg_->create<withoutNormals>(data_gp, obj_gp);
