@@ -249,6 +249,7 @@ class GaussianProcessNode
         ros::ServiceServer srv_update;
         ros::ServiceServer srv_get_next_best_path_;
         ros::ServiceServer srv_compute_fine_mesh_;
+        ros::ServiceServer srv_compute_fine_mesh_from_pcd_;
 
         // ros::ServiceServer srv_sample;
         ros::Publisher pub_markers; //, pub_point_marker, pub_direction_marker;
@@ -277,6 +278,7 @@ class GaussianProcessNode
 
         //callback to publish a fine mesh of the model
         bool cb_compute_fine_mesh(gp_regression::Update::Request &req, gp_regression::Update::Response &res);
+        bool cb_compute_fine_mesh_from_gp_pcd(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res);
 
         void cb_update(const gp_regression::Path::ConstPtr &msg);
         bool cb_updateS(gp_regression::Update::Request &req, gp_regression::Update::Response &res);

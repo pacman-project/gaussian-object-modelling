@@ -21,6 +21,7 @@ GaussianProcessNode::GaussianProcessNode (): nh(ros::NodeHandle("gaussian_proces
     srv_update = nh.advertiseService("update_process", &GaussianProcessNode::cb_updateS, this);
     srv_get_next_best_path_ = nh.advertiseService("get_next_best_path", &GaussianProcessNode::cb_get_next_best_path, this);
     srv_compute_fine_mesh_ = nh.advertiseService("compute_fine_mesh", &GaussianProcessNode::cb_compute_fine_mesh, this);
+    srv_compute_fine_mesh_from_pcd_ = nh.advertiseService("compute_fine_mesh_from_pcd", &GaussianProcessNode::cb_compute_fine_mesh_from_gp_pcd, this);
     pub_model = nh.advertise<pcl::PointCloud<pcl::PointXYZRGB>> ("training_data", 1);
     pub_real_explicit = nh.advertise<pcl::PointCloud<pcl::PointXYZI> >("estimated_model", 1);
     pub_octomap = nh.advertise<octomap_msgs::Octomap>("octomap",1);
@@ -98,10 +99,10 @@ void GaussianProcessNode::publishCloudModel () const
     // These checks are  to make sure we are not publishing empty cloud,
     // we have a  gaussian process computed and there's actually someone
     // who listens to us
-    if (start && model_ptr){
+    //if (start && model_ptr){
         // if(!model_ptr->empty() && pub_model.getNumSubscribers()>0){
         // I don't care if there are subscribers or not... publish'em all!
-        if(!model_ptr->empty()){
+        //if(!model_ptr->empty()){
             // publish both the internal [-1, 1] model and the ex
             // this actually publishes the training data, not the model!
             pub_model.publish(*model_ptr);
@@ -112,8 +113,8 @@ void GaussianProcessNode::publishCloudModel () const
             reMeanAndDenormalizeData(real_explicit_ptr, real_explicit);
             pub_real_explicit.publish(real_explicit);
             // pub_real_explicit.publish(*full_object);
-        }
-    }
+        //}
+    //}
 }
 //publish atlas markers and other samples
 void GaussianProcessNode::publishAtlas () const
@@ -1037,6 +1038,95 @@ bool GaussianProcessNode::cb_compute_fine_mesh(gp_regression::Update::Request &r
     publishCloudModel();
     ros::spinOnce();
 }
+
+bool GaussianProcessNode::cb_compute_fine_mesh_from_gp_pcd(gp_regression::StartProcess::Request& req, gp_regression::StartProcess::Response& res)
+{
+    if(req.obj_pcd.empty())
+  	{
+  		ROS_ERROR("[GaussianProcessNode::%s]\tYou didn't provide a path to a PCD file!!",__func__);
+  		return false;
+  	}
+
+    start = true;
+
+    cloud_gp = std::make_shared<gp_regression::Data>();
+    ext_gp = std::make_shared<gp_regression::Data>();
+
+  	PtC::Ptr gp_pcd_ptr;
+  	gp_pcd_ptr= boost::make_shared<PtC>();
+  	if (pcl::io::loadPCDFile(req.obj_pcd, *gp_pcd_ptr) != 0)
+    {
+  	    ROS_ERROR("[GaussianProcessNode::%s]\tError loading cloud from %s",__func__,req.obj_pcd.c_str());
+  	    return (false);
+  	}
+
+    PtC::Ptr gp_scale_ptr;
+    gp_scale_ptr = boost::make_shared<PtC>();
+
+    /*****  Prepare the training data from PCD  *********************************************/
+    for(auto p : *gp_pcd_ptr)
+    {
+      Eigen::Vector3i this_color;
+      this_color = p.getRGBVector3i();
+
+      // parse kind of data
+      // std::cout << "THIS COLOR IS: " << this_color(0) << " " << this_color(1) << " " << this_color(2) << std::endl;
+      if( this_color(0)==0 && this_color(1)==0 && this_color(2)==255 ) // INITIAL_CAMERA_DATA
+      {
+        cloud_gp->coord_x.push_back(p.x);
+        cloud_gp->coord_y.push_back(p.y);
+        cloud_gp->coord_z.push_back(p.z);
+        cloud_gp->label.push_back(0.0);
+        cloud_gp->sigma2.push_back(sigma2);
+
+        // only to retrieve the good scale
+        gp_scale_ptr->push_back(p);
+      }
+      if( this_color(0)==0 && this_color(1)==255 && this_color(2)==255 ) // EXPLORED_TOUCHED_DATA
+      {
+        cloud_gp->coord_x.push_back(p.x);
+        cloud_gp->coord_y.push_back(p.y);
+        cloud_gp->coord_z.push_back(p.z);
+        cloud_gp->label.push_back(0.0);
+        cloud_gp->sigma2.push_back(0.5*sigma2);
+      }
+      if( this_color(0)==100 && this_color(1)==0 && this_color(2)==50 ) // EXPLORED_NOT_TOUCHED_DATA
+      {
+        cloud_gp->coord_x.push_back(p.x);
+        cloud_gp->coord_y.push_back(p.y);
+        cloud_gp->coord_z.push_back(p.z);
+        cloud_gp->label.push_back(1.0);
+        cloud_gp->sigma2.push_back(0.5*sigma2);
+      }
+      if( this_color(0)==255 && this_color(1)==0 && this_color(2)==255 ) // INITIAL_EXTERNAL_DATA
+      {
+        ext_gp->coord_x.push_back(p.x);
+        ext_gp->coord_y.push_back(p.y);
+        ext_gp->coord_z.push_back(p.z);
+        ext_gp->label.push_back(1.0);
+        ext_gp->sigma2.push_back(sigma2);
+      }
+    }
+
+    // only used to compute the scale and offset
+    PtC::Ptr dummy_ptr;
+    dummy_ptr = boost::make_shared<PtC>();
+    deMeanAndNormalizeData( gp_scale_ptr, dummy_ptr );
+
+    // prepare data and prepare ext data
+    //prepareData();
+    //prepareExtData();
+
+    // compute gp
+    computeGP();
+
+    // compute fine mesh
+    marchingSampling(true, 0.06,0.01);
+    publishCloudModel();
+    ros::spinOnce();
+
+    return true;
+  }
 
 // for visualization purposes
 void GaussianProcessNode::fakeDeterministicSampling(const bool first_time, const double scale, const double pass)
